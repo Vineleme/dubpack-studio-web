@@ -9,10 +9,15 @@ const state = {
 const els = {
   packInput: document.querySelector('#packInput'),
   packStatus: document.querySelector('#packStatus'),
+  packSubtitle: document.querySelector('#packSubtitle'),
+  sceneCounter: document.querySelector('#sceneCounter'),
   sceneList: document.querySelector('#sceneList'),
   sceneVideo: document.querySelector('#sceneVideo'),
   sceneImage: document.querySelector('#sceneImage'),
   emptyFrame: document.querySelector('#emptyFrame'),
+  topCounter: document.querySelector('#topCounter'),
+  projectTitle: document.querySelector('#projectTitle'),
+  projectMeta: document.querySelector('#projectMeta'),
   counter: document.querySelector('#counter'),
   character: document.querySelector('#character'),
   subtitle: document.querySelector('#subtitle'),
@@ -61,6 +66,7 @@ async function importPack(event) {
   });
 
   els.packStatus.textContent = `${state.scenes.length} falas`;
+  els.packSubtitle.textContent = `${file.name} · ${state.scenes.length} falas detectadas`;
   renderSceneList();
   selectScene(0);
 }
@@ -109,6 +115,10 @@ function selectScene(index) {
   const scene = state.scenes[state.activeIndex];
 
   els.counter.textContent = `Fala ${state.activeIndex + 1} de ${state.scenes.length}`;
+  els.topCounter.textContent = `Fala ${state.activeIndex + 1} de ${state.scenes.length}`;
+  els.sceneCounter.textContent = `${state.activeIndex + 1}/${state.scenes.length}`;
+  els.projectTitle.textContent = scene.character;
+  els.projectMeta.textContent = state.takeUrl ? 'gravado' : 'original';
   els.character.textContent = scene.character;
   els.subtitle.textContent = scene.subtitle;
 
@@ -145,6 +155,7 @@ async function toggleRecording() {
     state.takeUrl = URL.createObjectURL(new Blob(state.chunks, { type: 'audio/webm' }));
     els.takeAudio.src = state.takeUrl;
     els.recordBtn.textContent = 'Regravar';
+    els.projectMeta.textContent = 'gravado';
     els.recordBtn.classList.remove('recording');
     els.nextBtn.classList.add('pulse-next');
   };

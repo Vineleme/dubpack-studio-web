@@ -11,32 +11,59 @@
   <body>
     <main class="app">
       <header class="topbar">
-        <img src="./assets/dubpack-logo.png" alt="DubPack Studio" class="logo" />
-        <div>
-          <strong>DubPack Studio</strong>
-          <span>MVP Web</span>
+        <div class="brand">
+          <img src="./assets/dubpack-logo.png" alt="DubPack Studio" class="logo" />
+          <div>
+            <strong>DubPack</strong>
+            <span>Studio Web</span>
+          </div>
         </div>
+        <button class="icon-button" type="button">⚙</button>
       </header>
 
-      <section class="hero">
-        <h1>Duble direto no navegador.</h1>
-        <p>Importe um pack ZIP, escolha uma fala, ouca a referencia e grave sua voz.</p>
-        <label class="primary">
-          Importar Pack ZIP
-          <input id="packInput" type="file" accept=".zip" hidden />
-        </label>
-      </section>
+      <nav class="bottom-nav" aria-label="Navegacao principal">
+        <button class="active" type="button">⌂<span>Meus Packs</span></button>
+        <button type="button">🎮<span>GameBanana</span></button>
+        <button type="button">👥<span>Comunidade</span></button>
+        <button type="button">◯<span>Perfil</span></button>
+      </nav>
 
       <section class="workspace">
-        <aside class="panel">
+        <aside class="panel packs-panel">
           <div class="section-title">
-            <span>Minhas cenas</span>
+            <span>Meus Packs</span>
             <small id="packStatus">Nenhum pack</small>
+          </div>
+          <div class="pack-card active">
+            <div>
+              <strong>Pack importado</strong>
+              <span id="packSubtitle">Importe um ZIP para comecar</span>
+            </div>
+            <div class="mini-progress"><i></i></div>
+          </div>
+          <label class="primary add-pack">
+            + Adicionar Pack
+            <input id="packInput" type="file" accept=".zip" hidden />
+          </label>
+          <div class="section-title scene-title">
+            <span>Cenas</span>
+            <small id="sceneCounter">0/0</small>
           </div>
           <div id="sceneList" class="scene-list"></div>
         </aside>
 
         <section class="studio">
+          <div class="scene-top">
+            <button id="prevBtn" type="button">‹</button>
+            <strong id="topCounter">Fala 0 de 0</strong>
+            <button type="button">⋮</button>
+          </div>
+
+          <div class="project-title">
+            <h1 id="projectTitle">DubPack Studio</h1>
+            <span id="projectMeta">original</span>
+          </div>
+
           <div class="video-frame">
             <video id="sceneVideo" controls playsinline></video>
             <img id="sceneImage" alt="" />
@@ -55,7 +82,6 @@
           </div>
 
           <div class="controls">
-            <button id="prevBtn" class="secondary">Anterior</button>
             <button id="referenceBtn" class="secondary">Referencia</button>
             <button id="recordBtn" class="record">Gravar</button>
             <button id="nextBtn" class="secondary">Proxima</button>

@@ -33,8 +33,15 @@ label {
 .topbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .topbar span {
@@ -52,30 +59,53 @@ label {
   box-shadow: 0 0 28px rgba(245, 46, 131, 0.45);
 }
 
-.hero,
+.icon-button {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 900;
+}
+
+.bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 8px;
+  border-radius: 22px;
+  background: rgba(14, 12, 32, 0.94);
+  border: 1px solid rgba(245, 46, 131, 0.18);
+}
+
+.bottom-nav button {
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  min-height: 54px;
+  border-radius: 16px;
+  background: transparent;
+  color: #b7b5ce;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.bottom-nav button.active {
+  color: #f52e83;
+  background: rgba(245, 46, 131, 0.1);
+}
+
+.bottom-nav span {
+  font-size: 11px;
+}
+
 .panel,
 .studio {
   border: 1px solid rgba(245, 46, 131, 0.22);
   background: rgba(16, 13, 38, 0.88);
   border-radius: 22px;
   box-shadow: 0 22px 50px rgba(0, 0, 0, 0.3);
-}
-
-.hero {
-  padding: 22px;
-  margin-bottom: 16px;
-}
-
-.hero h1 {
-  margin: 0 0 8px;
-  font-size: clamp(30px, 7vw, 60px);
-  line-height: 0.95;
-}
-
-.hero p {
-  max-width: 560px;
-  color: #b7b5ce;
-  line-height: 1.5;
 }
 
 .workspace {
@@ -101,6 +131,59 @@ label {
   color: #b7b5ce;
 }
 
+.pack-card {
+  display: grid;
+  gap: 12px;
+  min-height: 132px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(245, 46, 131, 0.18), rgba(124, 58, 237, 0.16)),
+    rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(245, 46, 131, 0.28);
+}
+
+.pack-card strong,
+.project-title h1 {
+  display: block;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.pack-card span,
+.project-title span {
+  display: block;
+  margin-top: 6px;
+  color: #b7b5ce;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mini-progress {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.mini-progress i {
+  display: block;
+  width: 28%;
+  height: 100%;
+  background: #f52e83;
+}
+
+.add-pack {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.scene-title {
+  margin-top: 8px;
+}
+
 .scene-list {
   display: grid;
   gap: 10px;
@@ -119,6 +202,34 @@ label {
 .scene.active {
   outline: 2px solid #f52e83;
   background: rgba(245, 46, 131, 0.16);
+}
+
+.scene-top {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.scene-top strong {
+  text-align: center;
+}
+
+.scene-top button {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 24px;
+}
+
+.project-title {
+  margin-bottom: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .video-frame {
@@ -223,7 +334,7 @@ label {
 .controls,
 .result {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin-top: 14px;
 }
@@ -281,7 +392,7 @@ audio {
   }
 
   .controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 }
 
