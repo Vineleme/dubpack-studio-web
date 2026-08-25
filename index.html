@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090817" />
+    <title>DubPack Studio Web</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <img src="./assets/dubpack-logo.png" alt="DubPack Studio" class="logo" />
+        <div>
+          <strong>DubPack Studio</strong>
+          <span>MVP Web</span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <h1>Duble direto no navegador.</h1>
+        <p>Importe um pack ZIP, escolha uma fala, ouca a referencia e grave sua voz.</p>
+        <label class="primary">
+          Importar Pack ZIP
+          <input id="packInput" type="file" accept=".zip" hidden />
+        </label>
+      </section>
+
+      <section class="workspace">
+        <aside class="panel">
+          <div class="section-title">
+            <span>Minhas cenas</span>
+            <small id="packStatus">Nenhum pack</small>
+          </div>
+          <div id="sceneList" class="scene-list"></div>
+        </aside>
+
+        <section class="studio">
+          <div class="video-frame">
+            <video id="sceneVideo" controls playsinline></video>
+            <img id="sceneImage" alt="" />
+            <div id="emptyFrame" class="empty-frame">Importe um ZIP para comecar</div>
+          </div>
+
+          <div class="cue-card">
+            <span id="counter">Fala 0 de 0</span>
+            <h2 id="character">Personagem</h2>
+            <p id="subtitle">A fala aparece aqui.</p>
+          </div>
+
+          <div class="waveform" aria-label="Timing visual da fala">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            <b></b>
+          </div>
+
+          <div class="controls">
+            <button id="prevBtn" class="secondary">Anterior</button>
+            <button id="referenceBtn" class="secondary">Referencia</button>
+            <button id="recordBtn" class="record">Gravar</button>
+            <button id="nextBtn" class="secondary">Proxima</button>
+          </div>
+
+          <div class="result">
+            <audio id="takeAudio" controls></audio>
+            <button id="downloadTakeBtn" class="primary small">Baixar minha voz</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
