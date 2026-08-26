@@ -59,110 +59,124 @@
             </label>
           </div>
 
-          <div class="pack-grid">
-            <article class="pack-card active">
+          <div id="emptyPacks" class="empty-packs">
+            <strong>Nenhum pack importado ainda</strong>
+            <p>Adicione um ZIP para aparecer aqui e começar a dublar take por take.</p>
+            <label class="primary">
+              + Adicionar Pack
+              <input id="packInputEmpty" type="file" accept=".zip" hidden />
+            </label>
+          </div>
+
+          <div id="packGrid" class="pack-grid has-no-pack">
+            <article id="packCard" class="pack-card active">
               <div class="pack-preview"><button type="button">▷</button><span>PRÉVIA DO PACK<br />(vídeo)</span></div>
               <h3 id="packTitle">Pack importado</h3>
               <p id="packSubtitle">Importe um ZIP para começar</p>
               <div class="progress-line"><i id="packProgress"></i></div>
               <button class="primary wide" type="button" data-tab="record">▷ Continuar</button>
             </article>
-            <article class="pack-card ghost-card">
-              <div class="pack-preview"><button type="button">▷</button><span>PRÉVIA DO PACK<br />(vídeo)</span></div>
-              <h3>Aventura Espacial</h3>
-              <p>12 cenas · exemplo visual</p>
-              <div class="progress-line pink"><i></i></div>
-              <button class="primary wide" type="button">▷ Continuar</button>
-            </article>
-            <article class="pack-card ghost-card orange">
-              <div class="pack-preview"><button type="button">▷</button><span>PRÉVIA DO PACK<br />(vídeo)</span></div>
-              <h3>Missão Comédia</h3>
-              <p>9 cenas · exemplo visual</p>
-              <div class="progress-line orange"><i></i></div>
-              <button class="primary wide orange-btn" type="button">▷ Continuar</button>
-            </article>
           </div>
         </section>
 
         <section id="recordTab" class="tab-view">
-          <section class="studio-card">
-            <div class="scene-top">
-              <button id="prevBtn" type="button">‹</button>
-              <strong id="topCounter">Fala 0 de 0</strong>
-              <button type="button">⋮</button>
-            </div>
-
-            <div class="session-summary">
-              <h2 id="projectTitle">DubPack Studio</h2>
-              <p id="projectMeta">original</p>
-            </div>
-
-            <div class="video-frame">
-              <video id="sceneVideo" playsinline></video>
-              <img id="sceneImage" alt="" />
-              <div id="emptyFrame" class="empty-frame">Importe um ZIP para começar</div>
-              <div id="recordingOverlay" class="recording-overlay">
-                <strong id="overlayCharacter">Personagem</strong>
-                <span id="overlayText">Leia a fala no tempo certo.</span>
+          <section class="dubbing-workspace">
+            <header class="dubbing-header">
+              <button id="prevBtn" class="back-link" type="button">← Voltar</button>
+              <div>
+                <h2>Nova dublagem</h2>
+                <p id="projectMeta">Siga os passos e grave no tempo certo.</p>
               </div>
-              <div id="stageState" class="stage-state">Pronto para gravar</div>
-              <div id="countdownBadge" class="countdown-badge">3</div>
-            </div>
+              <button class="secondary" type="button">Dicas de dublagem</button>
+            </header>
 
-            <div class="video-timeline">
-              <span>00:00</span>
-              <i><b id="videoProgress"></b></i>
-              <span id="durationLabel">00:00</span>
-            </div>
-
-            <div class="dub-desk">
-              <div class="character-row">
-                <div class="avatar">👤</div>
-                <div>
-                  <small>Personagem</small>
-                  <strong id="character">Personagem</strong>
+            <div class="dubbing-grid">
+              <article class="dub-panel reference-panel">
+                <h3>1. Referência original</h3>
+                <div class="video-frame compact">
+                  <video id="sceneVideo" playsinline></video>
+                  <img id="sceneImage" alt="" />
+                  <div id="emptyFrame" class="empty-frame">Importe um ZIP para começar</div>
+                  <div id="stageState" class="stage-state">Pronto para gravar</div>
+                  <div id="countdownBadge" class="countdown-badge">3</div>
                 </div>
-                <span id="counter">Fala 0 de 0</span>
-              </div>
-              <p id="subtitle" class="speech">A fala aparece aqui.</p>
-              <div class="recording-console">
-                <button id="referenceBtn" class="secondary" type="button">🔊 Referência</button>
-                <div class="timer">
-                  <small>Começa em</small>
+                <div class="video-timeline">
+                  <span>00:00</span>
+                  <i><b id="videoProgress"></b></i>
+                  <span id="durationLabel">00:00</span>
+                </div>
+                <button id="referenceBtn" class="secondary wide" type="button">▶ Ouvir referência</button>
+                <div class="tips-list">
+                  <strong>Dicas para referência</strong>
+                  <span>Áudio limpo e claro</span>
+                  <span>Fala próxima ao microfone</span>
+                  <span>Boa dicção e entonação</span>
+                </div>
+              </article>
+
+              <article class="dub-panel speech-panel">
+                <h3>2. Fala para dublar</h3>
+                <div class="script-box">
+                  <strong id="projectTitle">DubPack Studio</strong>
+                  <p id="subtitle" class="speech">A fala aparece aqui.</p>
+                  <small><span id="counter">Fala 0 de 0</span> · <span id="character">Personagem</span></small>
+                </div>
+                <div class="tips-list">
+                  <strong>Dicas</strong>
+                  <span>Seja confiante e empolgado</span>
+                  <span>Mantenha o ritmo da fala</span>
+                  <span>Transmita energia e emoção</span>
+                </div>
+              </article>
+
+              <article class="dub-panel recording-panel">
+                <div class="panel-title-row">
+                  <h3>3. Sua gravação</h3>
+                  <span id="recordingStatus">Pronto</span>
+                </div>
+                <div class="record-timer">
                   <strong id="timerValue">2.1</strong>
+                  <span id="micHint">Toque para começar</span>
                 </div>
-                <button id="recordBtn" class="mic" type="button">🎙</button>
-              </div>
-              <small id="micHint" class="hint">Toque no microfone para começar</small>
+                <div id="recordingOverlay" class="recording-overlay inline">
+                  <strong id="overlayCharacter">Personagem</strong>
+                  <span id="overlayText">Leia a fala no tempo certo.</span>
+                </div>
+                <div class="hero-waveform" aria-label="Waveform de gravação">
+                  <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                  <b></b>
+                </div>
+                <button id="recordBtn" class="mic stop-ready" type="button">🎙</button>
+                <small class="hint">A gravação para sozinha no tempo da fala.</small>
+                <div class="mic-level" aria-label="Nível do microfone">
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <button id="referenceBtnBottom" class="secondary wide" type="button">↻ Repetir referência</button>
+              </article>
+
+              <article class="dub-panel preview-panel">
+                <h3>4. Prévia da dublagem</h3>
+                <div class="preview-stage">
+                  <button id="previewBtn" type="button">▶</button>
+                  <span>Sua gravação aparecerá aqui</span>
+                </div>
+                <div id="takeResult" class="take-result vertical">
+                  <audio id="takeAudio" controls></audio>
+                  <button id="downloadTakeBtn" class="secondary wide" type="button">Baixar áudio do take</button>
+                </div>
+                <button id="exportVideoBtn" class="primary wide" type="button">Baixar vídeo MP4 pronto</button>
+                <button id="nextBtn" class="secondary wide" type="button">Próxima cena →</button>
+              </article>
             </div>
 
-            <div class="waveform-panel">
-              <div class="waveform-head">
-                <strong>Timing da dublagem</strong>
-                <span id="waveDuration">00:00</span>
-              </div>
-              <div class="timing-labels">
-                <span>Adiantado</span>
-                <span>Perfeito</span>
-                <span>Atrasado</span>
-              </div>
-              <div class="waveform" aria-label="Timing visual da fala">
-                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-                <b></b>
-              </div>
-            </div>
-
-            <div class="remote-grid">
-              <button id="referenceBtnBottom" class="secondary" type="button">Referência</button>
-              <button id="nextBtn" class="secondary" type="button">Próxima</button>
-            </div>
-
-            <div id="takeResult" class="take-result">
-              <audio id="takeAudio" controls></audio>
-              <button id="downloadTakeBtn" class="primary small" type="button">Baixar take</button>
-            </div>
-
-            <button id="previewBtn" class="primary wide" type="button">▶ Assistir Resultado</button>
+            <footer class="scene-nav">
+              <button class="secondary" type="button" id="prevSceneBtn">← Cena anterior</button>
+              <strong id="topCounter">Fala 0 de 0</strong>
+              <button class="secondary" type="button" id="nextSceneBtn">Próxima cena →</button>
+            </footer>
           </section>
         </section>
 
@@ -176,6 +190,7 @@
           <h2>Minha Dublagem</h2>
           <p>Assista o resultado sequencial com sua voz nas falas gravadas.</p>
           <button id="previewBtnAlt" class="primary wide" type="button">▶ Assistir Resultado</button>
+          <button id="exportVideoBtnAlt" class="secondary wide" type="button">Baixar vídeo MP4 pronto</button>
         </section>
 
         <section id="communityTab" class="tab-view info-card">

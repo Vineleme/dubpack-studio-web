@@ -7,11 +7,18 @@ const state = {
   activeTab: 'packs',
   countdownTimer: null,
   recordingTimer: null,
-  progressTimer: null
+  progressTimer: null,
+  playbackTimer: null,
+  videoTimer: null,
+  activeAudio: null
 };
 
 const els = {
   packInput: document.querySelector('#packInput'),
+  packInputEmpty: document.querySelector('#packInputEmpty'),
+  emptyPacks: document.querySelector('#emptyPacks'),
+  packGrid: document.querySelector('#packGrid'),
+  packCard: document.querySelector('#packCard'),
   packTitle: document.querySelector('#packTitle'),
   packSubtitle: document.querySelector('#packSubtitle'),
   packProgress: document.querySelector('#packProgress'),
@@ -35,6 +42,8 @@ const els = {
   timerValue: document.querySelector('#timerValue'),
   micHint: document.querySelector('#micHint'),
   prevBtn: document.querySelector('#prevBtn'),
+  prevSceneBtn: document.querySelector('#prevSceneBtn'),
+  nextSceneBtn: document.querySelector('#nextSceneBtn'),
   nextBtn: document.querySelector('#nextBtn'),
   referenceBtn: document.querySelector('#referenceBtn'),
   referenceBtnBottom: document.querySelector('#referenceBtnBottom'),
@@ -44,13 +53,19 @@ const els = {
   downloadTakeBtn: document.querySelector('#downloadTakeBtn'),
   previewBtn: document.querySelector('#previewBtn'),
   previewBtnAlt: document.querySelector('#previewBtnAlt'),
+  exportVideoBtn: document.querySelector('#exportVideoBtn'),
+  exportVideoBtnAlt: document.querySelector('#exportVideoBtnAlt'),
+  recordingStatus: document.querySelector('#recordingStatus'),
   localTakes: document.querySelector('#localTakes'),
   sidePackTitle: document.querySelector('#sidePackTitle'),
   sideSceneTitle: document.querySelector('#sideSceneTitle')
 };
 
 els.packInput.addEventListener('change', importPack);
-els.prevBtn.addEventListener('click', () => selectScene(state.activeIndex - 1));
+els.packInputEmpty.addEventListener('change', importPack);
+els.prevBtn.addEventListener('click', () => setTab('packs'));
+els.prevSceneBtn.addEventListener('click', () => selectScene(state.activeIndex - 1));
+els.nextSceneBtn.addEventListener('click', () => selectScene(state.activeIndex + 1));
 els.nextBtn.addEventListener('click', () => selectScene(state.activeIndex + 1));
 els.referenceBtn.addEventListener('click', playReference);
 els.referenceBtnBottom.addEventListener('click', playReference);
@@ -58,6 +73,8 @@ els.recordBtn.addEventListener('click', startTakeFlow);
 els.downloadTakeBtn.addEventListener('click', downloadTake);
 els.previewBtn.addEventListener('click', playProjectPreview);
 els.previewBtnAlt.addEventListener('click', playProjectPreview);
+els.exportVideoBtn.addEventListener('click', exportMp4Notice);
+els.exportVideoBtnAlt.addEventListener('click', exportMp4Notice);
 
 document.querySelectorAll('[data-tab]').forEach((button) => {
   button.addEventListener('click', (event) => {
@@ -83,9 +100,10 @@ async function importPack(event) {
   const images = entries.filter((entry) => ['png', 'jpg', 'jpeg', 'webp'].includes(entry.ext));
   const videos = entries.filter((entry) => ['mp4', 'mov', 'webm', 'ogv'].includes(entry.ext));
 
-  state.scenes = audio.map((entry, index) => {
+  state.scenes = await Promise.all(audio.map(async (entry, index) => {
     const baseName = entry.name.split('/').pop()?.replace(/\.[^.]+$/, '') ?? `Fala ${index + 1}`;
-    const duration = estimateDuration(baseName);
+    const audioUrl = objectUrl(entry);
+    const duration = await getMediaDuration(audioUrl).catch(() => estimateDuration(baseName));
     return {
       id: `${index}-${baseName}`,
       title: baseName,
@@ -93,14 +111,17 @@ async function importPack(event) {
       subtitle: cleanSubtitle(baseName),
       duration,
       durationLabel: formatSeconds(duration),
-      audioUrl: objectUrl(entry),
+      audioUrl,
       imageUrl: images[index] ? objectUrl(images[index]) : '',
-      videoUrl: videos[0] ? objectUrl(videos[0]) : ''
+      videoUrl: videos[index] ? objectUrl(videos[index]) : (videos[0] ? objectUrl(videos[0]) : '')
     };
-  });
+  }));
 
   state.takes = {};
   const packName = file.name.replace(/\.zip$/i, '');
+  els.emptyPacks.style.display = 'none';
+  els.packGrid.classList.remove('has-no-pack');
+  els.packCard.style.display = 'block';
   els.packTitle.textContent = packName;
   els.sidePackTitle.textContent = packName;
   els.packSubtitle.textContent = `${state.scenes.length} falas detectadas · pronto para dublar`;
@@ -134,9 +155,10 @@ function selectScene(index) {
   els.overlayCharacter.textContent = scene.character;
   els.overlayText.textContent = scene.subtitle;
   els.durationLabel.textContent = scene.durationLabel;
-  els.waveDuration.textContent = scene.durationLabel;
+  if (els.waveDuration) els.waveDuration.textContent = scene.durationLabel;
   els.timerValue.textContent = '2.1';
   els.micHint.textContent = take ? 'Toque no microfone para regravar' : 'Toque no microfone para começar';
+  els.recordingStatus.textContent = take ? 'Gravado' : 'Pronto';
   els.videoProgress.style.width = '18%';
   els.stageState.textContent = take ? 'Take gravado' : 'Pronto para gravar';
   els.stageState.className = `stage-state ${take ? 'recorded' : ''}`;
@@ -159,8 +181,8 @@ function currentScene() {
 function playReference() {
   const scene = currentScene();
   if (!scene?.audioUrl) return;
-  new Audio(scene.audioUrl).play();
-  playSceneMedia(scene);
+  playTimedAudio(scene.audioUrl, scene.duration);
+  playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
 }
 
@@ -176,6 +198,7 @@ async function startTakeFlow() {
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
   els.micHint.textContent = 'Entre no tempo certo';
+  els.recordingStatus.textContent = 'Preparando';
 
   let count = 3;
   els.countdownBadge.textContent = count;
@@ -212,7 +235,9 @@ async function recordActiveScene() {
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
   els.micHint.textContent = 'Gravando no tempo da fala...';
-  playSceneMedia(scene);
+  els.recordingStatus.textContent = 'Gravando';
+  playTimedAudio(scene.audioUrl, scene.duration, 0.55);
+  playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
 
   const startedAt = Date.now();
@@ -233,18 +258,42 @@ async function playProjectPreview() {
     selectScene(index);
     const scene = currentScene();
     const take = state.takes[scene.id];
-    const audio = new Audio(take?.url ?? scene.audioUrl);
-    playSceneMedia(scene);
+    playSceneMedia(scene, scene.duration);
     animateProgress(scene.duration);
-    await audio.play().catch(() => undefined);
+    playTimedAudio(take?.url ?? scene.audioUrl, scene.duration);
     await wait((scene.duration * 1000) + 250);
   }
 }
 
-function playSceneMedia(scene) {
+function playSceneMedia(scene, duration) {
   if (!scene.videoUrl) return;
   els.sceneVideo.currentTime = 0;
   els.sceneVideo.play().catch(() => undefined);
+  clearTimeout(state.videoTimer);
+  state.videoTimer = setTimeout(() => {
+    els.sceneVideo.pause();
+    els.sceneVideo.currentTime = 0;
+  }, duration * 1000);
+}
+
+function playTimedAudio(url, duration, volume = 1) {
+  stopActivePlayback();
+  const audio = new Audio(url);
+  audio.volume = volume;
+  state.activeAudio = audio;
+  audio.play().catch(() => undefined);
+  clearTimeout(state.playbackTimer);
+  state.playbackTimer = setTimeout(stopActivePlayback, duration * 1000);
+}
+
+function stopActivePlayback() {
+  clearTimeout(state.playbackTimer);
+  state.playbackTimer = null;
+  if (state.activeAudio) {
+    state.activeAudio.pause();
+    state.activeAudio.currentTime = 0;
+    state.activeAudio = null;
+  }
 }
 
 function animateProgress(duration) {
@@ -265,6 +314,10 @@ function downloadTake() {
   link.href = take.url;
   link.download = `dubpack-${scene.character}-fala-${state.activeIndex + 1}.webm`;
   link.click();
+}
+
+function exportMp4Notice() {
+  alert('MP4 final: no navegador, esta etapa precisa entrar com FFmpeg WebAssembly para renderizar o video com as vozes. O fluxo visual ja esta preparado; o proximo passo tecnico e ligar essa renderizacao real.');
 }
 
 function renderLocalTakes() {
@@ -288,12 +341,21 @@ function clearRuntime() {
   clearInterval(state.countdownTimer);
   clearInterval(state.recordingTimer);
   clearInterval(state.progressTimer);
+  clearTimeout(state.playbackTimer);
+  clearTimeout(state.videoTimer);
   state.countdownTimer = null;
   state.recordingTimer = null;
   state.progressTimer = null;
+  state.playbackTimer = null;
+  state.videoTimer = null;
   els.countdownBadge.style.display = 'none';
   els.recordingOverlay.style.display = 'none';
   els.recordBtn.classList.remove('recording');
+  if (state.activeAudio) {
+    state.activeAudio.pause();
+    state.activeAudio.currentTime = 0;
+    state.activeAudio = null;
+  }
   if (els.sceneVideo) els.sceneVideo.pause();
 }
 
@@ -347,6 +409,18 @@ function getRecordedPercent() {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getMediaDuration(url) {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio(url);
+    audio.preload = 'metadata';
+    audio.onloadedmetadata = () => {
+      const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+      resolve(Math.max(1.2, Math.min(duration || 0, 45)));
+    };
+    audio.onerror = reject;
+  });
 }
 
 if ('serviceWorker' in navigator) {
