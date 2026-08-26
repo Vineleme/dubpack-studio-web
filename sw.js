@@ -1,6 +1,6 @@
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open('dubpack-studio-web-v6').then((cache) => (
+    caches.open('dubpack-studio-web-v7').then((cache) => (
       cache.addAll(['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './assets/dubpack-logo.png'])
     ))
   );
@@ -10,7 +10,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => (
-      Promise.all(keys.filter((key) => key !== 'dubpack-studio-web-v6').map((key) => caches.delete(key)))
+      Promise.all(keys.filter((key) => key !== 'dubpack-studio-web-v7').map((key) => caches.delete(key)))
     ))
   );
   self.clients.claim();
@@ -21,7 +21,7 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request)
       .then((response) => {
         const copy = response.clone();
-        caches.open('dubpack-studio-web-v6').then((cache) => cache.put(event.request, copy));
+        caches.open('dubpack-studio-web-v7').then((cache) => cache.put(event.request, copy));
         return response;
       })
       .catch(() => caches.match(event.request))

@@ -1152,7 +1152,7 @@ body.tab-record .scene-nav {
 @media (max-width: 760px) {
   .dashboard {
     display: block;
-    padding-bottom: 96px;
+    padding-bottom: 24px;
   }
   .sidebar {
     min-height: auto;
@@ -1172,23 +1172,8 @@ body.tab-record .scene-nav {
   .side-logo strong { font-size: 22px; }
   .side-logo small { letter-spacing: 4px; }
   .side-nav {
-    position: fixed;
-    left: 14px;
-    right: 14px;
-    bottom: 14px;
-    z-index: 10;
-    grid-template-columns: repeat(4, 1fr);
-    padding: 8px;
-    border-radius: 26px;
-    background: rgba(14,12,32,0.98);
+    display: none;
   }
-  .side-nav button, .gamebanana-link {
-    min-height: 54px;
-    justify-content: center;
-    padding: 0;
-    font-size: 0;
-  }
-  .side-nav button::first-letter, .gamebanana-link::first-letter { font-size: 20px; }
   .pro-card { display: none; }
   .content, .right-rail { padding: 14px; }
   .topbar, .search-row { display: block; }
