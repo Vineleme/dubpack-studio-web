@@ -11,10 +11,8 @@ const state = {
 };
 
 const els = {
-  screenTitle: document.querySelector('#screenTitle'),
   packInput: document.querySelector('#packInput'),
   packTitle: document.querySelector('#packTitle'),
-  packStatus: document.querySelector('#packStatus'),
   packSubtitle: document.querySelector('#packSubtitle'),
   packProgress: document.querySelector('#packProgress'),
   sceneVideo: document.querySelector('#sceneVideo'),
@@ -45,7 +43,10 @@ const els = {
   takeAudio: document.querySelector('#takeAudio'),
   downloadTakeBtn: document.querySelector('#downloadTakeBtn'),
   previewBtn: document.querySelector('#previewBtn'),
-  localTakes: document.querySelector('#localTakes')
+  previewBtnAlt: document.querySelector('#previewBtnAlt'),
+  localTakes: document.querySelector('#localTakes'),
+  sidePackTitle: document.querySelector('#sidePackTitle'),
+  sideSceneTitle: document.querySelector('#sideSceneTitle')
 };
 
 els.packInput.addEventListener('change', importPack);
@@ -56,9 +57,13 @@ els.referenceBtnBottom.addEventListener('click', playReference);
 els.recordBtn.addEventListener('click', startTakeFlow);
 els.downloadTakeBtn.addEventListener('click', downloadTake);
 els.previewBtn.addEventListener('click', playProjectPreview);
+els.previewBtnAlt.addEventListener('click', playProjectPreview);
 
 document.querySelectorAll('[data-tab]').forEach((button) => {
-  button.addEventListener('click', () => setTab(button.dataset.tab));
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    setTab(button.dataset.tab);
+  });
 });
 
 async function importPack(event) {
@@ -95,10 +100,12 @@ async function importPack(event) {
   });
 
   state.takes = {};
-  els.packTitle.textContent = file.name.replace(/\.zip$/i, '');
-  els.packStatus.textContent = `${state.scenes.length} falas`;
+  const packName = file.name.replace(/\.zip$/i, '');
+  els.packTitle.textContent = packName;
+  els.sidePackTitle.textContent = packName;
   els.packSubtitle.textContent = `${state.scenes.length} falas detectadas · pronto para dublar`;
   selectScene(0);
+  setTab('record');
 }
 
 function setTab(tab) {
@@ -106,9 +113,7 @@ function setTab(tab) {
   document.querySelectorAll('.tab-view').forEach((view) => view.classList.remove('active'));
   document.querySelector(`#${tab}Tab`)?.classList.add('active');
   document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
-  const titles = { packs: 'Meus Packs', gamebanana: 'GameBanana', community: 'Comunidade', profile: 'Perfil' };
-  els.screenTitle.textContent = titles[tab] ?? 'Meus Packs';
-  if (tab === 'community') renderLocalTakes();
+  if (tab === 'community' || tab === 'results') renderLocalTakes();
 }
 
 function selectScene(index) {
@@ -123,6 +128,7 @@ function selectScene(index) {
   els.counter.textContent = counter;
   els.projectTitle.textContent = scene.character;
   els.projectMeta.textContent = take ? `${counter} · gravado` : `${counter} · original`;
+  els.sideSceneTitle.textContent = counter;
   els.character.textContent = scene.character;
   els.subtitle.textContent = scene.subtitle;
   els.overlayCharacter.textContent = scene.character;

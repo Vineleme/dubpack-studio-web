@@ -1,6 +1,6 @@
-# DubPack Studio Web MVP
+# DubPack Studio Web
 
-MVP barato em formato PWA para validar o produto no navegador.
+Versao web/PWA do DubPack Studio, portada a partir da experiencia Android usada em desenvolvimento.
 
 ## Rodar local
 
@@ -16,12 +16,15 @@ Depois abra o endereço local mostrado no terminal.
 - Lista audios do pack como falas.
 - Mostra imagem ou video quando existir no pack.
 - Toca referencia.
-- Grava a voz pelo navegador.
-- Permite ouvir e baixar o take gravado.
+- Grava com contagem de 3 segundos.
+- Para a gravacao automaticamente pelo tempo da fala.
+- Reproduz uma previa sequencial usando takes gravados.
+- Guarda takes locais durante a sessao do navegador.
+- Permite baixar o take gravado.
+- Pode ser publicado no GitHub Pages como site/PWA.
 
 ## O que fica para a proxima etapa
 
-- Renderizar MP4 final no navegador ou servidor.
+- Renderizar MP4 final no navegador com FFmpeg WebAssembly ou em servidor.
 - Login e comunidade.
 - Pagamento/assinatura.
-- Hospedagem publica.

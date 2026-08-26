@@ -1,7 +1,15 @@
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open('dubpack-studio-web-v1').then((cache) => (
+    caches.open('dubpack-studio-web-v2').then((cache) => (
       cache.addAll(['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './assets/dubpack-logo.png'])
+    ))
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => (
+      Promise.all(keys.filter((key) => key !== 'dubpack-studio-web-v2').map((key) => caches.delete(key)))
     ))
   );
 });
