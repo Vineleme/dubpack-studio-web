@@ -9,90 +9,166 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app">
+    <main class="phone-shell">
+      <div class="app-bg"></div>
+
       <header class="topbar">
         <div class="brand">
           <img src="./assets/dubpack-logo.png" alt="DubPack Studio" class="logo" />
           <div>
             <strong>DubPack</strong>
-            <span>Studio Web</span>
+            <span id="screenTitle">Meus Packs</span>
           </div>
         </div>
-        <button class="icon-button" type="button">⚙</button>
+        <button class="icon-button" type="button" aria-label="Configurações">⚙</button>
       </header>
 
-      <nav class="bottom-nav" aria-label="Navegacao principal">
-        <button class="active" type="button">⌂<span>Meus Packs</span></button>
-        <button type="button">🎮<span>GameBanana</span></button>
-        <button type="button">👥<span>Comunidade</span></button>
-        <button type="button">◯<span>Perfil</span></button>
-      </nav>
-
-      <section class="workspace">
-        <aside class="panel packs-panel">
-          <div class="section-title">
-            <span>Meus Packs</span>
-            <small id="packStatus">Nenhum pack</small>
-          </div>
-          <div class="pack-card active">
-            <div>
-              <strong>Pack importado</strong>
-              <span id="packSubtitle">Importe um ZIP para comecar</span>
+      <section id="packsTab" class="tab-view active">
+        <section class="pack-stack">
+          <article class="pack-card active">
+            <div class="pack-art">
+              <img src="./assets/dubpack-logo.png" alt="" />
             </div>
-            <div class="mini-progress"><i></i></div>
-          </div>
+            <div>
+              <h2 id="packTitle">Pack importado</h2>
+              <p id="packSubtitle">Importe um ZIP para começar</p>
+              <div class="progress-line"><i id="packProgress"></i></div>
+            </div>
+          </article>
+
           <label class="primary add-pack">
             + Adicionar Pack
             <input id="packInput" type="file" accept=".zip" hidden />
           </label>
-          <div class="section-title scene-title">
-            <span>Cenas</span>
-            <small id="sceneCounter">0/0</small>
-          </div>
-          <div id="sceneList" class="scene-list"></div>
-        </aside>
+        </section>
 
-        <section class="studio">
-          <div class="scene-top">
-            <button id="prevBtn" type="button">‹</button>
-            <strong id="topCounter">Fala 0 de 0</strong>
-            <button type="button">⋮</button>
-          </div>
-
-          <div class="project-title">
-            <h1 id="projectTitle">DubPack Studio</h1>
-            <span id="projectMeta">original</span>
-          </div>
-
-          <div class="video-frame">
-            <video id="sceneVideo" controls playsinline></video>
-            <img id="sceneImage" alt="" />
-            <div id="emptyFrame" class="empty-frame">Importe um ZIP para comecar</div>
-          </div>
-
-          <div class="cue-card">
-            <span id="counter">Fala 0 de 0</span>
-            <h2 id="character">Personagem</h2>
-            <p id="subtitle">A fala aparece aqui.</p>
-          </div>
-
-          <div class="waveform" aria-label="Timing visual da fala">
-            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-            <b></b>
-          </div>
-
-          <div class="controls">
-            <button id="referenceBtn" class="secondary">Referencia</button>
-            <button id="recordBtn" class="record">Gravar</button>
-            <button id="nextBtn" class="secondary">Proxima</button>
-          </div>
-
-          <div class="result">
-            <audio id="takeAudio" controls></audio>
-            <button id="downloadTakeBtn" class="primary small">Baixar minha voz</button>
+        <section class="hero-card">
+          <span>DUBLAGEM É O JOGO.</span>
+          <h1>A nota é a diversão.</h1>
+          <p>Abra um pack, escolha uma cena, duble no ritmo e veja seu resultado no navegador.</p>
+          <div class="flow">
+            <b>📁 Escolha</b>
+            <b>🎙 Duble</b>
+            <b>⭐ Nota</b>
+            <b>⬇ Baixe</b>
           </div>
         </section>
+
+        <section class="premium-card">
+          <span>MONETIZAÇÃO</span>
+          <h2>Plano Premium</h2>
+          <p>Grátis: 1 projeto por dia · anúncio libera sessão extra · Premium libera exportações.</p>
+          <div class="premium-actions">
+            <button class="secondary" type="button">Ver Anúncio</button>
+            <button class="primary" type="button">Simular Grátis</button>
+          </div>
+        </section>
+
+        <section class="scene-top">
+          <button id="prevBtn" type="button">‹</button>
+          <strong id="topCounter">Fala 0 de 0</strong>
+          <button type="button">⋮</button>
+        </section>
+
+        <section class="session-summary">
+          <h2 id="projectTitle">DubPack Studio</h2>
+          <p id="projectMeta">original</p>
+        </section>
+
+        <section class="stage">
+          <div class="video-frame">
+            <video id="sceneVideo" playsinline></video>
+            <img id="sceneImage" alt="" />
+            <div id="emptyFrame" class="empty-frame">Importe um ZIP para começar</div>
+            <div id="recordingOverlay" class="recording-overlay">
+              <strong id="overlayCharacter">Personagem</strong>
+              <span id="overlayText">Leia a fala no tempo certo.</span>
+            </div>
+            <div id="stageState" class="stage-state">Pronto para gravar</div>
+            <div id="countdownBadge" class="countdown-badge">3</div>
+          </div>
+
+          <div class="video-timeline">
+            <span>00:00</span>
+            <i><b id="videoProgress"></b></i>
+            <span id="durationLabel">00:00</span>
+          </div>
+
+          <div class="dub-desk">
+            <div class="character-row">
+              <div class="avatar">👤</div>
+              <div>
+                <small>Personagem</small>
+                <strong id="character">Personagem</strong>
+              </div>
+              <span id="counter">Fala 0 de 0</span>
+            </div>
+            <p id="subtitle" class="speech">A fala aparece aqui.</p>
+            <div class="recording-console">
+              <button id="referenceBtn" class="secondary" type="button">🔊 Referência</button>
+              <div class="timer">
+                <small>Começa em</small>
+                <strong id="timerValue">2.1</strong>
+              </div>
+              <button id="recordBtn" class="mic" type="button">🎙</button>
+            </div>
+            <small id="micHint" class="hint">Toque no microfone para começar</small>
+          </div>
+
+          <div class="waveform-panel">
+            <div class="waveform-head">
+              <strong>Timing da dublagem</strong>
+              <span id="waveDuration">00:00</span>
+            </div>
+            <div class="timing-labels">
+              <span>Adiantado</span>
+              <span>Perfeito</span>
+              <span>Atrasado</span>
+            </div>
+            <div class="waveform" aria-label="Timing visual da fala">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <b></b>
+            </div>
+          </div>
+
+          <div class="remote-grid">
+            <button id="referenceBtnBottom" class="secondary" type="button">Referência</button>
+            <button id="nextBtn" class="secondary" type="button">Próxima</button>
+          </div>
+
+          <div id="takeResult" class="take-result">
+            <audio id="takeAudio" controls></audio>
+            <button id="downloadTakeBtn" class="primary small" type="button">Baixar take</button>
+          </div>
+
+          <button id="previewBtn" class="primary wide" type="button">▶ Assistir Resultado</button>
+        </section>
       </section>
+
+      <section id="gamebananaTab" class="tab-view info-card">
+        <h2>GameBanana</h2>
+        <p>Baixe um pack pelo navegador, depois volte aqui e use + Adicionar Pack.</p>
+        <a class="primary link-button" href="https://gamebanana.com/games/20674" target="_blank" rel="noreferrer">Abrir GameBanana</a>
+      </section>
+
+      <section id="communityTab" class="tab-view info-card">
+        <h2>Comunidade</h2>
+        <p>No web MVP, seus takes ficam locais no navegador. Feed público entra quando tiver login, servidor e moderação.</p>
+        <div id="localTakes" class="local-takes"></div>
+      </section>
+
+      <section id="profileTab" class="tab-view info-card">
+        <h2>Perfil</h2>
+        <p>Beta em modo premium visual. Depois conectamos pagamento, conta e histórico online.</p>
+        <button class="secondary" type="button">Alternar Plano</button>
+      </section>
+
+      <nav class="bottom-nav" aria-label="Navegação principal">
+        <button class="active" type="button" data-tab="packs">⌂<span>Meus Packs</span></button>
+        <button type="button" data-tab="gamebanana">🎮<span>GameBanana</span></button>
+        <button type="button" data-tab="community">👥<span>Comunidade</span></button>
+        <button type="button" data-tab="profile">◯<span>Perfil</span></button>
+      </nav>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
