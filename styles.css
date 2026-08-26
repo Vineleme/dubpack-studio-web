@@ -26,6 +26,14 @@ button, label, a { border: 0; text-decoration: none; }
   gap: 28px;
 }
 
+body.tab-record .dashboard {
+  grid-template-columns: 292px minmax(0, 1fr);
+}
+
+body.tab-record .right-rail {
+  display: none;
+}
+
 .sidebar {
   min-height: 100vh;
   padding: 28px 22px;
@@ -903,7 +911,7 @@ button, label, a { border: 0; text-decoration: none; }
 .choicer-stage {
   min-height: 520px;
   display: grid;
-  grid-template-columns: 52px minmax(420px, 1fr) 210px;
+  grid-template-columns: 52px minmax(420px, 1fr);
   gap: 18px;
   align-items: center;
   padding: 28px;
@@ -980,7 +988,11 @@ button, label, a { border: 0; text-decoration: none; }
 
 .subtitle-console strong {
   color: #ffcf4a;
-  font-size: 13px;
+  justify-self: end;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 207, 74, 0.12);
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -997,7 +1009,8 @@ button, label, a { border: 0; text-decoration: none; }
 .record-strip {
   width: min(760px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto auto auto auto auto;
+  justify-content: center;
   gap: 12px;
   align-items: center;
   padding: 12px;
@@ -1007,7 +1020,7 @@ button, label, a { border: 0; text-decoration: none; }
 }
 
 .take-meta {
-  display: grid;
+  display: none;
   gap: 3px;
   min-width: 0;
 }
@@ -1036,6 +1049,15 @@ button, label, a { border: 0; text-decoration: none; }
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025));
   border: 1px solid rgba(255,255,255,0.16);
+}
+
+body.tab-record .save-panel {
+  display: none !important;
+}
+
+body.tab-record .timing-desk,
+body.tab-record .scene-nav {
+  display: none !important;
 }
 
 .preview-mini {

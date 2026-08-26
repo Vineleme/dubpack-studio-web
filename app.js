@@ -10,6 +10,7 @@ const state = {
   progressTimer: null,
   playbackTimer: null,
   videoTimer: null,
+  audioContext: null,
   activeAudio: null
 };
 
@@ -131,11 +132,13 @@ async function importPack(event) {
   els.sidePackTitle.textContent = packName;
   els.packSubtitle.textContent = `${state.scenes.length} falas detectadas · pronto para dublar`;
   selectScene(0);
+  updateExportState();
   setTab('record');
 }
 
 function setTab(tab) {
   state.activeTab = tab;
+  document.body.classList.toggle('tab-record', tab === 'record');
   document.querySelectorAll('.tab-view').forEach((view) => view.classList.remove('active'));
   document.querySelector(`#${tab}Tab`)?.classList.add('active');
   document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
@@ -179,9 +182,10 @@ function selectScene(index) {
   els.listenTakeBtn.disabled = !take;
   els.listenTakeBtn.classList.toggle('is-hidden', !take);
   els.packProgress.style.width = `${getRecordedPercent()}%`;
+  updateExportState();
 
-  els.sceneVideo.style.display = scene.videoUrl ? 'block' : 'none';
-  els.sceneImage.style.display = !scene.videoUrl && scene.imageUrl ? 'block' : 'none';
+  els.sceneImage.style.display = scene.imageUrl ? 'block' : 'none';
+  els.sceneVideo.style.display = !scene.imageUrl && scene.videoUrl ? 'block' : 'none';
   els.emptyFrame.style.display = scene.videoUrl || scene.imageUrl ? 'none' : 'grid';
   els.sceneVideo.src = scene.videoUrl || '';
   els.sceneImage.src = scene.imageUrl || '';
@@ -242,17 +246,24 @@ async function startTakeFlow() {
 
 async function recordActiveScene() {
   const scene = currentScene();
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stream = amplifyMicrophone(rawStream, 1.9);
   state.chunks = [];
   state.recorder = new MediaRecorder(stream);
   state.recorder.ondataavailable = (event) => state.chunks.push(event.data);
   state.recorder.onstop = () => {
     stream.getTracks().forEach((track) => track.stop());
+    rawStream.getTracks().forEach((track) => track.stop());
+    if (state.audioContext) {
+      state.audioContext.close().catch(() => undefined);
+      state.audioContext = null;
+    }
     const url = URL.createObjectURL(new Blob(state.chunks, { type: 'audio/webm' }));
     state.takes[scene.id] = { url, character: scene.character, subtitle: scene.subtitle, createdAt: new Date().toISOString() };
     clearRuntime();
     selectScene(state.activeIndex);
     renderLocalTakes();
+    updateExportState();
   };
 
   els.countdownBadge.style.display = 'none';
@@ -262,7 +273,7 @@ async function recordActiveScene() {
   els.recordBtn.classList.add('recording');
   els.micHint.textContent = 'Gravando no tempo da fala...';
   els.recordingStatus.textContent = 'Gravando';
-  playTimedAudio(scene.audioUrl, scene.duration, 0.55);
+  playTimedAudio(scene.audioUrl, scene.duration, 0.28);
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
 
@@ -304,6 +315,7 @@ function playCurrentTake() {
 }
 
 function playSceneMedia(scene, duration) {
+  if (scene.imageUrl) return;
   if (!scene.videoUrl) return;
   els.sceneVideo.currentTime = 0;
   els.sceneVideo.play().catch(() => undefined);
@@ -355,7 +367,37 @@ function downloadTake() {
 }
 
 function exportMp4Notice() {
+  if (!allTakesRecorded()) {
+    alert('Finalize todos os takes antes de salvar a dublagem.');
+    return;
+  }
   alert('MP4 final: no navegador, esta etapa precisa entrar com FFmpeg WebAssembly para renderizar o video com as vozes. O fluxo visual ja esta preparado; o proximo passo tecnico e ligar essa renderizacao real.');
+}
+
+function updateExportState() {
+  const ready = allTakesRecorded();
+  [els.exportVideoBtn, els.exportVideoBtnSide, els.exportVideoBtnAlt].forEach((button) => {
+    if (!button) return;
+    button.disabled = !ready;
+    button.textContent = ready ? 'Salvar dublagem' : 'Salvar ao concluir';
+  });
+}
+
+function allTakesRecorded() {
+  return state.scenes.length > 0 && state.scenes.every((scene) => state.takes[scene.id]);
+}
+
+function amplifyMicrophone(stream, gainValue) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return stream;
+  state.audioContext = new AudioContextClass();
+  const source = state.audioContext.createMediaStreamSource(stream);
+  const gain = state.audioContext.createGain();
+  const destination = state.audioContext.createMediaStreamDestination();
+  gain.gain.value = gainValue;
+  source.connect(gain);
+  gain.connect(destination);
+  return destination.stream;
 }
 
 function renderLocalTakes() {

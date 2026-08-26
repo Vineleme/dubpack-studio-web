@@ -78,7 +78,7 @@
                 <h2>Nova dublagem</h2>
                 <p id="projectMeta">Siga os passos e grave no tempo certo.</p>
               </div>
-              <button id="exportVideoBtn" class="primary" type="button">Salvar dublagem</button>
+              <button id="exportVideoBtn" class="primary" type="button" disabled>Salvar dublagem</button>
             </header>
 
             <div class="choicer-stage">
@@ -113,6 +113,8 @@
                     <span id="subtitle">A fala aparece aqui.</span>
                   </div>
                   <button id="referenceBtn" class="secondary" type="button">▶ Referência</button>
+                  <button id="listenTakeBtn" class="secondary listen-take" type="button">▶ Ouvir meu take</button>
+                  <button id="nextBtn" class="secondary" type="button">Próxima cena →</button>
                   <button id="recordBtn" class="mic stop-ready" type="button">🎙</button>
                   <div class="record-timer">
                     <small id="micHint">Toque para começar</small>
@@ -126,13 +128,11 @@
                 </div>
               </section>
 
-              <aside class="save-panel">
+              <aside class="save-panel is-hidden">
                 <button id="previewBtn" class="preview-mini" type="button">▶</button>
                 <span id="previewHint">Grave este take para ouvir aqui</span>
-                <button id="listenTakeBtn" class="secondary wide listen-take" type="button">▶ Ouvir meu take</button>
                 <button id="downloadTakeBtn" class="secondary wide" type="button">Baixar áudio do take</button>
                 <button id="exportVideoBtnSide" class="primary wide" type="button">Salvar dublagem</button>
-                <button id="nextBtn" class="secondary wide" type="button">Próxima cena →</button>
                 <div id="takeResult" class="take-result vertical">
                   <audio id="takeAudio" controls></audio>
                 </div>
