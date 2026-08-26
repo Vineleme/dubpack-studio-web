@@ -105,16 +105,18 @@ async function importPack(event) {
   const audio = entries.filter((entry) => ['mp3', 'wav', 'ogg', 'm4a'].includes(entry.ext) && !entry.name.toLowerCase().includes('backing'));
   const images = entries.filter((entry) => ['png', 'jpg', 'jpeg', 'webp'].includes(entry.ext));
   const videos = entries.filter((entry) => ['mp4', 'mov', 'webm', 'ogv'].includes(entry.ext));
+  const metadata = buildSceneMetadata(entries);
 
   state.scenes = await Promise.all(audio.map(async (entry, index) => {
     const baseName = entry.name.split('/').pop()?.replace(/\.[^.]+$/, '') ?? `Fala ${index + 1}`;
+    const sceneMeta = metadata.get(normalizeKey(baseName));
     const audioUrl = objectUrl(entry);
     const duration = await getMediaDuration(audioUrl).catch(() => estimateDuration(baseName));
     return {
       id: `${index}-${baseName}`,
       title: baseName,
-      character: detectCharacter(baseName),
-      subtitle: cleanSubtitle(baseName),
+      character: sceneMeta?.character || detectCharacter(baseName),
+      subtitle: sceneMeta?.caption || cleanSubtitle(baseName),
       duration,
       durationLabel: formatSeconds(duration),
       audioUrl,
@@ -372,6 +374,39 @@ function exportMp4Notice() {
     return;
   }
   alert('MP4 final: no navegador, esta etapa precisa entrar com FFmpeg WebAssembly para renderizar o video com as vozes. O fluxo visual ja esta preparado; o proximo passo tecnico e ligar essa renderizacao real.');
+}
+
+function buildSceneMetadata(entries) {
+  const textDecoder = new TextDecoder('utf-8');
+  const textEntries = entries.filter((entry) => ['txt', 'ini', 'json'].includes(entry.ext));
+  const metadata = new Map();
+
+  textEntries.forEach((entry) => {
+    if (entry.name.toLowerCase().includes('_pack_info')) return;
+    const baseName = entry.name.split('/').pop()?.replace(/\.[^.]+$/, '') ?? '';
+    const raw = textDecoder.decode(entry.data);
+    const caption = matchValue(raw, 'caption');
+    const character = matchArrayFirst(raw, 'dub_characters') || matchValue(raw, 'character');
+    if (baseName && (caption || character)) {
+      metadata.set(normalizeKey(baseName), { caption, character });
+    }
+  });
+
+  return metadata;
+}
+
+function matchValue(raw, key) {
+  const pattern = new RegExp(`${key}\\s*=\\s*["']([^"']+)["']`, 'i');
+  return raw.match(pattern)?.[1]?.trim() || '';
+}
+
+function matchArrayFirst(raw, key) {
+  const pattern = new RegExp(`${key}\\s*=\\s*\\[\\s*["']([^"']+)["']`, 'i');
+  return raw.match(pattern)?.[1]?.trim() || '';
+}
+
+function normalizeKey(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 function updateExportState() {

@@ -837,13 +837,13 @@ body.tab-record .right-rail {
 .score-card a { color: #f52e83; }
 .score-body {
   display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 18px;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 16px;
   align-items: center;
 }
 .score-ring {
-  width: 128px;
-  height: 128px;
+  width: 112px;
+  height: 112px;
   display: grid;
   place-items: center;
   border-radius: 999px;
@@ -851,13 +851,24 @@ body.tab-record .right-rail {
     radial-gradient(circle at center, #100d26 58%, transparent 59%),
     conic-gradient(#ff7a1a, #f52e83, #7c3aed, #ff7a1a);
 }
-.score-ring strong { font-size: 42px; }
+.score-ring strong { font-size: 38px; }
 .score-ring span { font-size: 10px; color: #b7b5ce; }
+.score-card ul {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
 .score-card li {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
   margin: 12px 0;
   color: #fff;
+  line-height: 1.25;
+}
+
+.score-card li b {
+  justify-self: end;
 }
 .mini-video {
   width: 88px;
