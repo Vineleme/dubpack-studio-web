@@ -250,8 +250,9 @@ async function recordActiveScene() {
   const scene = currentScene();
   const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const stream = amplifyMicrophone(rawStream, 1.9);
+  const recorderOptions = getRecorderOptions();
   state.chunks = [];
-  state.recorder = new MediaRecorder(stream);
+  state.recorder = new MediaRecorder(stream, recorderOptions);
   state.recorder.ondataavailable = (event) => state.chunks.push(event.data);
   state.recorder.onstop = () => {
     stream.getTracks().forEach((track) => track.stop());
@@ -260,8 +261,10 @@ async function recordActiveScene() {
       state.audioContext.close().catch(() => undefined);
       state.audioContext = null;
     }
-    const url = URL.createObjectURL(new Blob(state.chunks, { type: 'audio/webm' }));
-    state.takes[scene.id] = { url, character: scene.character, subtitle: scene.subtitle, createdAt: new Date().toISOString() };
+    const mimeType = state.recorder?.mimeType || recorderOptions.mimeType || 'audio/webm';
+    const blob = new Blob(state.chunks, { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    state.takes[scene.id] = { url, mimeType, character: scene.character, subtitle: scene.subtitle, createdAt: new Date().toISOString() };
     clearRuntime();
     selectScene(state.activeIndex);
     renderLocalTakes();
@@ -311,7 +314,13 @@ function playCurrentTake() {
     els.previewHint.textContent = 'Grave este take primeiro';
     return;
   }
-  playTimedAudio(take.url, scene.duration);
+  stopActivePlayback();
+  els.takeAudio.src = take.url;
+  els.takeAudio.currentTime = 0;
+  els.takeAudio.volume = 1;
+  els.takeAudio.play().catch(() => {
+    playTimedAudio(take.url, scene.duration);
+  });
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
 }
@@ -341,6 +350,10 @@ function playTimedAudio(url, duration, volume = 1) {
 function stopActivePlayback() {
   clearTimeout(state.playbackTimer);
   state.playbackTimer = null;
+  if (els.takeAudio) {
+    els.takeAudio.pause();
+    els.takeAudio.currentTime = 0;
+  }
   if (state.activeAudio) {
     state.activeAudio.pause();
     state.activeAudio.currentTime = 0;
@@ -364,7 +377,7 @@ function downloadTake() {
   if (!take) return;
   const link = document.createElement('a');
   link.href = take.url;
-  link.download = `dubpack-${scene.character}-fala-${state.activeIndex + 1}.webm`;
+  link.download = `dubpack-${scene.character}-fala-${state.activeIndex + 1}.${extensionForMime(take.mimeType)}`;
   link.click();
 }
 
@@ -407,6 +420,23 @@ function matchArrayFirst(raw, key) {
 
 function normalizeKey(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function getRecorderOptions() {
+  const supportedTypes = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/aac'
+  ];
+  const mimeType = supportedTypes.find((type) => MediaRecorder.isTypeSupported?.(type));
+  return mimeType ? { mimeType } : {};
+}
+
+function extensionForMime(mimeType = '') {
+  if (mimeType.includes('mp4') || mimeType.includes('aac')) return 'm4a';
+  if (mimeType.includes('ogg')) return 'ogg';
+  return 'webm';
 }
 
 function updateExportState() {
