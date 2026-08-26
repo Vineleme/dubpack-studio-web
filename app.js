@@ -56,6 +56,7 @@ const els = {
   previewBtnAlt: document.querySelector('#previewBtnAlt'),
   listenTakeBtn: document.querySelector('#listenTakeBtn'),
   exportVideoBtn: document.querySelector('#exportVideoBtn'),
+  exportVideoBtnSide: document.querySelector('#exportVideoBtnSide'),
   exportVideoBtnAlt: document.querySelector('#exportVideoBtnAlt'),
   recordingStatus: document.querySelector('#recordingStatus'),
   localTakes: document.querySelector('#localTakes'),
@@ -77,6 +78,7 @@ els.previewBtn.addEventListener('click', playCurrentTake);
 els.listenTakeBtn.addEventListener('click', playCurrentTake);
 els.previewBtnAlt.addEventListener('click', playProjectPreview);
 els.exportVideoBtn.addEventListener('click', exportMp4Notice);
+els.exportVideoBtnSide.addEventListener('click', exportMp4Notice);
 els.exportVideoBtnAlt.addEventListener('click', exportMp4Notice);
 
 document.querySelectorAll('[data-tab]').forEach((button) => {
