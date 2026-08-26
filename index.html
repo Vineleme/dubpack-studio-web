@@ -59,15 +59,6 @@
             </label>
           </div>
 
-          <div id="emptyPacks" class="empty-packs">
-            <strong>Nenhum pack importado ainda</strong>
-            <p>Adicione um ZIP para aparecer aqui e começar a dublar take por take.</p>
-            <label class="primary">
-              + Adicionar Pack
-              <input id="packInputEmpty" type="file" accept=".zip" hidden />
-            </label>
-          </div>
-
           <div id="packGrid" class="pack-grid has-no-pack">
             <article id="packCard" class="pack-card active">
               <div class="pack-preview"><button type="button">▷</button><span>PRÉVIA DO PACK<br />(vídeo)</span></div>
@@ -97,6 +88,10 @@
                   <video id="sceneVideo" playsinline></video>
                   <img id="sceneImage" alt="" />
                   <div id="emptyFrame" class="empty-frame">Importe um ZIP para começar</div>
+                  <div class="frame-caption">
+                    <strong id="frameCharacter">Personagem</strong>
+                    <span id="frameSubtitle">A legenda aparece aqui.</span>
+                  </div>
                   <div id="stageState" class="stage-state">Pronto para gravar</div>
                   <div id="countdownBadge" class="countdown-badge">3</div>
                 </div>
@@ -161,7 +156,7 @@
                 <h3>4. Prévia da dublagem</h3>
                 <div class="preview-stage">
                   <button id="previewBtn" type="button">▶</button>
-                  <span>Sua gravação aparecerá aqui</span>
+                  <span id="previewHint">Grave este take para ouvir aqui</span>
                 </div>
                 <div id="takeResult" class="take-result vertical">
                   <audio id="takeAudio" controls></audio>
@@ -169,6 +164,7 @@
                 </div>
                 <button id="exportVideoBtn" class="primary wide" type="button">Baixar vídeo MP4 pronto</button>
                 <button id="nextBtn" class="secondary wide" type="button">Próxima cena →</button>
+                <button id="listenTakeBtn" class="secondary wide listen-take" type="button">▶ Ouvir meu take</button>
               </article>
             </div>
 
@@ -221,7 +217,7 @@
           </div>
         </section>
 
-        <section class="sequence-card">
+        <section id="sequenceCard" class="sequence-card is-hidden">
           <h2>Sequência atual</h2>
           <div class="mini-video">▷</div>
           <p><strong id="sidePackTitle">Pack importado</strong><br /><span id="sideSceneTitle">Cena 01</span></p>

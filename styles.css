@@ -180,35 +180,16 @@ button, label, a { border: 0; text-decoration: none; }
   gap: 16px;
 }
 
-.empty-packs {
-  min-height: 280px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 12px;
-  padding: 28px;
-  border-radius: 22px;
-  border: 1px dashed rgba(245, 46, 131, 0.34);
-  background: rgba(16, 13, 38, 0.58);
-  text-align: center;
-}
-
-.empty-packs strong {
-  font-size: 22px;
-}
-
-.empty-packs p {
-  max-width: 420px;
-  margin: 0;
-  color: #b7b5ce;
-}
-
 .pack-grid.has-no-pack {
   display: none;
 }
 
 #packCard {
   display: none;
+}
+
+.is-hidden {
+  display: none !important;
 }
 
 .pack-card, .studio-card, .info-card, .score-card, .sequence-card, .tips-card {
@@ -276,6 +257,12 @@ button, label, a { border: 0; text-decoration: none; }
   color: #fff;
   font-weight: 950;
   cursor: pointer;
+}
+
+.primary:disabled, .secondary:disabled, .preview-stage button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .primary {
@@ -626,6 +613,33 @@ button, label, a { border: 0; text-decoration: none; }
   font-weight: 850;
 }
 
+.frame-caption {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 46px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(5, 4, 13, 0.38), rgba(5, 4, 13, 0.86));
+  text-align: center;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+  pointer-events: none;
+}
+
+.frame-caption strong {
+  font-size: 13px;
+  color: #fff;
+}
+
+.frame-caption span {
+  color: #fff;
+  font-size: clamp(13px, 1.4vw, 17px);
+  font-weight: 950;
+  line-height: 1.25;
+}
+
 .recording-overlay {
   display: none;
   position: absolute;
@@ -784,9 +798,19 @@ button, label, a { border: 0; text-decoration: none; }
 .take-result audio { flex: 1; }
 .small { min-height: 42px; }
 .pulse-next {
-  background: #43e97b;
-  color: #090817;
+  background: linear-gradient(90deg, #16d95a, #43e97b) !important;
+  color: #07110b !important;
+  box-shadow: 0 0 26px rgba(67, 233, 123, 0.65) !important;
   animation: pulseNext 1s ease-in-out infinite;
+}
+
+.listen-take {
+  border-color: rgba(67, 233, 123, 0.28);
+  color: #43e97b;
+}
+
+.mic.attention {
+  animation: recordPulse 0.28s ease-in-out 3;
 }
 
 .right-rail {
