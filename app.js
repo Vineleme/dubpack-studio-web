@@ -17,6 +17,28 @@ const OWNER_EMAILS = [
   'vineleme@icloud.com',
   'viniciusleme@icloud.com'
 ];
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBl-eePA-sXfI6JR6wVlx3m2BLTpfyMFSE',
+  authDomain: 'dub-pack-studio.firebaseapp.com',
+  projectId: 'dub-pack-studio',
+  storageBucket: 'dub-pack-studio.firebasestorage.app',
+  messagingSenderId: '856569139818',
+  appId: '1:856569139818:web:0a715060112d1fc779b013'
+};
+
+let firebaseAuth = null;
+try {
+  if (window.firebase?.apps?.length) {
+    firebaseAuth = window.firebase.auth();
+  } else if (window.firebase?.initializeApp) {
+    window.firebase.initializeApp(FIREBASE_CONFIG);
+    firebaseAuth = window.firebase.auth();
+  }
+  if (firebaseAuth) firebaseAuth.languageCode = 'pt';
+} catch (error) {
+  console.error(error);
+  firebaseAuth = null;
+}
 
 const STUDIO_TIPS = [
   {
@@ -199,7 +221,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=51').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=52').catch(() => undefined);
 }
 
 function bindUi() {
@@ -268,26 +290,26 @@ function bindUi() {
 }
 
 async function bootApp() {
-  state.user = readSessionUser();
-  if (!state.user) {
-    showStudio();
+  showStudio();
+  renderCreditShop();
+  if (!firebaseAuth) {
     showAuthGate(true);
-    renderCreditShop();
+    toast('Firebase não carregou. Recarregue a página.');
     return;
   }
-  showAuthGate(false);
-  showStudio();
-  refreshAccountUi();
-  try {
-    await restoreSession();
-  } catch {
-    renderPackGrid();
-  }
-  pruneExpiredPacks();
-  renderCreditShop();
-  updateCreditUi();
-  renderActivity();
-  showFinalVideo(currentPack());
+  await new Promise((resolve) => {
+    const stop = firebaseAuth.onAuthStateChanged(async (fbUser) => {
+      stop();
+      if (fbUser) {
+        await finishLogin(accountFromFirebase(fbUser), { toast: false });
+      } else {
+        state.user = null;
+        localStorage.removeItem(SESSION_USER_KEY);
+        showAuthGate(true);
+      }
+      resolve();
+    });
+  });
 }
 
 function normalizeEmail(value) {
@@ -310,13 +332,17 @@ function writeUsers(users) {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
-function readSessionUser() {
-  try {
-    const user = JSON.parse(localStorage.getItem(SESSION_USER_KEY) || 'null');
-    return user?.email ? user : null;
-  } catch {
-    return null;
-  }
+function accountFromFirebase(fbUser) {
+  const email = normalizeEmail(fbUser.email);
+  const local = readUsers()[email] || {};
+  const owner = OWNER_EMAILS.includes(email) || Boolean(local.owner);
+  const name = String(fbUser.displayName || local.name || '').trim() || displayNameFromEmail(email);
+  const next = { ...local, name, email, owner, uid: fbUser.uid };
+  delete next.password;
+  const users = readUsers();
+  users[email] = next;
+  writeUsers(users);
+  return { name, email, owner, uid: fbUser.uid };
 }
 
 function isOwner(user = state.user) {
@@ -341,23 +367,24 @@ function setAuthMode(mode) {
     els.authName.required = false;
     if (login || reset) els.authName.value = '';
   }
-  if (els.authPasswordWrap) els.authPasswordWrap.classList.remove('is-hidden');
-  if (els.authPasswordLabel) els.authPasswordLabel.textContent = reset ? 'Nova senha' : 'Senha';
+  if (els.authPasswordWrap) els.authPasswordWrap.classList.toggle('is-hidden', reset);
+  if (els.authPasswordLabel) els.authPasswordLabel.textContent = 'Senha';
   if (els.authPassword) {
-    els.authPassword.placeholder = reset ? 'Digite a senha nova' : 'Sua senha';
-    els.authPassword.autocomplete = reset ? 'new-password' : 'current-password';
+    els.authPassword.placeholder = 'Sua senha';
+    els.authPassword.autocomplete = 'current-password';
+    if (reset) els.authPassword.value = '';
   }
   if (els.authTitle) {
-    els.authTitle.textContent = reset ? 'Nova senha' : login ? 'Entrar' : 'Criar conta';
+    els.authTitle.textContent = reset ? 'Esqueci a senha' : login ? 'Entrar' : 'Criar conta';
   }
   if (els.authLead) {
     els.authLead.textContent = reset
-      ? 'Defina uma senha nova para este e-mail e entre agora.'
+      ? 'Enviaremos um link no seu e-mail para criar uma senha nova.'
       : login
         ? 'Entre para começar a dublar agora.'
         : 'Crie sua conta para começar a dublar agora.';
   }
-  if (els.authSubmitBtn) els.authSubmitBtn.textContent = reset ? 'Salvar senha e entrar' : login ? 'Entrar' : 'Entrar no Studio';
+  if (els.authSubmitBtn) els.authSubmitBtn.textContent = reset ? 'Enviar e-mail' : login ? 'Entrar' : 'Entrar no Studio';
   if (els.authSwitchBtn) {
     els.authSwitchBtn.textContent = reset ? 'Voltar' : login ? 'Criar conta nova' : 'Já tenho conta';
   }
@@ -399,28 +426,65 @@ function refreshAccountUi() {
   updateCreditUi();
 }
 
-function finishLogin(account) {
+async function finishLogin(account, options = {}) {
+  const showToast = options.toast !== false;
   state.user = {
     name: account.name,
     email: account.email,
-    owner: Boolean(account.owner)
+    owner: Boolean(account.owner),
+    uid: account.uid || null
   };
   localStorage.setItem(SESSION_USER_KEY, JSON.stringify(state.user));
   showAuthGate(false);
   showStudio();
   refreshAccountUi();
-  toast(isOwner() ? 'Conta de dono ativa. Créditos infinitos.' : 'Conta pronta. Packs duram 2 dias.');
+  if (showToast) {
+    toast(isOwner() ? 'Conta de dono ativa. Créditos infinitos.' : 'Conta pronta. Packs duram 2 dias.');
+  }
   releasePackSession();
-  restoreSession().then(() => {
-    pruneExpiredPacks();
-    renderCreditShop();
-    updateCreditUi();
-    renderActivity();
-  }).catch(() => renderPackGrid());
+  try {
+    await restoreSession();
+  } catch {
+    renderPackGrid();
+  }
+  pruneExpiredPacks();
+  renderCreditShop();
+  updateCreditUi();
+  renderActivity();
+  showFinalVideo(currentPack());
 }
 
-function submitAuth(event) {
+function setAuthBusy(on) {
+  if (els.authSubmitBtn) els.authSubmitBtn.disabled = Boolean(on);
+  if (els.authSwitchBtn) els.authSwitchBtn.disabled = Boolean(on);
+  if (els.authForgotBtn) els.authForgotBtn.disabled = Boolean(on);
+}
+
+function authErrorMessage(error) {
+  const code = String(error?.code || '');
+  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+    return 'wrong-password';
+  }
+  if (code === 'auth/user-not-found') return 'Conta não encontrada. Toque em Criar conta nova.';
+  if (code === 'auth/email-already-in-use') return 'Este e-mail já tem conta. Entre com a senha.';
+  if (code === 'auth/weak-password') return 'A senha precisa ter pelo menos 6 caracteres.';
+  if (code === 'auth/too-many-requests') return 'Muitas tentativas. Espere um pouco e tente de novo.';
+  if (code === 'auth/network-request-failed') return 'Sem conexão com o Firebase. Confira a internet.';
+  if (code === 'auth/operation-not-allowed') {
+    return 'E-mail/senha ainda não está ligado no Firebase. Ative em Authentication.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return 'Domínio não autorizado no Firebase. Adicione vineleme.github.io em Authentication → Settings.';
+  }
+  return error?.message || 'Não foi possível entrar agora.';
+}
+
+async function submitAuth(event) {
   event.preventDefault();
+  if (!firebaseAuth) {
+    toast('Firebase não carregou. Recarregue a página.');
+    return;
+  }
   const email = normalizeEmail(els.authEmail?.value);
   const password = String(els.authPassword?.value || '').trim();
   if (!email) {
@@ -431,55 +495,56 @@ function submitAuth(event) {
     toast('E-mail incompleto. Use o @, tipo voce@icloud.com.');
     return;
   }
-  if (!password || password.length < 4) {
-    toast('A senha precisa ter pelo menos 4 caracteres.');
-    return;
-  }
   if (state.authMode === 'reset') {
-    saveNewPasswordAndEnter(email, password);
+    setAuthBusy(true);
+    try {
+      await firebaseAuth.sendPasswordResetEmail(email, {
+        url: `${location.origin}${location.pathname}`,
+        handleCodeInApp: false
+      });
+      clearAuthError();
+      toast('E-mail enviado. Abra a caixa de entrada e toque no link para criar a senha nova.');
+      setAuthMode('login');
+    } catch (error) {
+      toast(authErrorMessage(error));
+    } finally {
+      setAuthBusy(false);
+    }
     return;
   }
-  const users = readUsers();
-  const existing = users[email];
-  const owner = OWNER_EMAILS.includes(email) || Boolean(existing?.owner);
+  if (!password || password.length < 6) {
+    toast('A senha precisa ter pelo menos 6 caracteres.');
+    return;
+  }
 
-  if (existing) {
-    const saved = String(existing.password || '').trim();
-    if (saved !== password) {
-      if (owner) {
-        existing.password = password;
-        existing.owner = true;
-        users[email] = existing;
-        writeUsers(users);
-        clearAuthError();
-        finishLogin(existing);
-        return;
-      }
-      showWrongPassword();
+  setAuthBusy(true);
+  try {
+    if (state.authMode === 'signup') {
+      const name = String(els.authName?.value || '').trim() || displayNameFromEmail(email);
+      const cred = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+      await cred.user.updateProfile({ displayName: name });
+      const owner = OWNER_EMAILS.includes(email);
+      if (!owner) localStorage.setItem(`dubpack-credits:${email}`, '1');
+      clearAuthError();
+      await finishLogin(accountFromFirebase(cred.user));
       return;
     }
-    if (owner && !existing.owner) {
-      existing.owner = true;
-      users[email] = existing;
-      writeUsers(users);
-    }
-    clearAuthError();
-    finishLogin(existing);
-    return;
-  }
 
-  const created = {
-    name: String(els.authName?.value || '').trim() || displayNameFromEmail(email),
-    email,
-    password,
-    owner,
-    createdAt: new Date().toISOString()
-  };
-  users[email] = created;
-  writeUsers(users);
-  if (!owner) localStorage.setItem(`dubpack-credits:${email}`, '1');
-  clearAuthError();
-  finishLogin(created);
+    const cred = await firebaseAuth.signInWithEmailAndPassword(email, password);
+    clearAuthError();
+    await finishLogin(accountFromFirebase(cred.user));
+  } catch (error) {
+    if (authErrorMessage(error) === 'wrong-password') {
+      showWrongPassword();
+    } else {
+      const message = authErrorMessage(error);
+      if (String(error?.code || '') === 'auth/email-already-in-use') setAuthMode('login');
+      if (String(error?.code || '') === 'auth/user-not-found') setAuthMode('signup');
+      toast(message);
+    }
+  } finally {
+    setAuthBusy(false);
+  }
 }
 
 function clearAuthError() {
@@ -491,49 +556,27 @@ function clearAuthError() {
 function showWrongPassword() {
   setAuthMode('login');
   if (els.authError) {
-    els.authError.textContent = 'Senha errada. Toque em Esqueci a senha e defina uma nova.';
+    els.authError.textContent = 'Senha errada. Toque em Esqueci a senha para receber o e-mail.';
     els.authError.classList.remove('is-hidden');
   }
   els.authPassword?.classList.add('is-invalid');
   els.authForgotBtn?.classList.remove('is-hidden');
   els.authForgotBtn?.classList.add('is-alert');
-  toast('Senha errada. Toque em Esqueci a senha para definir uma nova e entrar.');
+  toast('Senha errada. Toque em Esqueci a senha para receber o e-mail.');
 }
 
 function showPasswordReset() {
   clearAuthError();
   setAuthMode('reset');
-  els.authPassword?.focus();
+  els.authEmail?.focus();
 }
 
-function saveNewPasswordAndEnter(email, password) {
-  const users = readUsers();
-  let account = users[email];
-  const owner = OWNER_EMAILS.includes(email) || Boolean(account?.owner);
-  if (!account) {
-    if (!owner) {
-      toast('Não há conta com este e-mail neste navegador. Crie uma conta nova.');
-      setAuthMode('signup');
-      return;
-    }
-    account = {
-      name: displayNameFromEmail(email),
-      email,
-      password,
-      owner: true,
-      createdAt: new Date().toISOString()
-    };
-  } else {
-    account.password = password;
-    if (owner) account.owner = true;
+async function logoutUser() {
+  try {
+    if (firebaseAuth) await firebaseAuth.signOut();
+  } catch {
+    /* ignore */
   }
-  users[email] = account;
-  writeUsers(users);
-  clearAuthError();
-  finishLogin(account);
-}
-
-function logoutUser() {
   localStorage.removeItem(SESSION_USER_KEY);
   state.user = null;
   releasePackSession();
