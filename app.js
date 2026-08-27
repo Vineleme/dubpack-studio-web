@@ -1439,13 +1439,14 @@ async function requestFinalMp4() {
   try {
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
-    try {
-      if (!composed.type.includes('mp4')) {
-        setExportProgress(92, 'Convertendo para MP4');
+    if (!composed.type.includes('mp4')) {
+      setExportProgress(92, 'Convertendo para MP4');
+      try {
         output = await convertToMp4(composed);
+      } catch (error) {
+        output = composed;
+        toast('O Chrome gravou em WebM. Abre no Chrome e no VLC.');
       }
-    } catch (error) {
-      output = composed;
     }
     setExportProgress(100, 'Pronto');
     if (pack.finalUrl) URL.revokeObjectURL(pack.finalUrl);
@@ -1477,7 +1478,14 @@ async function requestFinalMp4() {
 }
 
 function pickVideoMime() {
-  const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  const types = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs=avc1.4D401E,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -1930,6 +1938,7 @@ function loadScript(src) {
 
 async function convertToMp4(blob) {
   const work = (async () => {
+    setExportProgress(92, 'Carregando conversor MP4');
     await loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js');
     const { createFFmpeg, fetchFile } = window.FFmpeg;
     if (!state.ffmpeg) {
@@ -1940,9 +1949,23 @@ async function convertToMp4(blob) {
       });
     }
     if (!state.ffmpeg.isLoaded()) await state.ffmpeg.load();
+    state.ffmpeg.setProgress?.(({ ratio }) => {
+      setExportProgress(93 + Math.round(Math.min(6, Math.max(0, Number(ratio) || 0) * 6)), 'Convertendo para MP4');
+    });
     const input = blob.type.includes('mp4') ? 'input.mp4' : 'input.webm';
     state.ffmpeg.FS('writeFile', input, await fetchFile(blob));
-    await state.ffmpeg.run('-i', input, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', 'output.mp4');
+    await state.ffmpeg.run(
+      '-i', input,
+      '-vf', 'scale=-2:720',
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '28',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-movflags', '+faststart',
+      'output.mp4'
+    );
     const data = state.ffmpeg.FS('readFile', 'output.mp4');
     state.ffmpeg.FS('unlink', input);
     state.ffmpeg.FS('unlink', 'output.mp4');
@@ -1950,7 +1973,7 @@ async function convertToMp4(blob) {
   })();
   return Promise.race([
     work,
-    wait(90000).then(() => {
+    wait(180000).then(() => {
       throw new Error('Conversão MP4 demorou demais');
     })
   ]);
