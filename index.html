@@ -15,6 +15,27 @@
   </head>
   <body>
     <div id="appToast" class="app-toast" hidden role="status"></div>
+    <div id="authGate" class="auth-gate">
+      <form id="authForm" class="auth-card">
+        <img src="./assets/dubpack-logo.jpg" alt="" />
+        <h1>Entrar no DubPack Studio</h1>
+        <p>Crie sua conta com e-mail para dublar. Packs ficam 2 dias nesta conta. Gerar de novo o vídeo gasta crédito.</p>
+        <label>Nome
+          <input id="authName" type="text" autocomplete="name" placeholder="Seu nome" required />
+        </label>
+        <label>E-mail
+          <input id="authEmail" type="email" autocomplete="email" placeholder="voce@email.com" required />
+        </label>
+        <label>Senha
+          <input id="authPassword" type="password" autocomplete="new-password" placeholder="Mínimo 4 caracteres" required minlength="4" />
+        </label>
+        <label class="auth-owner">Código do estúdio (só o dono)
+          <input id="authOwnerCode" type="password" autocomplete="off" placeholder="Opcional" />
+        </label>
+        <button class="primary wide" type="submit">Criar conta ou entrar</button>
+        <small>Sem servidor ainda: a conta fica neste navegador. O dono usa o código do estúdio e tem créditos infinitos.</small>
+      </form>
+    </div>
     <div id="helpModal" class="help-modal is-hidden" role="dialog" aria-labelledby="helpTitle" aria-modal="true">
       <div class="help-card">
         <h2 id="helpTitle">Como dublar</h2>
@@ -23,7 +44,7 @@
           <li>Toque em <strong>Referência</strong> para ouvir o original.</li>
           <li>Toque no microfone: countdown de 3 segundos, depois grave no tempo da fala. Fone ajuda, mas não é obrigatório.</li>
           <li>Toque de novo no microfone para cancelar o countdown ou encerrar a gravação.</li>
-          <li>Avance de fala, ouça o take e baixe os áudios quando terminar.</li>
+          <li>Avance de fala, ouça o take e toque em Finalizar dublagem quando terminar. Packs ficam 2 dias nesta conta.</li>
         </ol>
         <p>Takes ficam neste navegador. Recarregar a página restaura o último pack, se o armazenamento local permitir.</p>
         <button id="helpCloseBtn" class="primary" type="button">Entendi</button>
@@ -58,7 +79,7 @@
       <section class="content">
         <header class="topbar">
           <div>
-            <h1>Bem-vindo de volta, Vinicius!</h1>
+            <h1 id="welcomeTitle">Bem-vindo ao Studio</h1>
             <p id="topbarHint">Escolha um pack e comece a dublar.</p>
           </div>
           <div class="search-row">
@@ -70,7 +91,7 @@
             <button id="bellBtn" class="ghost" type="button" aria-label="Créditos">⌾</button>
             <button id="userChip" class="user-chip" type="button" data-tab="profile">
               <img src="./assets/dubpack-logo.jpg" alt="" />
-              <span><strong>Vinicius Leme</strong><small>Pro · <b id="creditBadge">1 crédito</b></small></span>
+              <span><strong id="userChipName">Conta</strong><small><b id="userChipRole">Pro</b> · <b id="creditBadge">1 crédito</b></small></span>
             </button>
           </div>
         </header>
@@ -194,12 +215,13 @@
           <div class="profile-hero">
             <img src="./assets/dubpack-logo.jpg" alt="" />
             <div>
-              <h3>Vinicius Leme</h3>
-              <p>Pro · dublagem local neste dispositivo</p>
+              <h3 id="profileName">Conta</h3>
+              <p id="profileMeta">Faça login para dublar</p>
             </div>
           </div>
-          <p>Você tem <strong id="profileCredits">1 crédito</strong>. O crédito só cai quando o MP4 final fica pronto para assistir.</p>
+          <p>Você tem <strong id="profileCredits">1 crédito</strong>. O crédito só cai quando o vídeo final fica pronto para assistir. Packs desta conta expiram em 2 dias.</p>
           <button class="primary wide" type="button" data-tab="credits">Comprar mais créditos</button>
+          <button id="logoutBtn" class="secondary wide" type="button">Sair da conta</button>
         </section>
 
         <section id="creditsTab" class="tab-view info-card">
@@ -230,13 +252,6 @@
               <li><span>Pack atual</span><b id="scorePack">—</b></li>
             </ul>
           </div>
-        </section>
-
-        <section id="sequenceCard" class="sequence-card is-hidden">
-          <h2>Sequência atual</h2>
-          <div class="mini-video">▷</div>
-          <p><strong id="sidePackTitle">Pack importado</strong><br /><span id="sideSceneTitle">Cena 01</span></p>
-          <button class="primary wide" type="button" data-tab="record">🎙 Continuar dublando</button>
         </section>
 
         <section class="tips-card">

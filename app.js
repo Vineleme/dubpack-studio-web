@@ -7,6 +7,15 @@ const BED_VOLUME = 0.14;
 const BED_EXPORT = 0.4;
 const BED_DUCK = 0.09;
 const TAKE_PEAK_TARGET = 0.62;
+const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
+const SESSION_USER_KEY = 'dubpack-user';
+const USERS_KEY = 'dubpack-users';
+const OWNER_CLAIM_CODE = 'DUBPACK-OWNER';
+const OWNER_EMAILS = [
+  'viniciusleme@gmail.com',
+  'vinicius.leme@gmail.com',
+  'vineleme@gmail.com'
+];
 
 const state = {
   packs: [],
@@ -38,7 +47,8 @@ const state = {
   saveTimer: null,
   objectUrls: [],
   ffmpeg: null,
-  exporting: false
+  exporting: false,
+  user: null
 };
 
 const els = {
@@ -91,6 +101,18 @@ const els = {
   sequenceCard: document.querySelector('#sequenceCard'),
   sidePackTitle: document.querySelector('#sidePackTitle'),
   sideSceneTitle: document.querySelector('#sideSceneTitle'),
+  welcomeTitle: document.querySelector('#welcomeTitle'),
+  userChipName: document.querySelector('#userChipName'),
+  userChipRole: document.querySelector('#userChipRole'),
+  profileName: document.querySelector('#profileName'),
+  profileMeta: document.querySelector('#profileMeta'),
+  authGate: document.querySelector('#authGate'),
+  authForm: document.querySelector('#authForm'),
+  authName: document.querySelector('#authName'),
+  authEmail: document.querySelector('#authEmail'),
+  authPassword: document.querySelector('#authPassword'),
+  authOwnerCode: document.querySelector('#authOwnerCode'),
+  logoutBtn: document.querySelector('#logoutBtn'),
   takeRail: document.querySelector('#takeRail'),
   wavePlayhead: document.querySelector('#wavePlayhead'),
   waveStartLabel: document.querySelector('#waveStartLabel'),
@@ -135,15 +157,7 @@ const els = {
 };
 
 bindUi();
-restoreSession().then(() => {
-  renderCreditShop();
-  updateCreditUi();
-  renderActivity();
-  showFinalVideo(currentPack());
-}).catch(() => {
-  renderCreditShop();
-  updateCreditUi();
-});
+bootApp();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => undefined);
@@ -178,6 +192,8 @@ function bindUi() {
   });
   els.proBtn.addEventListener('click', () => setTab('credits'));
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
+  els.logoutBtn?.addEventListener('click', logoutUser);
+  els.authForm?.addEventListener('submit', submitAuth);
 
   document.querySelectorAll('[data-tab]').forEach((button) => {
     button.addEventListener('click', (event) => {
@@ -187,7 +203,180 @@ function bindUi() {
   });
 }
 
+async function bootApp() {
+  state.user = readSessionUser();
+  if (!state.user) {
+    showAuthGate(true);
+    renderCreditShop();
+    return;
+  }
+  showAuthGate(false);
+  refreshAccountUi();
+  try {
+    await restoreSession();
+  } catch {
+    renderPackGrid();
+  }
+  pruneExpiredPacks();
+  renderCreditShop();
+  updateCreditUi();
+  renderActivity();
+  showFinalVideo(currentPack());
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function readUsers() {
+  try {
+    return JSON.parse(localStorage.getItem(USERS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writeUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function readSessionUser() {
+  try {
+    const user = JSON.parse(localStorage.getItem(SESSION_USER_KEY) || 'null');
+    return user?.email ? user : null;
+  } catch {
+    return null;
+  }
+}
+
+function isOwner(user = state.user) {
+  const email = normalizeEmail(user?.email);
+  if (!email) return false;
+  if (user?.owner) return true;
+  return OWNER_EMAILS.includes(email);
+}
+
+function showAuthGate(on) {
+  els.authGate?.classList.toggle('is-hidden', !on);
+}
+
+function refreshAccountUi() {
+  const user = state.user;
+  const first = String(user?.name || 'dublador').split(' ')[0];
+  const owner = isOwner(user);
+  if (els.welcomeTitle) els.welcomeTitle.textContent = `Bem-vindo de volta, ${first}!`;
+  if (els.userChipName) els.userChipName.textContent = user?.name || 'Conta';
+  if (els.userChipRole) els.userChipRole.textContent = owner ? 'Dono' : 'Pro';
+  if (els.profileName) els.profileName.textContent = user?.name || 'Conta';
+  if (els.profileMeta) {
+    els.profileMeta.textContent = owner
+      ? `${user.email} · dono do estúdio · créditos infinitos`
+      : `${user?.email || ''} · packs duram 2 dias nesta conta`;
+  }
+  updateCreditUi();
+}
+
+function submitAuth(event) {
+  event.preventDefault();
+  const name = String(els.authName?.value || '').trim();
+  const email = normalizeEmail(els.authEmail?.value);
+  const password = String(els.authPassword?.value || '');
+  const ownerCode = String(els.authOwnerCode?.value || '').trim();
+  if (!name || !email || password.length < 4) {
+    toast('Preencha nome, e-mail e uma senha com pelo menos 4 caracteres.');
+    return;
+  }
+  const users = readUsers();
+  const existing = users[email];
+  if (existing) {
+    if (existing.password !== password) {
+      toast('Senha não confere para este e-mail.');
+      return;
+    }
+  } else {
+    users[email] = {
+      name,
+      email,
+      password,
+      owner: OWNER_EMAILS.includes(email) || ownerCode === OWNER_CLAIM_CODE,
+      createdAt: new Date().toISOString()
+    };
+    writeUsers(users);
+    if (!users[email].owner) localStorage.setItem(`dubpack-credits:${email}`, '1');
+  }
+  if (ownerCode === OWNER_CLAIM_CODE) {
+    users[email].owner = true;
+    users[email].name = name;
+    writeUsers(users);
+  }
+  state.user = { name: users[email].name, email, owner: Boolean(users[email].owner) };
+  localStorage.setItem(SESSION_USER_KEY, JSON.stringify(state.user));
+  showAuthGate(false);
+  refreshAccountUi();
+  toast(isOwner() ? 'Conta de dono ativa. Créditos infinitos.' : 'Conta pronta. Packs duram 2 dias.');
+  state.packs = [];
+  restoreSession().then(() => {
+    pruneExpiredPacks();
+    renderCreditShop();
+    updateCreditUi();
+    renderActivity();
+  }).catch(() => renderPackGrid());
+}
+
+function logoutUser() {
+  localStorage.removeItem(SESSION_USER_KEY);
+  state.user = null;
+  state.packs = [];
+  state.activePackId = null;
+  showAuthGate(true);
+  setTab('packs');
+  toast('Você saiu. Entre de novo com seu e-mail.');
+}
+
+function packExpiresAt(pack) {
+  return (Number(pack?.importedAt) || 0) + PACK_TTL_MS;
+}
+
+function packIsExpired(pack) {
+  return Date.now() > packExpiresAt(pack);
+}
+
+function remainingLabel(pack) {
+  const ms = packExpiresAt(pack) - Date.now();
+  if (ms <= 0) return 'Expirou';
+  const hours = Math.ceil(ms / 36e5);
+  if (hours < 24) return `Expira em ${hours}h`;
+  return `Expira em ${Math.ceil(hours / 24)}d`;
+}
+
+function pruneExpiredPacks() {
+  const kept = [];
+  let dropped = 0;
+  state.packs.forEach((pack) => {
+    if (packIsExpired(pack)) {
+      revokePackMedia(pack);
+      dropped += 1;
+    } else kept.push(pack);
+  });
+  if (!dropped) return;
+  state.packs = kept;
+  if (!currentPack()) state.activePackId = state.packs[0]?.id || null;
+  scheduleSave();
+  toast(`${dropped} pack${dropped > 1 ? 's' : ''} expiraram depois de 2 dias.`);
+  renderPackGrid();
+}
+
+function sessionStoreKey() {
+  const email = normalizeEmail(state.user?.email);
+  return email ? `user:${email}` : 'current';
+}
+
 async function importPack(event) {
+  if (!state.user) {
+    showAuthGate(true);
+    toast('Crie sua conta para importar um pack.');
+    return;
+  }
   const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
@@ -311,6 +500,7 @@ async function buildPack(name, zipBytes) {
     zipBytes,
     scenes,
     takes: {},
+    importedAt: Date.now(),
     filmUrl: sharedVideo ? objectUrl(sharedVideo) : '',
     backingUrl: backing ? objectUrl(backing) : ''
   };
@@ -349,6 +539,10 @@ function decorateScene(scene) {
 }
 
 function setTab(tab) {
+  if (!state.user) {
+    showAuthGate(true);
+    return;
+  }
   if ((tab === 'record' || tab === 'dub') && !currentPack()) {
     toast('Importe um pack para gravar.');
     tab = 'packs';
@@ -380,9 +574,8 @@ function selectScene(index) {
   els.counter.textContent = counter;
   els.projectTitle.textContent = pack.name;
   els.projectMeta.textContent = take ? `${counter} · gravado` : `${counter} · original`;
-  els.sidePackTitle.textContent = pack.name;
-  els.sideSceneTitle.textContent = counter;
-  els.sequenceCard.classList.remove('is-hidden');
+  if (els.sidePackTitle) els.sidePackTitle.textContent = pack.name;
+  if (els.sideSceneTitle) els.sideSceneTitle.textContent = counter;
   els.character.textContent = scene.character;
   els.subtitle.textContent = scene.subtitle;
   els.frameCharacter.textContent = scene.character;
@@ -953,7 +1146,7 @@ function renderPackGrid() {
     const title = document.createElement('h3');
     title.textContent = pack.name;
     const subtitle = document.createElement('p');
-    subtitle.textContent = `${pack.scenes.length} ${pack.scenes.length === 1 ? 'fala' : 'falas'} · ${recorded} gravadas`;
+    subtitle.textContent = `${pack.scenes.length} ${pack.scenes.length === 1 ? 'fala' : 'falas'} · ${recorded} gravadas · ${remainingLabel(pack)}`;
     const progress = document.createElement('div');
     progress.className = 'progress-line';
     const bar = document.createElement('i');
@@ -981,6 +1174,12 @@ function renderPackGrid() {
 }
 
 function openPack(id) {
+  const pack = state.packs.find((item) => item.id === id);
+  if (pack && packIsExpired(pack)) {
+    pruneExpiredPacks();
+    toast('Este pack expirou depois de 2 dias. Importe o ZIP de novo.');
+    return;
+  }
   state.activePackId = id;
   state.activeIndex = 0;
   renderPackGrid();
@@ -1356,9 +1555,11 @@ const CREDIT_PACKS = [
 ];
 
 function getCredits() {
-  const stored = localStorage.getItem(CREDIT_KEY);
+  if (isOwner()) return Number.POSITIVE_INFINITY;
+  const key = state.user?.email ? `dubpack-credits:${normalizeEmail(state.user.email)}` : CREDIT_KEY;
+  const stored = localStorage.getItem(key);
   if (stored === null) {
-    localStorage.setItem(CREDIT_KEY, '1');
+    localStorage.setItem(key, '1');
     return 1;
   }
   const value = Number(stored);
@@ -1366,11 +1567,17 @@ function getCredits() {
 }
 
 function setCredits(value) {
-  localStorage.setItem(CREDIT_KEY, String(Math.max(0, value)));
+  if (isOwner()) {
+    updateCreditUi();
+    return;
+  }
+  const key = state.user?.email ? `dubpack-credits:${normalizeEmail(state.user.email)}` : CREDIT_KEY;
+  localStorage.setItem(key, String(Math.max(0, value)));
   updateCreditUi();
 }
 
 function creditLabel(count) {
+  if (!Number.isFinite(count) || count === Number.POSITIVE_INFINITY) return '∞ créditos';
   return `${count} ${count === 1 ? 'crédito' : 'créditos'}`;
 }
 
@@ -1385,6 +1592,13 @@ function updateCreditUi() {
 function renderCreditShop() {
   if (!els.creditShop) return;
   els.creditShop.replaceChildren();
+  if (isOwner()) {
+    const note = document.createElement('p');
+    note.className = 'hint-copy';
+    note.textContent = 'Conta de dono: créditos infinitos. Quem usa o Studio gasta crédito de novo se quiser gerar o vídeo outra vez.';
+    els.creditShop.append(note);
+    return;
+  }
   CREDIT_PACKS.forEach((pack) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -1493,8 +1707,8 @@ async function requestFinalMp4() {
     setTab('record');
     return;
   }
-  if (getCredits() < 1) {
-    toast('Sem créditos. Escolha um pacote para gerar o MP4.');
+  if (!isOwner() && getCredits() < 1) {
+    toast('Sem créditos. Escolha um pacote para finalizar de novo.');
     setTab('credits');
     return;
   }
@@ -1527,7 +1741,7 @@ async function requestFinalMp4() {
     pack.finalBlob = output;
     pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
-    setCredits(getCredits() - 1);
+    if (!isOwner()) setCredits(getCredits() - 1);
     showFinalVideo(pack);
     scheduleSave();
     toast('Dublagem pronta. Assista com a sua voz.');
@@ -2077,12 +2291,14 @@ function openDb() {
 }
 
 async function persistSession() {
+  if (!state.user?.email) return;
   const payload = {
     activePackId: state.activePackId,
     activeIndex: state.activeIndex,
     packs: await Promise.all(state.packs.map(async (pack) => ({
       id: pack.id,
       name: pack.name,
+      importedAt: pack.importedAt || Date.now(),
       zipBytes: pack.zipBytes,
       finalBlob: pack.finalBlob || null,
       finalExt: pack.finalExt || '',
@@ -2106,7 +2322,7 @@ async function persistSession() {
   const db = await openDb();
   await new Promise((resolve, reject) => {
     const tx = db.transaction('session', 'readwrite');
-    tx.objectStore('session').put(payload, 'current');
+    tx.objectStore('session').put(payload, sessionStoreKey());
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
@@ -2115,23 +2331,30 @@ async function persistSession() {
 
 async function restoreSession() {
   const db = await openDb();
+  const store = db.transaction('session', 'readonly').objectStore('session');
   const payload = await new Promise((resolve, reject) => {
-    const tx = db.transaction('session', 'readonly');
-    const request = tx.objectStore('session').get('current');
+    const request = store.get(sessionStoreKey());
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const fallback = payload || !isOwner() ? null : await new Promise((resolve, reject) => {
+    const request = db.transaction('session', 'readonly').objectStore('session').get('current');
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
   db.close();
-  if (!payload?.packs?.length) {
+  const savedSession = payload || fallback;
+  if (!savedSession?.packs?.length) {
     renderPackGrid();
     updateScoreCard();
     return;
   }
 
-  for (const saved of payload.packs) {
+  for (const saved of savedSession.packs) {
     try {
       const pack = await buildPack(saved.name, saved.zipBytes);
       pack.id = saved.id;
+      pack.importedAt = saved.importedAt || Date.now();
       pack.takes = {};
       Object.entries(saved.takes || {}).forEach(([id, take]) => {
         const url = rememberUrl(URL.createObjectURL(take.blob));
@@ -2148,8 +2371,8 @@ async function restoreSession() {
     }
   }
 
-  state.activePackId = payload.activePackId;
-  state.activeIndex = payload.activeIndex || 0;
+  state.activePackId = savedSession.activePackId;
+  state.activeIndex = savedSession.activeIndex || 0;
   if (!currentPack() && state.packs[0]) state.activePackId = state.packs[0].id;
   renderPackGrid();
   updateScoreCard();
