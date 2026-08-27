@@ -112,6 +112,8 @@ const els = {
   micBars: [...document.querySelectorAll('.mic-level span')],
   generateMp4Btn: document.querySelector('#generateMp4Btn'),
   finalVideo: document.querySelector('#finalVideo'),
+  finalVideoWrap: document.querySelector('#finalVideoWrap'),
+  exportFilm: document.querySelector('#exportFilm'),
   finalVideoEmpty: document.querySelector('#finalVideoEmpty'),
   downloadMp4Btn: document.querySelector('#downloadMp4Btn'),
   exportStatus: document.querySelector('#exportStatus'),
@@ -1460,8 +1462,9 @@ async function requestFinalMp4() {
       if (play) play.catch(() => toast('Toque no play para ouvir sua dublagem.'));
     }
   } catch (error) {
-    toast(error.message || 'Não foi possível gerar o vídeo.');
-    if (els.exportStatus) els.exportStatus.textContent = 'Falha ao gerar. Tente de novo.';
+    const message = error.message || 'Não foi possível gerar o vídeo.';
+    toast(message);
+    if (els.exportStatus) els.exportStatus.textContent = message;
   } finally {
     state.exporting = false;
     if (els.generateMp4Btn) els.generateMp4Btn.disabled = false;
@@ -1484,8 +1487,22 @@ function loadImage(src) {
   });
 }
 
-function loadVideoEl(src) {
-  const video = document.createElement('video');
+function setExportPreview(active) {
+  els.finalVideoWrap?.classList.toggle('is-exporting', active);
+}
+
+function filmCandidates(pack) {
+  const urls = [];
+  const add = (url) => {
+    if (url && !urls.includes(url)) urls.push(url);
+  };
+  add(pack.filmUrl);
+  pack.scenes.forEach((scene) => add(scene.videoUrl));
+  return urls;
+}
+
+function loadExportVideo(src) {
+  const video = els.exportFilm || document.createElement('video');
   video.crossOrigin = 'anonymous';
   video.muted = true;
   video.defaultMuted = true;
@@ -1493,27 +1510,31 @@ function loadVideoEl(src) {
   video.preload = 'auto';
   video.loop = false;
   video.controls = false;
-  video.setAttribute('playsinline', '');
-  video.setAttribute('webkit-playsinline', '');
-  video.style.cssText = 'position:fixed;right:8px;bottom:8px;width:192px;height:108px;opacity:0.08;pointer-events:none;z-index:2;background:#000';
-  document.body.appendChild(video);
+  video.removeAttribute('src');
+  video.src = src;
+  video.load();
   return new Promise((resolve, reject) => {
-    const ready = () => resolve(video);
-    video.onerror = () => reject(new Error('Não deu para abrir o vídeo da cena.'));
-    video.onloadedmetadata = ready;
-    video.oncanplay = ready;
-    video.src = src;
-    video.load();
+    const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou demais para abrir.')), 12000);
+    const done = () => {
+      clearTimeout(timer);
+      resolve(video);
+    };
+    video.onloadeddata = done;
+    video.oncanplay = done;
+    video.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error('Não deu para abrir o vídeo da cena. Importe o ZIP de novo com dub_video em mp4 ou webm.'));
+    };
   });
 }
 
 async function waitForVideoFrame(video) {
-  const deadline = performance.now() + 8000;
+  const deadline = performance.now() + 12000;
   while (performance.now() < deadline) {
-    if (video.videoWidth > 1 && video.readyState >= 2 && !video.paused) return;
+    if (!video.paused && video.readyState >= 2 && (video.videoWidth > 1 || video.currentTime > 0.05)) return;
     await wait(40);
   }
-  throw new Error('O vídeo da cena não desenhou nenhum quadro. Importe o ZIP de novo e gere outra vez. Se o arquivo for .ogv, o Chrome pode não tocar — packs com dub_video.mp4 ou .webm funcionam melhor.');
+  throw new Error('O Chrome não desenhou o filme da cena. Importe o ZIP outra vez e use dub_video em mp4 ou webm (ogv costuma falhar).');
 }
 
 async function decodeAudioFrom(audioCtx, blob, url) {
@@ -1583,10 +1604,7 @@ function attachMediaBed(audioCtx, dest, srcUrl) {
 }
 
 function resolveFilmUrl(pack) {
-  if (pack.filmUrl) return pack.filmUrl;
-  const urls = pack.scenes.map((scene) => scene.videoUrl).filter(Boolean);
-  if (urls.length && urls.every((url) => url === urls[0])) return urls[0];
-  return '';
+  return filmCandidates(pack)[0] || '';
 }
 
 function coverDraw(ctx, media, width, height) {
@@ -1599,15 +1617,18 @@ function coverDraw(ctx, media, width, height) {
 }
 
 async function composeDubbedVideo(pack, onProgress) {
-  const filmUrl = resolveFilmUrl(pack);
-  if (!filmUrl) {
-    throw new Error('Este pack não tem o vídeo completo da cena (dub_video). Sem ele não dá para montar o filme — só a tela de gravação. Importe o ZIP de novo com o vídeo.');
+  const candidates = filmCandidates(pack);
+  if (!candidates.length) {
+    throw new Error('Este pack não tem o vídeo completo da cena (dub_video). Importe o ZIP de novo com o filme, não só as imagens das falas.');
   }
 
   const audioCtx = new AudioContext();
   await audioCtx.resume();
   const dest = audioCtx.createMediaStreamDestination();
   const mimeType = pickVideoMime();
+  if (!mimeType && typeof MediaRecorder === 'undefined') {
+    throw new Error('Este navegador não grava vídeo. Abra no Chrome.');
+  }
   const stops = [];
   let video;
   let bed;
@@ -1617,10 +1638,22 @@ async function composeDubbedVideo(pack, onProgress) {
   let recorder;
   let stopped = Promise.resolve();
   const chunks = [];
+  setExportPreview(true);
 
   try {
     onProgress?.('Carregando o vídeo da cena...');
-    video = await loadVideoEl(filmUrl);
+    let lastError = null;
+    for (const url of candidates) {
+      try {
+        video = await loadExportVideo(url);
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!video) throw lastError || new Error('Não achei um vídeo da cena que o Chrome consiga tocar.');
+
     const lastLineEnd = pack.scenes.reduce((max, raw) => {
       const scene = decorateScene(raw);
       return Math.max(max, (Number(scene.videoOffset) || 0) + (Number(scene.duration) || 0));
@@ -1654,7 +1687,7 @@ async function composeDubbedVideo(pack, onProgress) {
       try {
         takeBuffers.push({
           ...win,
-          buffer: await decodeAudioFrom(audioCtx, win.take.blob, win.take.url || win.scene.audioUrl)
+          buffer: await decodeAudioFrom(audioCtx, win.take.blob, win.take.url)
         });
       } catch {
         // Sem take decodificado, a fala original do filme fica.
@@ -1662,50 +1695,30 @@ async function composeDubbedVideo(pack, onProgress) {
     }
 
     if (!playBacking) {
-      bed = attachMediaBed(audioCtx, dest, filmUrl);
+      bed = attachMediaBed(audioCtx, dest, video.currentSrc || candidates[0]);
     }
 
-    video.currentTime = 0;
     video.muted = true;
-    await video.play().catch(() => undefined);
-    if (video.paused) {
-      throw new Error('O navegador não reproduziu o vídeo da cena. Confira se o pack tem dub_video em mp4 ou webm.');
-    }
-    await waitForVideoFrame(video);
-    video.pause();
-    await new Promise((resolve) => {
-      const done = () => {
-        video.removeEventListener('seeked', done);
-        resolve();
-      };
-      video.addEventListener('seeked', done);
+    try {
       video.currentTime = 0;
-      setTimeout(done, 600);
-    });
-
-    const duration = Number.isFinite(video.duration) && video.duration > 0
-      ? video.duration
-      : Math.max(lastLineEnd, 8);
+    } catch {
+      // ignore
+    }
 
     const capture = video.captureStream?.bind(video) || video.mozCaptureStream?.bind(video);
-    let videoTrack;
-    if (capture) {
-      videoTrack = capture().getVideoTracks()[0];
-    }
+    let videoTrack = capture ? capture().getVideoTracks()[0] : null;
     if (!videoTrack) {
-      const width = video.videoWidth || 1280;
-      const height = video.videoHeight || 720;
+      const width = Math.max(640, video.videoWidth || 1280);
+      const height = Math.max(360, video.videoHeight || 720);
       canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
-      canvas.style.cssText = 'position:fixed;right:8px;bottom:120px;width:192px;height:108px;opacity:0.08;pointer-events:none;z-index:2';
-      document.body.appendChild(canvas);
       const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
       canvasStream = canvas.captureStream(30);
       videoTrack = canvasStream.getVideoTracks()[0];
       const paint = () => {
-        if (!canvas.isConnected) return;
-        ctx.drawImage(video, 0, 0, width, height);
+        if (!canvasStream) return;
+        if (video.videoWidth) ctx.drawImage(video, 0, 0, width, height);
         if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(paint);
         else requestAnimationFrame(paint);
       };
@@ -1725,9 +1738,14 @@ async function composeDubbedVideo(pack, onProgress) {
     });
 
     if (bed) bed.el.currentTime = 0;
-    recorder.start(100);
+    await video.play().catch(() => undefined);
+    if (video.paused) {
+      throw new Error('O navegador não reproduziu o filme da cena. Use Chrome e um dub_video em mp4 ou webm.');
+    }
+    await waitForVideoFrame(video);
+
+    recorder.start(200);
     recordingStarted = true;
-    await video.play();
     if (bed) await bed.el.play().catch(() => undefined);
     const t0 = audioCtx.currentTime;
     playBacking?.(t0);
@@ -1735,6 +1753,10 @@ async function composeDubbedVideo(pack, onProgress) {
     takeBuffers.forEach((win) => {
       stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, 1.15));
     });
+
+    const duration = Number.isFinite(video.duration) && video.duration > 0
+      ? video.duration
+      : Math.max(lastLineEnd, 8);
 
     onProgress?.('Gravando o filme completo...');
     await Promise.race([
@@ -1749,23 +1771,20 @@ async function composeDubbedVideo(pack, onProgress) {
     if (recordingStarted && recorder) {
       if (recorder.state === 'recording') {
         recorder.requestData();
-        await wait(250);
+        await wait(280);
         recorder.stop();
       }
       await stopped;
     }
-    if (video) {
-      video.pause();
-      video.remove();
-    }
-    canvas?.remove();
+    video?.pause();
     canvasStream?.getTracks().forEach((track) => track.stop());
     dest.stream.getTracks().forEach((track) => track.stop());
     await audioCtx.close().catch(() => undefined);
+    setExportPreview(false);
   }
 
   const blob = new Blob(chunks, { type: recorder?.mimeType || mimeType || 'video/webm' });
-  if (blob.size < 800) throw new Error('O navegador não gerou o vídeo. Tente novamente.');
+  if (blob.size < 2000) throw new Error('O navegador não gerou o vídeo. Tente de novo no Chrome, com o ZIP original.');
   return blob;
 }
 
@@ -1824,7 +1843,7 @@ async function convertToMp4(blob) {
   })();
   return Promise.race([
     work,
-    wait(40000).then(() => {
+    wait(90000).then(() => {
       throw new Error('Conversão MP4 demorou demais');
     })
   ]);

@@ -1566,6 +1566,21 @@ button, label, a { border: 0; text-decoration: none; }
   object-fit: contain;
   background: #05040d;
 }
+#exportFilm {
+  position: absolute;
+  inset: 0;
+  display: none;
+  object-fit: contain;
+  background: #000;
+  z-index: 2;
+}
+.final-video-wrap.is-exporting #exportFilm {
+  display: block;
+}
+.final-video-wrap.is-exporting #finalVideo,
+.final-video-wrap.is-exporting .empty-frame {
+  visibility: hidden;
+}
 .final-video-wrap .empty-frame {
   position: absolute;
   inset: 0;
