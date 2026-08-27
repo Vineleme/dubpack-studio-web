@@ -1514,7 +1514,7 @@ function loadExportVideo(src) {
   video.src = src;
   video.load();
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou demais para abrir.')), 12000);
+    const timer = setTimeout(() => reject(new Error('timeout')), 8000);
     const done = () => {
       clearTimeout(timer);
       resolve(video);
@@ -1523,18 +1523,142 @@ function loadExportVideo(src) {
     video.oncanplay = done;
     video.onerror = () => {
       clearTimeout(timer);
-      reject(new Error('Não deu para abrir o vídeo da cena. Importe o ZIP de novo com dub_video em mp4 ou webm.'));
+      reject(new Error('native'));
     };
   });
 }
 
 async function waitForVideoFrame(video) {
-  const deadline = performance.now() + 12000;
+  const deadline = performance.now() + 6000;
   while (performance.now() < deadline) {
-    if (!video.paused && video.readyState >= 2 && (video.videoWidth > 1 || video.currentTime > 0.05)) return;
+    if (!video.paused && video.readyState >= 2 && video.videoWidth > 1) return true;
     await wait(40);
   }
-  throw new Error('O Chrome não desenhou o filme da cena. Importe o ZIP outra vez e use dub_video em mp4 ou webm (ogv costuma falhar).');
+  return false;
+}
+
+async function ensureOgvPlayer() {
+  if (window.OGVPlayer || window.ogv?.OGVPlayer) return window.OGVPlayer || window.ogv.OGVPlayer;
+  window.OGVLoader = window.OGVLoader || {};
+  window.OGVLoader.base = 'https://unpkg.com/ogv@1.8.9/dist/';
+  await loadScript('https://unpkg.com/ogv@1.8.9/dist/ogv-support.js');
+  await loadScript('https://unpkg.com/ogv@1.8.9/dist/ogv.js');
+  const Player = window.OGVPlayer || window.ogv?.OGVPlayer;
+  if (!Player) throw new Error('Não carregou o player de .ogv.');
+  return Player;
+}
+
+async function openOgvFilm(url, onProgress) {
+  onProgress?.('Abrindo o vídeo Choicer (.ogv) no Chrome...');
+  const Player = await ensureOgvPlayer();
+  const player = new Player({ wasm: true, webGL: true });
+  player.muted = true;
+  player.setAttribute('playsinline', '');
+  player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
+  els.finalVideoWrap.appendChild(player);
+  player.src = url;
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('O vídeo .ogv demorou demais para abrir.')), 20000);
+    const ok = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    player.addEventListener('loadedmetadata', ok, { once: true });
+    player.addEventListener('canplay', ok, { once: true });
+    player.addEventListener('error', () => {
+      clearTimeout(timer);
+      reject(new Error('Não deu para decodificar o dub_video.ogv.'));
+    }, { once: true });
+  });
+  const play = player.play();
+  if (play) await play.catch(() => undefined);
+  await wait(200);
+  const ogvCanvas = player._canvas || player.querySelector('canvas');
+  if (!ogvCanvas) {
+    player.remove();
+    throw new Error('O player Choicer não criou o canvas do vídeo.');
+  }
+  return {
+    duration: Number(player.duration) || 0,
+    srcUrl: url,
+    play: () => player.play(),
+    pause: () => player.pause(),
+    ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
+    getTrack: () => {
+      const stream = ogvCanvas.captureStream(30);
+      const track = stream.getVideoTracks()[0];
+      const pump = () => {
+        if (!player.isConnected) return;
+        stream.requestFrame?.();
+        track.requestFrame?.();
+        requestAnimationFrame(pump);
+      };
+      pump();
+      return track;
+    },
+    stop: () => {
+      try { player.pause(); } catch { /* ignore */ }
+      player.remove();
+    }
+  };
+}
+
+async function openNativeFilm(url) {
+  const video = await loadExportVideo(url);
+  video.muted = true;
+  try { video.currentTime = 0; } catch { /* ignore */ }
+  await video.play().catch(() => undefined);
+  if (video.paused || !(await waitForVideoFrame(video))) {
+    video.pause();
+    throw new Error('native-frames');
+  }
+  return {
+    duration: Number(video.duration) || 0,
+    srcUrl: url,
+    play: () => video.play(),
+    pause: () => video.pause(),
+    ended: new Promise((resolve) => {
+      video.onended = resolve;
+    }),
+    getTrack: () => {
+      const capture = video.captureStream?.bind(video) || video.mozCaptureStream?.bind(video);
+      if (capture) return capture().getVideoTracks()[0];
+      const width = Math.max(640, video.videoWidth || 1280);
+      const height = Math.max(360, video.videoHeight || 720);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+      const stream = canvas.captureStream(30);
+      const paint = () => {
+        if (!video.isConnected && video.paused && video.ended) return;
+        if (video.videoWidth) ctx.drawImage(video, 0, 0, width, height);
+        requestAnimationFrame(paint);
+      };
+      paint();
+      return stream.getVideoTracks()[0];
+    },
+    stop: () => {
+      video.pause();
+    }
+  };
+}
+
+async function openFilmPlayback(candidates, onProgress) {
+  let lastError = null;
+  for (const url of candidates) {
+    try {
+      return await openNativeFilm(url);
+    } catch (error) {
+      lastError = error;
+      try {
+        return await openOgvFilm(url, onProgress);
+      } catch (ogvError) {
+        lastError = ogvError;
+      }
+    }
+  }
+  throw lastError || new Error('Não achei o vídeo da cena no ZIP.');
 }
 
 async function decodeAudioFrom(audioCtx, blob, url) {
@@ -1630,10 +1754,8 @@ async function composeDubbedVideo(pack, onProgress) {
     throw new Error('Este navegador não grava vídeo. Abra no Chrome.');
   }
   const stops = [];
-  let video;
+  let film;
   let bed;
-  let canvas;
-  let canvasStream;
   let recordingStarted = false;
   let recorder;
   let stopped = Promise.resolve();
@@ -1642,17 +1764,7 @@ async function composeDubbedVideo(pack, onProgress) {
 
   try {
     onProgress?.('Carregando o vídeo da cena...');
-    let lastError = null;
-    for (const url of candidates) {
-      try {
-        video = await loadExportVideo(url);
-        lastError = null;
-        break;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    if (!video) throw lastError || new Error('Não achei um vídeo da cena que o Chrome consiga tocar.');
+    film = await openFilmPlayback(candidates, onProgress);
 
     const lastLineEnd = pack.scenes.reduce((max, raw) => {
       const scene = decorateScene(raw);
@@ -1695,35 +1807,15 @@ async function composeDubbedVideo(pack, onProgress) {
     }
 
     if (!playBacking) {
-      bed = attachMediaBed(audioCtx, dest, video.currentSrc || candidates[0]);
+      try {
+        bed = attachMediaBed(audioCtx, dest, film.srcUrl);
+      } catch {
+        bed = null;
+      }
     }
 
-    video.muted = true;
-    try {
-      video.currentTime = 0;
-    } catch {
-      // ignore
-    }
-
-    const capture = video.captureStream?.bind(video) || video.mozCaptureStream?.bind(video);
-    let videoTrack = capture ? capture().getVideoTracks()[0] : null;
-    if (!videoTrack) {
-      const width = Math.max(640, video.videoWidth || 1280);
-      const height = Math.max(360, video.videoHeight || 720);
-      canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
-      canvasStream = canvas.captureStream(30);
-      videoTrack = canvasStream.getVideoTracks()[0];
-      const paint = () => {
-        if (!canvasStream) return;
-        if (video.videoWidth) ctx.drawImage(video, 0, 0, width, height);
-        if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(paint);
-        else requestAnimationFrame(paint);
-      };
-      paint();
-    }
+    const videoTrack = film.getTrack();
+    if (!videoTrack) throw new Error('Não deu para capturar o filme da cena.');
 
     const mixed = new MediaStream([
       videoTrack,
@@ -1738,12 +1830,7 @@ async function composeDubbedVideo(pack, onProgress) {
     });
 
     if (bed) bed.el.currentTime = 0;
-    await video.play().catch(() => undefined);
-    if (video.paused) {
-      throw new Error('O navegador não reproduziu o filme da cena. Use Chrome e um dub_video em mp4 ou webm.');
-    }
-    await waitForVideoFrame(video);
-
+    await film.play()?.catch?.(() => undefined);
     recorder.start(200);
     recordingStarted = true;
     if (bed) await bed.el.play().catch(() => undefined);
@@ -1754,15 +1841,10 @@ async function composeDubbedVideo(pack, onProgress) {
       stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, 1.15));
     });
 
-    const duration = Number.isFinite(video.duration) && video.duration > 0
-      ? video.duration
-      : Math.max(lastLineEnd, 8);
-
+    const duration = film.duration > 0 ? film.duration : Math.max(lastLineEnd, 8);
     onProgress?.('Gravando o filme completo...');
     await Promise.race([
-      new Promise((resolve) => {
-        video.onended = resolve;
-      }),
+      film.ended,
       wait(duration * 1000 + 800)
     ]);
   } finally {
@@ -1776,8 +1858,7 @@ async function composeDubbedVideo(pack, onProgress) {
       }
       await stopped;
     }
-    video?.pause();
-    canvasStream?.getTracks().forEach((track) => track.stop());
+    film?.stop();
     dest.stream.getTracks().forEach((track) => track.stop());
     await audioCtx.close().catch(() => undefined);
     setExportPreview(false);

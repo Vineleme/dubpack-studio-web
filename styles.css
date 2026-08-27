@@ -1577,6 +1577,14 @@ button, label, a { border: 0; text-decoration: none; }
 .final-video-wrap.is-exporting #exportFilm {
   display: block;
 }
+.final-video-wrap ogvjs {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 3;
+  background: #000;
+}
 .final-video-wrap.is-exporting #finalVideo,
 .final-video-wrap.is-exporting .empty-frame {
   visibility: hidden;
