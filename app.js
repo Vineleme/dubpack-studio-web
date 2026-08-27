@@ -1490,11 +1490,15 @@ function loadImage(src) {
   });
 }
 
+function setExportPreview(on) {
+  els.finalVideoWrap?.classList.toggle('is-exporting', Boolean(on));
+}
+
 function setExportProgress(pct, text) {
   const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
   els.exportProgressWrap?.classList.remove('is-hidden');
   if (els.exportProgressBar) els.exportProgressBar.style.width = `${n}%`;
-  if (els.exportProgressLabel) els.exportProgressLabel.textContent = `${n}%`;
+  if (els.exportProgressLabel) els.exportProgressLabel.textContent = text ? `${text} ${n}%` : `${n}%`;
   if (els.exportStatus && text) els.exportStatus.textContent = `${text} ${n}%`;
 }
 
