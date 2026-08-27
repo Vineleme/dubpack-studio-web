@@ -1843,7 +1843,7 @@ async function requestFinalMp4() {
         output = await convertToMp4(composed);
       } catch (error) {
         output = composed;
-        toast('O Chrome gravou em WebM. Abre no Chrome e no VLC.');
+        toast(error.message || 'A conversão MP4 falhou. O arquivo ficou em WebM.');
       }
     }
     setExportProgress(100, 'Pronto');
@@ -1854,7 +1854,9 @@ async function requestFinalMp4() {
     if (!isOwner()) setCredits(getCredits() - 1);
     showFinalVideo(pack);
     scheduleSave();
-    toast('Dublagem pronta. Assista com a sua voz.');
+    toast(pack.finalExt === 'mp4'
+      ? 'Dublagem pronta em MP4. Assista ou baixe.'
+      : 'Dublagem pronta em WebM. A conversão MP4 não rodou neste navegador.');
     els.exportVideoBtn?.classList.remove('pulse-next');
     els.exportVideoBtnSide?.classList.remove('pulse-next');
     if (els.finalVideo) {
@@ -2334,46 +2336,82 @@ function loadScript(src) {
     }
     const script = document.createElement('script');
     script.src = src;
+    script.crossOrigin = 'anonymous';
     script.dataset.src = src;
     script.onload = resolve;
-    script.onerror = reject;
+    script.onerror = () => reject(new Error(`Não carreguei ${src}`));
     document.head.appendChild(script);
   });
+}
+
+const FFMPEG_CDNS = [
+  {
+    script: 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js',
+    core: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+  },
+  {
+    script: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js',
+    core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+  }
+];
+
+async function loadFfmpeg() {
+  if (state.ffmpeg?.isLoaded?.()) return state.ffmpeg;
+  let lastError;
+  for (const cdn of FFMPEG_CDNS) {
+    try {
+      await loadScript(cdn.script);
+      const { createFFmpeg } = window.FFmpeg || {};
+      if (!createFFmpeg) throw new Error('FFmpeg não apareceu no navegador.');
+      const ffmpeg = createFFmpeg({
+        log: false,
+        mainName: 'createFFmpegCore',
+        corePath: cdn.core
+      });
+      await ffmpeg.load();
+      state.ffmpeg = ffmpeg;
+      return ffmpeg;
+    } catch (error) {
+      lastError = error;
+      state.ffmpeg = null;
+    }
+  }
+  throw lastError || new Error('Não deu para carregar o conversor MP4.');
 }
 
 async function convertToMp4(blob) {
   const work = (async () => {
     setExportProgress(92, 'Carregando conversor MP4');
-    await loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js');
-    const { createFFmpeg, fetchFile } = window.FFmpeg;
-    if (!state.ffmpeg) {
-      state.ffmpeg = createFFmpeg({
-        log: false,
-        mainName: 'createFFmpegCore',
-        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-      });
-    }
-    if (!state.ffmpeg.isLoaded()) await state.ffmpeg.load();
-    state.ffmpeg.setProgress?.(({ ratio }) => {
+    const ffmpeg = await loadFfmpeg();
+    const { fetchFile } = window.FFmpeg;
+    ffmpeg.setProgress?.(({ ratio }) => {
       setExportProgress(93 + Math.round(Math.min(6, Math.max(0, Number(ratio) || 0) * 6)), 'Convertendo para MP4');
     });
     const input = blob.type.includes('mp4') ? 'input.mp4' : 'input.webm';
-    state.ffmpeg.FS('writeFile', input, await fetchFile(blob));
-    await state.ffmpeg.run(
-      '-i', input,
-      '-vf', 'scale=-2:720',
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
-      '-crf', '28',
-      '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-movflags', '+faststart',
-      'output.mp4'
-    );
-    const data = state.ffmpeg.FS('readFile', 'output.mp4');
-    state.ffmpeg.FS('unlink', input);
-    state.ffmpeg.FS('unlink', 'output.mp4');
+    ffmpeg.FS('writeFile', input, await fetchFile(blob));
+    const recipes = [
+      ['-i', input, '-vf', 'scale=-2:720', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', 'output.mp4'],
+      ['-i', input, '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', 'output.mp4']
+    ];
+    let converted = false;
+    let lastError;
+    for (const args of recipes) {
+      try {
+        await ffmpeg.run(...args);
+        converted = true;
+        break;
+      } catch (error) {
+        lastError = error;
+        try { ffmpeg.FS('unlink', 'output.mp4'); } catch { /* ignore */ }
+      }
+    }
+    try { ffmpeg.FS('unlink', input); } catch { /* ignore */ }
+    if (!converted) {
+      throw new Error(lastError?.message || 'FFmpeg não conseguiu gerar o MP4.');
+    }
+    const data = ffmpeg.FS('readFile', 'output.mp4');
+    try { ffmpeg.FS('unlink', 'output.mp4'); } catch { /* ignore */ }
+    if (!data?.length) throw new Error('O MP4 saiu vazio.');
     return new Blob([data.buffer], { type: 'video/mp4' });
   })();
   return Promise.race([

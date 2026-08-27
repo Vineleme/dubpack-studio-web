@@ -1,4 +1,4 @@
-const CACHE = 'dubpack-studio-web-v40';
+const CACHE = 'dubpack-studio-web-v41';
 const PRECACHE = [
   './',
   './index.html',
@@ -40,6 +40,8 @@ function shouldCache(request, response) {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith(
     fetch(request)
@@ -50,6 +52,10 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match('./index.html')))
+      .catch(() => caches.match(request).then((cached) => {
+        if (cached) return cached;
+        if (request.mode === 'navigate') return caches.match('./index.html');
+        return Promise.reject(new Error('offline'));
+      }))
   );
 });
