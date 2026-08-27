@@ -33,6 +33,7 @@ const state = {
   ignoreRecorderStop: false,
   countdownTimer: null,
   countdownStartTimer: null,
+  captureGen: 0,
   recordingTimer: null,
   recordStopTimer: null,
   progressTimer: null,
@@ -196,6 +197,12 @@ function bindUi() {
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
   els.authForm?.addEventListener('submit', submitAuth);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && !state.exporting) abortCapture();
+  });
+  window.addEventListener('pagehide', () => {
+    if (!state.exporting) abortCapture();
+  });
   els.authCloseBtn?.addEventListener('click', () => showAuthGate(false));
   els.authGate?.addEventListener('click', (event) => {
     if (event.target === els.authGate) showAuthGate(false);
@@ -307,7 +314,7 @@ function finishLogin(account) {
   showStudio(true);
   refreshAccountUi();
   toast(isOwner() ? 'Conta de dono ativa. Créditos infinitos.' : 'Conta pronta. Packs duram 2 dias.');
-  state.packs = [];
+  releasePackSession();
   restoreSession().then(() => {
     pruneExpiredPacks();
     renderCreditShop();
@@ -377,11 +384,18 @@ function submitAuth(event) {
 function logoutUser() {
   localStorage.removeItem(SESSION_USER_KEY);
   state.user = null;
-  state.packs = [];
-  state.activePackId = null;
+  releasePackSession();
   showAuthGate(false);
   showStudio(false);
   toast('Você saiu. Até a próxima dublagem.');
+}
+
+function releasePackSession() {
+  abortCapture();
+  state.packs.forEach((pack) => revokePackMedia(pack));
+  state.packs = [];
+  state.activePackId = null;
+  revokeAllObjectUrls();
 }
 
 function packExpiresAt(pack) {
@@ -431,9 +445,14 @@ async function importPack(event) {
   const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
+  toast('Abrindo o ZIP…');
+  await wait(20);
 
   try {
     const zipBytes = new Uint8Array(await file.arrayBuffer());
+    if (zipBytes.length < 4 || zipBytes[0] !== 0x50 || zipBytes[1] !== 0x4b) {
+      throw new Error('Isso não é um ZIP. Importe o pack em .zip.');
+    }
     const packName = file.name.replace(/\.zip$/i, '');
     const pack = await buildPack(packName, zipBytes);
     upsertPack(pack);
@@ -605,6 +624,7 @@ function setTab(tab) {
     button.classList.toggle('active', button.dataset.tab === tab);
   });
   document.querySelector('.dashboard')?.classList.toggle('final-mode', tab === 'dub');
+  if (tab !== 'record') abortCapture();
   if (tab === 'record' && !state.previewing) selectScene(state.activeIndex);
   if (tab === 'dub') showFinalVideo(currentPack());
   if (tab === 'credits' || tab === 'profile') updateCreditUi();
@@ -764,6 +784,9 @@ async function startTakeFlow() {
     return;
   }
 
+  abortCapture();
+  const gen = state.captureGen;
+  await wait(isPhone() ? 80 : 0);
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -774,8 +797,15 @@ async function startTakeFlow() {
         channelCount: 1
       }
     });
-  } catch {
-    toast('Permita o microfone no navegador para gravar.');
+  } catch (error) {
+    const denied = error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError';
+    toast(denied
+      ? 'Você bloqueou o microfone. Permita o mic neste site e toque de novo.'
+      : 'Não achei um microfone neste aparelho.');
+    return;
+  }
+  if (state.captureGen !== gen) {
+    stream.getTracks().forEach((track) => track.stop());
     return;
   }
 
@@ -788,6 +818,7 @@ async function startTakeFlow() {
   els.stageState.textContent = 'Prepare a fala...';
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
+  els.recordBtn.setAttribute('aria-label', 'Parar');
   els.micHint.textContent = 'Toque de novo para cancelar';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Preparando';
 
@@ -803,6 +834,7 @@ async function startTakeFlow() {
       state.countdownTimer = null;
       state.countdownStartTimer = setTimeout(() => {
         state.countdownStartTimer = null;
+        if (state.captureGen !== gen) return;
         recordActiveScene();
       }, 220);
     }
@@ -816,6 +848,7 @@ function isPhone() {
 }
 
 function recordActiveScene() {
+  if (!state.liveStream) return;
   const scene = currentScene();
   const stream = state.liveStream;
   if (!scene || !stream) return;
@@ -902,6 +935,7 @@ function recordActiveScene() {
   els.stageState.textContent = 'Gravando take...';
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
+  els.recordBtn.setAttribute('aria-label', 'Parar');
   els.micHint.textContent = 'Fale agora · o filme fica parado nesta fala';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
   els.sceneVideo?.pause();
@@ -1287,6 +1321,7 @@ function takePlaceholder(text) {
 }
 
 function abortCapture({ keepPreview = false } = {}) {
+  state.captureGen += 1;
   clearInterval(state.countdownTimer);
   clearTimeout(state.countdownStartTimer);
   clearInterval(state.recordingTimer);
@@ -1304,12 +1339,20 @@ function abortCapture({ keepPreview = false } = {}) {
   els.countdownBadge.style.display = 'none';
   els.recordingOverlay.style.display = 'none';
   els.recordBtn.classList.remove('recording');
+  els.recordBtn.setAttribute('aria-label', 'Gravar');
   stopActivePlayback();
   if (els.sceneVideo) els.sceneVideo.pause();
   if (state.recorder?.state === 'recording') {
     state.ignoreRecorderStop = true;
-    state.recorder.stop();
-  } else if (!state.recorder) {
+    try {
+      state.recorder.stop();
+    } catch {
+      state.recorder = null;
+      stopStream();
+      stopMeter();
+    }
+  } else {
+    state.recorder = null;
     stopStream();
     stopMeter();
   }
@@ -1560,8 +1603,30 @@ function formatClock(value) {
 }
 
 function rememberUrl(url) {
-  state.objectUrls.push(url);
+  if (url) state.objectUrls.push(url);
   return url;
+}
+
+function forgetUrl(url) {
+  if (!url) return;
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    // ignore
+  }
+  state.objectUrls = state.objectUrls.filter((item) => item !== url);
+}
+
+function revokeAllObjectUrls() {
+  const urls = [...new Set(state.objectUrls)];
+  state.objectUrls = [];
+  urls.forEach((url) => {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore
+    }
+  });
 }
 
 function revokePackMedia(pack) {
@@ -1569,7 +1634,7 @@ function revokePackMedia(pack) {
   const drop = (url) => {
     if (!url || seen.has(url)) return;
     seen.add(url);
-    URL.revokeObjectURL(url);
+    forgetUrl(url);
   };
   pack.scenes.forEach((scene) => {
     drop(scene.audioUrl);
