@@ -503,7 +503,7 @@ async function startTakeFlow() {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
-        noiseSuppression: false,
+        noiseSuppression: true,
         autoGainControl: true,
         channelCount: 1
       }
