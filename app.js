@@ -1496,14 +1496,7 @@ async function requestFinalMp4() {
 }
 
 function pickVideoMime() {
-  const types = [
-    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-    'video/mp4;codecs=avc1.4D401E,mp4a.40.2',
-    'video/mp4',
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm'
-  ];
+  const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -1868,7 +1861,14 @@ async function composeDubbedVideo(pack, onProgress) {
       videoTrack,
       ...dest.stream.getAudioTracks()
     ]);
-    recorder = mimeType ? new MediaRecorder(mixed, { mimeType, videoBitsPerSecond: 4_500_000 }) : new MediaRecorder(mixed);
+    try {
+      recorder = mimeType ? new MediaRecorder(mixed, { mimeType, videoBitsPerSecond: 3_500_000 }) : new MediaRecorder(mixed);
+    } catch {
+      recorder = new MediaRecorder(mixed);
+    }
+    recorder.onerror = () => {
+      chunks.length = 0;
+    };
     recorder.ondataavailable = (event) => {
       if (event.data?.size) chunks.push(event.data);
     };
