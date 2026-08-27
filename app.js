@@ -111,6 +111,14 @@ const els = {
   authPassword: document.querySelector('#authPassword'),
   authOwnerCode: document.querySelector('#authOwnerCode'),
   logoutBtn: document.querySelector('#logoutBtn'),
+  landingPage: document.querySelector('#landingPage'),
+  studioApp: document.querySelector('#studioApp'),
+  landingEnterBtn: document.querySelector('#landingEnterBtn'),
+  landingEnterBtn2: document.querySelector('#landingEnterBtn2'),
+  landingStartBtn: document.querySelector('#landingStartBtn'),
+  landingDemo: document.querySelector('#landingDemo'),
+  landingDemoHint: document.querySelector('#landingDemoHint'),
+  authCloseBtn: document.querySelector('#authCloseBtn'),
   takeRail: document.querySelector('#takeRail'),
   wavePlayhead: document.querySelector('#wavePlayhead'),
   waveStartLabel: document.querySelector('#waveStartLabel'),
@@ -188,6 +196,16 @@ function bindUi() {
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
   els.authForm?.addEventListener('submit', submitAuth);
+  els.authCloseBtn?.addEventListener('click', () => showAuthGate(false));
+  els.authGate?.addEventListener('click', (event) => {
+    if (event.target === els.authGate) showAuthGate(false);
+  });
+  [els.landingEnterBtn, els.landingEnterBtn2, els.landingStartBtn].forEach((button) => {
+    button?.addEventListener('click', () => showAuthGate(true));
+  });
+  els.landingDemo?.addEventListener('loadeddata', () => {
+    if (els.landingDemo.videoWidth) els.landingDemoHint?.classList.add('is-hidden');
+  });
 
   document.querySelectorAll('[data-tab]').forEach((button) => {
     button.addEventListener('click', (event) => {
@@ -200,11 +218,13 @@ function bindUi() {
 async function bootApp() {
   state.user = readSessionUser();
   if (!state.user) {
-    showAuthGate(true);
+    showStudio(false);
+    showAuthGate(false);
     renderCreditShop();
     return;
   }
   showAuthGate(false);
+  showStudio(true);
   refreshAccountUi();
   try {
     await restoreSession();
@@ -252,6 +272,12 @@ function isOwner(user = state.user) {
 
 function showAuthGate(on) {
   els.authGate?.classList.toggle('is-hidden', !on);
+}
+
+function showStudio(on) {
+  els.landingPage?.classList.toggle('is-hidden', on);
+  els.studioApp?.classList.toggle('is-hidden', !on);
+  document.body.classList.toggle('in-studio', on);
 }
 
 function refreshAccountUi() {
@@ -306,6 +332,7 @@ function submitAuth(event) {
   state.user = { name: users[email].name, email, owner: Boolean(users[email].owner) };
   localStorage.setItem(SESSION_USER_KEY, JSON.stringify(state.user));
   showAuthGate(false);
+  showStudio(true);
   refreshAccountUi();
   toast(isOwner() ? 'Conta de dono ativa. Créditos infinitos.' : 'Conta pronta. Packs duram 2 dias.');
   state.packs = [];
@@ -322,9 +349,9 @@ function logoutUser() {
   state.user = null;
   state.packs = [];
   state.activePackId = null;
-  showAuthGate(true);
-  setTab('packs');
-  toast('Você saiu. Entre de novo com seu e-mail.');
+  showAuthGate(false);
+  showStudio(false);
+  toast('Você saiu. Até a próxima dublagem.');
 }
 
 function packExpiresAt(pack) {
@@ -534,6 +561,7 @@ function decorateScene(scene) {
 
 function setTab(tab) {
   if (!state.user) {
+    showStudio(false);
     showAuthGate(true);
     return;
   }
