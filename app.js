@@ -4,6 +4,9 @@ const VIDEO_EXTS = ['mp4', 'mov', 'webm', 'ogv', 'm4v'];
 const MAX_LINE_SECONDS = 600;
 const GUIDE_VOLUME = 0.08;
 const BED_VOLUME = 0.14;
+const BED_EXPORT = 0.4;
+const BED_DUCK = 0.09;
+const TAKE_PEAK_TARGET = 0.62;
 
 const state = {
   packs: [],
@@ -110,6 +113,9 @@ const els = {
   proBtn: document.querySelector('#proBtn'),
   waveformBars: [...document.querySelectorAll('.hero-waveform i')],
   micBars: [...document.querySelectorAll('.mic-level span')],
+  voiceMeter: document.querySelector('#voiceMeter'),
+  voiceMeterFill: document.querySelector('#voiceMeterFill'),
+  voiceMeterHint: document.querySelector('#voiceMeterHint'),
   generateMp4Btn: document.querySelector('#generateMp4Btn'),
   finalVideo: document.querySelector('#finalVideo'),
   finalVideoWrap: document.querySelector('#finalVideoWrap'),
@@ -387,6 +393,8 @@ function selectScene(index) {
   els.elapsedLabel.textContent = '00:00';
   els.timerValue.textContent = scene.duration.toFixed(1);
   els.micHint.textContent = take ? 'Toque no microfone para regravar' : 'Toque no microfone para começar';
+  if (take?.peak != null) setVoiceMeter(take.peak, false);
+  else if (els.voiceMeter) els.voiceMeter.hidden = true;
   if (els.recordingStatus) els.recordingStatus.textContent = take ? 'Gravado' : 'Pronto';
   els.videoProgress.style.width = '0%';
   if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
@@ -514,6 +522,12 @@ async function startTakeFlow() {
   }
 
   state.liveStream = stream;
+  try {
+    state.meterStream = stream.clone();
+    startMeter(state.meterStream);
+  } catch {
+    state.meterStream = null;
+  }
   stream.getAudioTracks().forEach((track) => {
     track.enabled = true;
   });
@@ -622,11 +636,14 @@ function recordActiveScene() {
     };
     selectScene(state.activeIndex);
     scheduleSave();
-    if (voicePeak < 0.06) {
-      toast('Quase não deu para ouvir sua voz. Fale mais perto e use fone para a referência não vazar.');
+    if (voicePeak < 0.14) {
+      toast('Volume baixo. Fale mais perto do microfone e grave de novo.');
+    } else if (voicePeak > 0.78) {
+      toast('Um pouco alto. Afaste um pouco o microfone.');
     } else {
-      toast('Take gravado com a sua voz.');
+      toast('Take gravado. Volume bom para a dublagem.');
     }
+    setVoiceMeter(voicePeak, false);
     const finished = pack.scenes.every((item) => pack.takes[item.id]);
     if (finished) {
       toast('Pack concluído. Toque em Gerar MP4 no topo para assistir e baixar.');
@@ -1066,6 +1083,43 @@ function stopStream() {
   state.meterStream = null;
 }
 
+function voiceLevelFromPeak(peak) {
+  const n = Number(peak) || 0;
+  if (n < 0.14) return { id: 'low', hint: 'Fale mais perto do microfone' };
+  if (n > 0.78) return { id: 'high', hint: 'Um pouco alto — afaste um pouco' };
+  return { id: 'good', hint: 'Volume bom para a dublagem' };
+}
+
+function setVoiceMeter(peak, live) {
+  const level = voiceLevelFromPeak(peak);
+  if (els.voiceMeter) {
+    els.voiceMeter.hidden = false;
+    els.voiceMeter.classList.remove('is-low', 'is-good', 'is-high');
+    els.voiceMeter.classList.add(`is-${level.id}`);
+  }
+  if (els.voiceMeterFill) {
+    els.voiceMeterFill.style.width = `${Math.max(8, Math.min(100, Math.round((Number(peak) || 0) * 135)))}%`;
+  }
+  if (els.voiceMeterHint) {
+    els.voiceMeterHint.textContent = live && level.id === 'good' ? 'Pode falar neste volume' : level.hint;
+  }
+}
+
+function bufferPeak(buffer) {
+  let peak = 0;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    for (let i = 0; i < data.length; i += 1) peak = Math.max(peak, Math.abs(data[i]));
+  }
+  return peak;
+}
+
+function gainForTake(buffer) {
+  const peak = bufferPeak(buffer);
+  if (peak < 0.02) return 2.4;
+  return Math.min(3.4, Math.max(0.85, TAKE_PEAK_TARGET / peak));
+}
+
 function startMeter(stream) {
   stopMeter();
   if (!stream) return;
@@ -1087,8 +1141,9 @@ function startMeter(stream) {
     for (let i = 0; i < wave.length; i += 1) {
       peak = Math.max(peak, Math.abs(wave[i] - 128) / 128);
     }
-    if (state.recorder?.state === 'recording') {
+    if (state.recorder?.state === 'recording' || state.countdownTimer) {
       state.recordPeak = Math.max(state.recordPeak, peak);
+      setVoiceMeter(Math.max(state.recordPeak, peak), true);
     }
     els.micBars.forEach((bar, index) => {
       const value = data[Math.min(index, data.length - 1)] / 255;
@@ -1722,23 +1777,26 @@ function startBufferAt(audioCtx, dest, buffer, when, gainValue) {
   source.buffer = buffer;
   source.connect(gain);
   source.start(Math.max(when, audioCtx.currentTime));
-  return () => {
-    try { source.stop(); } catch { /* already stopped */ }
-    source.disconnect();
-    gain.disconnect();
+  return {
+    gain,
+    stop: () => {
+      try { source.stop(); } catch { /* already stopped */ }
+      source.disconnect();
+      gain.disconnect();
+    }
   };
 }
 
 function duckDuringTakes(gainNode, t0, windows) {
   const param = gainNode.gain;
-  param.setValueAtTime(1, t0);
+  param.setValueAtTime(BED_EXPORT, t0);
   windows.forEach((win) => {
     const start = t0 + win.offset;
     const end = start + win.duration;
-    param.setValueAtTime(1, Math.max(t0, start - 0.05));
-    param.linearRampToValueAtTime(0.12, start + 0.06);
-    param.setValueAtTime(0.12, Math.max(start + 0.06, end - 0.06));
-    param.linearRampToValueAtTime(1, end + 0.1);
+    param.setValueAtTime(BED_EXPORT, Math.max(t0, start - 0.08));
+    param.linearRampToValueAtTime(BED_DUCK, start + 0.05);
+    param.setValueAtTime(BED_DUCK, Math.max(start + 0.05, end - 0.05));
+    param.linearRampToValueAtTime(BED_EXPORT, end + 0.12);
   });
 }
 
@@ -1749,7 +1807,7 @@ function attachMediaBed(audioCtx, dest, srcUrl) {
   audio.src = srcUrl;
   document.body.appendChild(audio);
   const gain = audioCtx.createGain();
-  gain.gain.value = 1;
+  gain.gain.value = BED_EXPORT;
   const source = audioCtx.createMediaElementSource(audio);
   source.connect(gain);
   gain.connect(dest);
@@ -1826,7 +1884,11 @@ async function composeDubbedVideo(pack, onProgress) {
     if (pack.backingUrl) {
       try {
         const backingBuf = await decodeAudioFrom(audioCtx, null, pack.backingUrl);
-        playBacking = (t0) => stops.push(startBufferAt(audioCtx, dest, backingBuf, t0, 1));
+        playBacking = (t0) => {
+          const node = startBufferAt(audioCtx, dest, backingBuf, t0, BED_EXPORT);
+          stops.push(node.stop);
+          return node.gain;
+        };
       } catch {
         playBacking = null;
       }
@@ -1882,10 +1944,10 @@ async function composeDubbedVideo(pack, onProgress) {
     await film.play()?.catch?.(() => undefined);
     if (bed) await bed.el.play().catch(() => undefined);
     const t0 = audioCtx.currentTime;
-    playBacking?.(t0);
-    if (bed && takeBuffers.length) duckDuringTakes(bed.gain, t0, takeBuffers);
+    const bedGain = playBacking?.(t0) || bed?.gain;
+    if (bedGain && takeBuffers.length) duckDuringTakes(bedGain, t0, takeBuffers);
     takeBuffers.forEach((win) => {
-      stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, 1.15));
+      stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, gainForTake(win.buffer)).stop);
     });
 
     const duration = film.duration > 0 ? film.duration : Math.max(lastLineEnd, 8);
