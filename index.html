@@ -13,82 +13,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
 
-    <div id="landingPage" class="landing">
-      <header class="landing-nav">
-        <div class="landing-brand">
-          <img src="./assets/dubpack-logo.jpg" alt="" />
-          <strong>Dub<span>Pack</span> Studio</strong>
-        </div>
-        <button id="landingEnterBtn" class="secondary" type="button">Entrar</button>
-      </header>
-
-      <section class="landing-hero">
-        <p class="landing-kicker">Duble. Jogue. Compartilhe.</p>
-        <h1>Sua voz no filme da cena.<br />Não um recorte de estúdio.</h1>
-        <p class="landing-lead">Importe o pack Choicer, grave fala por fala e finalize a dublagem com o ambiente original e a sua voz no lugar dos personagens.</p>
-        <div class="landing-cta">
-          <button id="landingStartBtn" class="primary" type="button">Começar a dublar</button>
-          <button id="landingEnterBtn2" class="secondary" type="button">Já tenho conta</button>
-        </div>
-      </section>
-
-      <section class="landing-demo">
-        <div class="landing-video-frame">
-          <video id="landingDemo" poster="./assets/dubpack-logo.jpg" controls playsinline preload="metadata">
-            <source src="./assets/demo.mp4" type="video/mp4" />
-          </video>
-          <span id="landingDemoHint" class="landing-video-hint">Aqui entra o vídeo de exemplo — você sobe o arquivo depois</span>
-        </div>
-      </section>
-
-      <section class="landing-prints" aria-label="Prints do Studio">
-        <figure>
-          <div class="print-screen print-packs">
-            <b>Meus Packs</b>
-            <i></i><i></i>
-          </div>
-          <figcaption>Seus ZIPs, 2 dias na conta</figcaption>
-        </figure>
-        <figure>
-          <div class="print-screen print-record">
-            <em>WINGO · FALA 3 DE 10</em>
-            <p>“A gente se vê no fim da pista.”</p>
-            <span>🎙</span>
-          </div>
-          <figcaption>Uma fala por vez, no tempo certo</figcaption>
-        </figure>
-        <figure>
-          <div class="print-screen print-final">
-            <u></u>
-            <small>Finalizar dublagem</small>
-          </div>
-          <figcaption>O filme completo, com a sua voz</figcaption>
-        </figure>
-      </section>
-
-      <section class="landing-steps">
-        <article><strong>1</strong><h2>Importa o ZIP</h2><p>Pack Choicer com dub_video, falas e, se tiver, o ambiente.</p></article>
-        <article><strong>2</strong><h2>Grava no palco</h2><p>Countdown, microfone, volume certo. Sem o filme tapando a voz.</p></article>
-        <article><strong>3</strong><h2>Finaliza</h2><p>Gera o vídeo, assiste e baixa. Gerar de novo gasta crédito.</p></article>
-      </section>
-
-      <footer class="landing-foot">
-        <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>
-        <span>DubPack Studio · 2026</span>
-      </footer>
-    </div>
-
-    <div id="authGate" class="auth-gate is-hidden">
+    <div id="authGate" class="auth-gate">
       <form id="authForm" class="auth-card">
-        <button id="authCloseBtn" class="ghost auth-close" type="button" aria-label="Fechar">×</button>
         <img src="./assets/dubpack-logo.jpg" alt="" />
-        <h1>Entrar no Studio</h1>
-        <p>Conta nova: nome, e-mail e senha. Já tem conta: e-mail e senha. Dono: e-mail e o código do estúdio.</p>
-        <label>Nome
-          <input id="authName" type="text" autocomplete="name" placeholder="Seu nome (só na primeira vez)" />
+        <h1 id="authTitle">Criar conta</h1>
+        <p id="authLead">Nome, e-mail e senha. Depois você entra no Studio.</p>
+        <label id="authNameWrap">Nome
+          <input id="authName" type="text" autocomplete="name" placeholder="Seu nome" />
         </label>
         <label>E-mail
           <input id="authEmail" type="email" autocomplete="email" placeholder="voce@email.com" required />
@@ -96,11 +30,9 @@
         <label>Senha
           <input id="authPassword" type="password" autocomplete="current-password" placeholder="Sua senha" />
         </label>
-        <label class="auth-owner">Código do estúdio (dono)
-          <input id="authOwnerCode" type="password" autocomplete="off" placeholder="Se for o dono, cole aqui" />
-        </label>
-        <button class="primary wide" type="submit">Criar conta ou entrar</button>
-        <small>Sem servidor ainda: a conta fica neste navegador. O dono usa o código do estúdio e tem créditos infinitos.</small>
+        <button id="authSubmitBtn" class="primary wide" type="submit">Entrar no Studio</button>
+        <button id="authSwitchBtn" class="ghost wide" type="button">Já tenho conta</button>
+        <small>A conta fica neste navegador. Quem já é dono entra só com o e-mail e a senha — o Studio reconhece sozinho.</small>
       </form>
     </div>
     <div id="helpModal" class="help-modal is-hidden" role="dialog" aria-labelledby="helpTitle" aria-modal="true">
@@ -118,7 +50,7 @@
       </div>
     </div>
 
-    <main id="studioApp" class="dashboard is-hidden">
+    <main id="studioApp" class="dashboard">
       <aside class="sidebar">
         <a class="side-logo" href="#packsTab" data-tab="packs">
           <img src="./assets/dubpack-logo.jpg" alt="DubPack Studio" />

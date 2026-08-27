@@ -10,7 +10,6 @@ const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const SESSION_USER_KEY = 'dubpack-user';
 const USERS_KEY = 'dubpack-users';
-const OWNER_CLAIM_CODE = 'DUBPACK-OWNER';
 const OWNER_EMAILS = [
   'viniciusleme@gmail.com',
   'vinicius.leme@gmail.com',
@@ -48,7 +47,8 @@ const state = {
   objectUrls: [],
   ffmpeg: null,
   exporting: false,
-  user: null
+  user: null,
+  authMode: 'signup'
 };
 
 const els = {
@@ -110,16 +110,13 @@ const els = {
   authName: document.querySelector('#authName'),
   authEmail: document.querySelector('#authEmail'),
   authPassword: document.querySelector('#authPassword'),
-  authOwnerCode: document.querySelector('#authOwnerCode'),
+  authTitle: document.querySelector('#authTitle'),
+  authLead: document.querySelector('#authLead'),
+  authNameWrap: document.querySelector('#authNameWrap'),
+  authSubmitBtn: document.querySelector('#authSubmitBtn'),
+  authSwitchBtn: document.querySelector('#authSwitchBtn'),
   logoutBtn: document.querySelector('#logoutBtn'),
-  landingPage: document.querySelector('#landingPage'),
   studioApp: document.querySelector('#studioApp'),
-  landingEnterBtn: document.querySelector('#landingEnterBtn'),
-  landingEnterBtn2: document.querySelector('#landingEnterBtn2'),
-  landingStartBtn: document.querySelector('#landingStartBtn'),
-  landingDemo: document.querySelector('#landingDemo'),
-  landingDemoHint: document.querySelector('#landingDemoHint'),
-  authCloseBtn: document.querySelector('#authCloseBtn'),
   takeRail: document.querySelector('#takeRail'),
   wavePlayhead: document.querySelector('#wavePlayhead'),
   waveStartLabel: document.querySelector('#waveStartLabel'),
@@ -197,21 +194,14 @@ function bindUi() {
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
   els.authForm?.addEventListener('submit', submitAuth);
+  els.authSwitchBtn?.addEventListener('click', () => {
+    setAuthMode(state.authMode === 'signup' ? 'login' : 'signup');
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && !state.exporting) abortCapture();
   });
   window.addEventListener('pagehide', () => {
     if (!state.exporting) abortCapture();
-  });
-  els.authCloseBtn?.addEventListener('click', () => showAuthGate(false));
-  els.authGate?.addEventListener('click', (event) => {
-    if (event.target === els.authGate) showAuthGate(false);
-  });
-  [els.landingEnterBtn, els.landingEnterBtn2, els.landingStartBtn].forEach((button) => {
-    button?.addEventListener('click', () => showAuthGate(true));
-  });
-  els.landingDemo?.addEventListener('loadeddata', () => {
-    if (els.landingDemo.videoWidth) els.landingDemoHint?.classList.add('is-hidden');
   });
 
   document.querySelectorAll('[data-tab]').forEach((button) => {
@@ -225,13 +215,13 @@ function bindUi() {
 async function bootApp() {
   state.user = readSessionUser();
   if (!state.user) {
-    showStudio(false);
-    showAuthGate(false);
+    showStudio();
+    showAuthGate(true);
     renderCreditShop();
     return;
   }
   showAuthGate(false);
-  showStudio(true);
+  showStudio();
   refreshAccountUi();
   try {
     await restoreSession();
@@ -279,12 +269,27 @@ function isOwner(user = state.user) {
 
 function showAuthGate(on) {
   els.authGate?.classList.toggle('is-hidden', !on);
+  if (on) setAuthMode(state.authMode || 'signup');
 }
 
-function showStudio(on) {
-  els.landingPage?.classList.toggle('is-hidden', on);
-  els.studioApp?.classList.toggle('is-hidden', !on);
-  document.body.classList.toggle('in-studio', on);
+function setAuthMode(mode) {
+  state.authMode = mode === 'login' ? 'login' : 'signup';
+  const login = state.authMode === 'login';
+  if (els.authNameWrap) els.authNameWrap.classList.toggle('is-hidden', login);
+  if (els.authName) els.authName.required = !login;
+  if (els.authTitle) els.authTitle.textContent = login ? 'Entrar' : 'Criar conta';
+  if (els.authLead) {
+    els.authLead.textContent = login
+      ? 'E-mail e senha para voltar ao Studio.'
+      : 'Nome, e-mail e senha. Depois você entra no Studio.';
+  }
+  if (els.authSubmitBtn) els.authSubmitBtn.textContent = login ? 'Entrar' : 'Entrar no Studio';
+  if (els.authSwitchBtn) els.authSwitchBtn.textContent = login ? 'Criar conta nova' : 'Já tenho conta';
+}
+
+function showStudio() {
+  els.studioApp?.classList.remove('is-hidden');
+  document.body.classList.add('in-studio');
 }
 
 function refreshAccountUi() {
@@ -311,7 +316,7 @@ function finishLogin(account) {
   };
   localStorage.setItem(SESSION_USER_KEY, JSON.stringify(state.user));
   showAuthGate(false);
-  showStudio(true);
+  showStudio();
   refreshAccountUi();
   toast(isOwner() ? 'Conta de dono ativa. Créditos infinitos.' : 'Conta pronta. Packs duram 2 dias.');
   releasePackSession();
@@ -326,58 +331,59 @@ function finishLogin(account) {
 function submitAuth(event) {
   event.preventDefault();
   const email = normalizeEmail(els.authEmail?.value);
-  let name = String(els.authName?.value || '').trim();
-  let password = String(els.authPassword?.value || '');
-  let ownerCode = String(els.authOwnerCode?.value || '').trim();
-  if (password === OWNER_CLAIM_CODE) ownerCode = OWNER_CLAIM_CODE;
+  const name = String(els.authName?.value || '').trim();
+  const password = String(els.authPassword?.value || '');
+  const login = state.authMode === 'login';
   if (!email) {
     toast('Informe o e-mail.');
     return;
   }
-  const users = readUsers();
-  const existing = users[email];
-  const claimOwner = ownerCode === OWNER_CLAIM_CODE || OWNER_EMAILS.includes(email);
-
-  if (claimOwner) {
-    const account = {
-      ...(existing || {}),
-      name: name || existing?.name || email.split('@')[0],
-      email,
-      password: existing?.password && existing.password !== OWNER_CLAIM_CODE
-        ? existing.password
-        : (password && password !== OWNER_CLAIM_CODE ? password : existing?.password || OWNER_CLAIM_CODE),
-      owner: true,
-      createdAt: existing?.createdAt || new Date().toISOString()
-    };
-    users[email] = account;
-    writeUsers(users);
-    finishLogin(account);
+  if (!password || password.length < 4) {
+    toast('A senha precisa ter pelo menos 4 caracteres.');
     return;
   }
+  const users = readUsers();
+  const existing = users[email];
+  const owner = OWNER_EMAILS.includes(email) || Boolean(existing?.owner);
 
-  if (existing) {
-    if (existing.password !== password) {
-      toast('Senha não confere. Se for o dono, use o código do estúdio.');
+  if (login) {
+    if (!existing) {
+      toast('Não achei essa conta. Crie uma conta nova.');
+      setAuthMode('signup');
       return;
+    }
+    if (existing.password !== password) {
+      toast('Senha não confere.');
+      return;
+    }
+    if (owner && !existing.owner) {
+      existing.owner = true;
+      users[email] = existing;
+      writeUsers(users);
     }
     finishLogin(existing);
     return;
   }
 
-  if (!name || password.length < 4) {
-    toast('Para criar conta: nome, e-mail e senha com pelo menos 4 caracteres.');
+  if (existing) {
+    toast('Esse e-mail já tem conta. Entre com a senha.');
+    setAuthMode('login');
+    return;
+  }
+  if (!name) {
+    toast('Informe seu nome para criar a conta.');
     return;
   }
   const created = {
     name,
     email,
     password,
-    owner: false,
+    owner,
     createdAt: new Date().toISOString()
   };
   users[email] = created;
   writeUsers(users);
-  localStorage.setItem(`dubpack-credits:${email}`, '1');
+  if (!owner) localStorage.setItem(`dubpack-credits:${email}`, '1');
   finishLogin(created);
 }
 
@@ -385,8 +391,9 @@ function logoutUser() {
   localStorage.removeItem(SESSION_USER_KEY);
   state.user = null;
   releasePackSession();
-  showAuthGate(false);
-  showStudio(false);
+  showStudio();
+  setAuthMode('login');
+  showAuthGate(true);
   toast('Você saiu. Até a próxima dublagem.');
 }
 
@@ -610,7 +617,7 @@ function decorateScene(scene) {
 
 function setTab(tab) {
   if (!state.user) {
-    showStudio(false);
+    showStudio();
     showAuthGate(true);
     return;
   }
