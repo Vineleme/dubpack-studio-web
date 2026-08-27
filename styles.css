@@ -1537,11 +1537,31 @@ button, label, a { border: 0; text-decoration: none; }
 .final-video-page p {
   text-align: center;
 }
-.final-video-page .primary.wide,
-.final-video-page .hint-copy {
-  max-width: 420px;
-  margin-left: auto;
-  margin-right: auto;
+.export-progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  width: min(420px, 100%);
+  margin: 8px auto 16px;
+  text-align: left;
+}
+.export-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(245, 46, 131, 0.18);
+  overflow: hidden;
+}
+.export-progress-track b {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #f52e83, #ff7a1a);
+  transition: width 0.2s linear;
+}
+#exportProgressLabel {
+  color: #ffd21e;
+  font-size: 18px;
 }
 .final-video-page #downloadMp4Btn:not(.is-hidden),
 .final-video-page #generateMp4Btn:not(.is-hidden) {
