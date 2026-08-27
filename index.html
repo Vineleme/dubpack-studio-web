@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090817" />
+    <title>DubPack Studio</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./assets/dubpack-logo.jpg" type="image/jpeg" />
+    <link rel="apple-touch-icon" href="./assets/dubpack-logo.jpg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="appToast" class="app-toast" hidden role="status"></div>
+    <div id="helpModal" class="help-modal is-hidden" role="dialog" aria-labelledby="helpTitle" aria-modal="true">
+      <div class="help-card">
+        <h2 id="helpTitle">Como dublar</h2>
+        <ol>
+          <li>Importe um pack <strong>.zip</strong> com os áudios das falas (e vídeo ou imagens, se houver).</li>
+          <li>Toque em <strong>Referência</strong> para ouvir o original.</li>
+          <li>Use fone de ouvido. Toque no microfone: countdown de 3 segundos, depois grave no tempo da fala. A referência fica bem baixa para não tapar a sua voz.</li>
+          <li>Toque de novo no microfone para cancelar o countdown ou encerrar a gravação.</li>
+          <li>Avance de fala, ouça o take e baixe os áudios quando terminar.</li>
+        </ol>
+        <p>Takes ficam neste navegador. Recarregar a página restaura o último pack, se o armazenamento local permitir.</p>
+        <button id="helpCloseBtn" class="primary" type="button">Entendi</button>
+      </div>
+    </div>
+
+    <main class="dashboard">
+      <aside class="sidebar">
+        <a class="side-logo" href="#packsTab" data-tab="packs">
+          <img src="./assets/dubpack-logo.jpg" alt="DubPack Studio" />
+          <strong>Dub<span>Pack</span></strong>
+          <small>STUDIO</small>
+          <em>Duble. Jogue. Compartilhe.</em>
+        </a>
+
+        <nav class="side-nav" aria-label="Navegação principal">
+          <button class="active" type="button" data-tab="packs"><span class="nav-ico" aria-hidden="true">⌂</span><span class="nav-label">Meus Packs</span></button>
+          <button type="button" data-tab="record"><span class="nav-ico" aria-hidden="true">🎙</span><span class="nav-label">Gravar</span></button>
+          <button type="button" data-tab="profile"><span class="nav-ico" aria-hidden="true">○</span><span class="nav-label">Perfil</span></button>
+          <button type="button" data-tab="credits"><span class="nav-ico" aria-hidden="true">✦</span><span class="nav-label">Créditos</span></button>
+          <a class="gamebanana-link" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">🎮 GameBanana</a>
+        </nav>
+
+        <section class="pro-card">
+          <span>Seja Pro</span>
+          <p>Cada MP4 final consome 1 crédito. Recarregue quando quiser dublar de novo.</p>
+          <button id="proBtn" class="primary" type="button">Comprar créditos</button>
+        </section>
+      </aside>
+
+      <section class="content">
+        <header class="topbar">
+          <div>
+            <h1>Bem-vindo de volta, Vinicius!</h1>
+            <p id="topbarHint">Escolha um pack e comece a dublar.</p>
+          </div>
+          <div class="search-row">
+            <label class="search-box">
+              <input id="packSearch" type="search" placeholder="Buscar packs..." />
+              <span>⌕</span>
+            </label>
+            <button id="helpBtn" class="ghost" type="button" aria-label="Ajuda">?</button>
+            <button id="bellBtn" class="ghost" type="button" aria-label="Créditos">⌾</button>
+            <button id="userChip" class="user-chip" type="button" data-tab="profile">
+              <img src="./assets/dubpack-logo.jpg" alt="" />
+              <span><strong>Vinicius Leme</strong><small>Pro · <b id="creditBadge">1 crédito</b></small></span>
+            </button>
+          </div>
+        </header>
+
+        <section id="packsTab" class="tab-view active">
+          <div class="section-head">
+            <h2>Meus Packs</h2>
+            <label class="text-link">
+              + Adicionar Pack
+              <input id="packInput" type="file" accept=".zip,application/zip" hidden />
+            </label>
+          </div>
+
+          <div id="packEmpty" class="pack-empty">
+            <h3>Nenhum pack ainda</h3>
+            <p>Traga um ZIP com as falas em mp3, wav, ogg ou m4a. Se o pack tiver vídeo (incluindo <code>dub_video</code> no estilo Choicer) ou imagens, eles aparecem no palco.</p>
+            <label class="primary">
+              Importar ZIP
+              <input id="packInputEmpty" type="file" accept=".zip,application/zip" hidden />
+            </label>
+          </div>
+
+          <div id="packGrid" class="pack-grid"></div>
+        </section>
+
+        <section id="recordTab" class="tab-view">
+          <section class="choicer-workspace">
+            <header class="choicer-topbar">
+              <button id="prevBtn" class="back-link" type="button">← Voltar</button>
+              <div>
+                <h2>Nova dublagem</h2>
+                <p id="projectMeta">Siga os passos e grave no tempo certo.</p>
+              </div>
+              <button id="exportVideoBtn" class="primary is-hidden" type="button">Gerar MP4</button>
+            </header>
+
+            <div class="choicer-stage">
+              <section class="tv-zone">
+                <div class="video-shell">
+                  <video id="sceneVideo" playsinline muted preload="auto"></video>
+                  <img id="sceneImage" alt="" />
+                  <div id="emptyFrame" class="empty-frame">Importe um ZIP para começar</div>
+                  <div id="stageState" class="stage-state">Pronto para gravar</div>
+                  <div id="countdownBadge" class="countdown-badge">3</div>
+                </div>
+
+                <div class="video-timeline">
+                  <span id="elapsedLabel">00:00</span>
+                  <i><b id="videoProgress"></b></i>
+                  <span id="durationLabel">00:00</span>
+                </div>
+
+                <div class="scene-chip">
+                  <span id="frameCharacter">Personagem</span>
+                  <span id="counter">Fala 0 de 0</span>
+                </div>
+
+                <div class="subtitle-console">
+                  <p id="frameSubtitle">A legenda aparece aqui.</p>
+                </div>
+
+                <div class="record-strip">
+                  <div class="take-meta">
+                    <small id="projectTitle">DubPack Studio</small>
+                    <strong id="character">Personagem</strong>
+                    <span id="subtitle">A fala aparece aqui.</span>
+                  </div>
+                  <button id="referenceBtn" class="secondary" type="button">▶ Referência</button>
+                  <button id="recordBtn" class="mic stop-ready" type="button" aria-label="Gravar">🎙</button>
+                  <div class="record-timer">
+                    <small id="micHint">Toque para começar</small>
+                    <strong id="timerValue">0.0</strong>
+                  </div>
+                </div>
+
+                <div id="recordingOverlay" class="recording-overlay inline">
+                  <strong id="overlayCharacter">Personagem</strong>
+                  <span id="overlayText">Leia a fala no tempo certo.</span>
+                </div>
+              </section>
+
+              <aside class="save-panel">
+                <button id="previewBtn" class="preview-mini" type="button" aria-label="Ouvir take">▶</button>
+                <span id="previewHint">Grave este take para ouvir aqui</span>
+                <button id="listenTakeBtn" class="secondary wide listen-take" type="button">▶ Ouvir meu take</button>
+                <button id="nextBtn" class="secondary wide" type="button">Próxima cena →</button>
+              </aside>
+            </div>
+
+            <footer class="scene-nav">
+              <button class="secondary" type="button" id="prevSceneBtn">← Cena anterior</button>
+              <strong id="topCounter">Fala 0 de 0</strong>
+              <button class="secondary" type="button" id="nextSceneBtn">Próxima cena →</button>
+            </footer>
+          </section>
+        </section>
+
+        <section id="dubTab" class="tab-view info-card final-video-page">
+          <h2>Vídeo final</h2>
+          <p>O resultado é o vídeo completo da cena, com o ambiente original e as vozes que você dublou no lugar dos personagens.</p>
+          <div id="finalVideoWrap" class="final-video-wrap">
+            <video id="finalVideo" controls playsinline></video>
+            <div id="finalVideoEmpty" class="empty-frame">Grave as falas e gere o MP4 para assistir sua dublagem completa.</div>
+          </div>
+          <p id="exportStatus" class="hint-copy">Nenhum vídeo gerado ainda.</p>
+          <button id="generateMp4Btn" class="primary wide" type="button">Gerar vídeo final (1 crédito)</button>
+          <a id="downloadMp4Btn" class="primary wide is-hidden" download>Baixar vídeo</a>
+        </section>
+
+        <section id="profileTab" class="tab-view info-card">
+          <h2>Perfil</h2>
+          <div class="profile-hero">
+            <img src="./assets/dubpack-logo.jpg" alt="" />
+            <div>
+              <h3>Vinicius Leme</h3>
+              <p>Pro · dublagem local neste dispositivo</p>
+            </div>
+          </div>
+          <p>Você tem <strong id="profileCredits">1 crédito</strong>. O crédito só cai quando o MP4 final fica pronto para assistir.</p>
+          <button class="primary wide" type="button" data-tab="credits">Comprar mais créditos</button>
+        </section>
+
+        <section id="creditsTab" class="tab-view info-card">
+          <h2>Créditos</h2>
+          <p>1 MP4 = 1 crédito. Pacotes com desconto quanto mais você leva.</p>
+          <p>Saldo atual: <strong id="creditsBalance">1 crédito</strong></p>
+          <div id="creditShop" class="credit-shop"></div>
+          <p class="hint-copy">Pagamento real (Pix/cartão) entra depois. Agora a compra é instantânea para você testar o fluxo completo.</p>
+        </section>
+      </section>
+
+      <aside class="right-rail">
+        <section class="score-card">
+          <div>
+            <h2>Seu desempenho</h2>
+          </div>
+          <div class="score-body">
+            <div class="score-ring">
+              <div class="score-ring-inner">
+                <strong id="scoreAverage">—</strong>
+                <span id="scoreCaption">SEM PACK</span>
+              </div>
+            </div>
+            <ul class="score-metrics">
+              <li><span>Falas gravadas</span><b id="scoreCoverage">—</b></li>
+              <li><span>Duração vs referência</span><b id="scoreDuration">—</b></li>
+              <li><span>Takes no tempo</span><b id="scoreOnTime">—</b></li>
+              <li><span>Pack atual</span><b id="scorePack">—</b></li>
+            </ul>
+          </div>
+        </section>
+
+        <section id="sequenceCard" class="sequence-card is-hidden">
+          <h2>Sequência atual</h2>
+          <div class="mini-video">▷</div>
+          <p><strong id="sidePackTitle">Pack importado</strong><br /><span id="sideSceneTitle">Cena 01</span></p>
+          <button class="primary wide" type="button" data-tab="record">🎙 Continuar dublando</button>
+        </section>
+
+        <section class="tips-card">
+          <h2>Dicas do Studio</h2>
+          <p><strong>Foque na emoção!</strong></p>
+          <p>Ouça a referência uma vez, depois grave. O countdown de 3 segundos é o seu “ação”. Toque no microfone de novo para parar.</p>
+        </section>
+      </aside>
+    </main>
+    <footer class="site-footer">DubPack Studio © 2026 · Feito para dubladores apaixonados</footer>
+
+    <script src="./vendor/fflate.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

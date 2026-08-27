@@ -1,0 +1,16 @@
+{
+  "name": "DubPack Studio Web",
+  "short_name": "DubPack",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#090817",
+  "theme_color": "#090817",
+  "icons": [
+    {
+      "src": "./assets/dubpack-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
