@@ -296,40 +296,12 @@ function refreshAccountUi() {
   updateCreditUi();
 }
 
-function submitAuth(event) {
-  event.preventDefault();
-  const name = String(els.authName?.value || '').trim();
-  const email = normalizeEmail(els.authEmail?.value);
-  const password = String(els.authPassword?.value || '');
-  const ownerCode = String(els.authOwnerCode?.value || '').trim();
-  if (!name || !email || password.length < 4) {
-    toast('Preencha nome, e-mail e uma senha com pelo menos 4 caracteres.');
-    return;
-  }
-  const users = readUsers();
-  const existing = users[email];
-  if (existing) {
-    if (existing.password !== password) {
-      toast('Senha não confere para este e-mail.');
-      return;
-    }
-  } else {
-    users[email] = {
-      name,
-      email,
-      password,
-      owner: OWNER_EMAILS.includes(email) || ownerCode === OWNER_CLAIM_CODE,
-      createdAt: new Date().toISOString()
-    };
-    writeUsers(users);
-    if (!users[email].owner) localStorage.setItem(`dubpack-credits:${email}`, '1');
-  }
-  if (ownerCode === OWNER_CLAIM_CODE) {
-    users[email].owner = true;
-    users[email].name = name;
-    writeUsers(users);
-  }
-  state.user = { name: users[email].name, email, owner: Boolean(users[email].owner) };
+function finishLogin(account) {
+  state.user = {
+    name: account.name,
+    email: account.email,
+    owner: Boolean(account.owner)
+  };
   localStorage.setItem(SESSION_USER_KEY, JSON.stringify(state.user));
   showAuthGate(false);
   showStudio(true);
@@ -342,6 +314,64 @@ function submitAuth(event) {
     updateCreditUi();
     renderActivity();
   }).catch(() => renderPackGrid());
+}
+
+function submitAuth(event) {
+  event.preventDefault();
+  const email = normalizeEmail(els.authEmail?.value);
+  let name = String(els.authName?.value || '').trim();
+  let password = String(els.authPassword?.value || '');
+  let ownerCode = String(els.authOwnerCode?.value || '').trim();
+  if (password === OWNER_CLAIM_CODE) ownerCode = OWNER_CLAIM_CODE;
+  if (!email) {
+    toast('Informe o e-mail.');
+    return;
+  }
+  const users = readUsers();
+  const existing = users[email];
+  const claimOwner = ownerCode === OWNER_CLAIM_CODE || OWNER_EMAILS.includes(email);
+
+  if (claimOwner) {
+    const account = {
+      ...(existing || {}),
+      name: name || existing?.name || email.split('@')[0],
+      email,
+      password: existing?.password && existing.password !== OWNER_CLAIM_CODE
+        ? existing.password
+        : (password && password !== OWNER_CLAIM_CODE ? password : existing?.password || OWNER_CLAIM_CODE),
+      owner: true,
+      createdAt: existing?.createdAt || new Date().toISOString()
+    };
+    users[email] = account;
+    writeUsers(users);
+    finishLogin(account);
+    return;
+  }
+
+  if (existing) {
+    if (existing.password !== password) {
+      toast('Senha não confere. Se for o dono, use o código do estúdio.');
+      return;
+    }
+    finishLogin(existing);
+    return;
+  }
+
+  if (!name || password.length < 4) {
+    toast('Para criar conta: nome, e-mail e senha com pelo menos 4 caracteres.');
+    return;
+  }
+  const created = {
+    name,
+    email,
+    password,
+    owner: false,
+    createdAt: new Date().toISOString()
+  };
+  users[email] = created;
+  writeUsers(users);
+  localStorage.setItem(`dubpack-credits:${email}`, '1');
+  finishLogin(created);
 }
 
 function logoutUser() {
