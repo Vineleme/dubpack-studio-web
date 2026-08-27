@@ -543,6 +543,12 @@ async function startTakeFlow() {
   }, 1000);
 }
 
+function isPhone() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    || window.matchMedia('(pointer: coarse)').matches;
+}
+
 function recordActiveScene() {
   const scene = currentScene();
   const stream = state.liveStream;
@@ -552,15 +558,21 @@ function recordActiveScene() {
   state.chunks = [];
   state.recordPeak = 0;
   state.ignoreRecorderStop = false;
-  state.recorder = mimeType
-    ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 128000 })
-    : new MediaRecorder(stream);
+  try {
+    state.recorder = mimeType
+      ? new MediaRecorder(stream, isPhone() ? { mimeType } : { mimeType, audioBitsPerSecond: 128000 })
+      : new MediaRecorder(stream);
+  } catch {
+    state.recorder = new MediaRecorder(stream);
+  }
   const startedAt = Date.now();
+  const recMs = Math.round(Math.max(1.6, Number(scene.duration) || 2) * 1000);
 
   state.recorder.ondataavailable = (event) => {
     if (event.data?.size) state.chunks.push(event.data);
   };
   state.recorder.onstop = async () => {
+    await wait(180);
     const elapsed = (Date.now() - startedAt) / 1000;
     const livePeak = state.recordPeak;
     stopStream();
@@ -574,7 +586,7 @@ function recordActiveScene() {
     if (!pack) return;
     const blob = new Blob(state.chunks, { type: state.chunks[0]?.type || mimeType || 'audio/webm' });
     if (blob.size < 400) {
-      toast('A gravação veio vazia. Use fone de ouvido e tente de novo.');
+      toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo, sem o filme tocando.');
       selectScene(state.activeIndex);
       return;
     }
@@ -626,17 +638,21 @@ function recordActiveScene() {
   els.stageState.textContent = 'Gravando take...';
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
-  els.micHint.textContent = 'Fale agora · use fone se puder';
+  els.micHint.textContent = 'Fale agora · o filme fica parado nesta fala';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
-  playSceneMedia(scene, scene.duration);
-  animateProgress(scene.duration);
+  els.sceneVideo?.pause();
+  animateProgress(recMs / 1000);
 
   state.recordingTimer = setInterval(() => {
-    const remaining = Math.max(0, scene.duration - ((Date.now() - startedAt) / 1000));
+    const remaining = Math.max(0, (recMs / 1000) - ((Date.now() - startedAt) / 1000));
     els.timerValue.textContent = remaining.toFixed(1);
   }, 100);
 
-  state.recorder.start(100);
+  try {
+    state.recorder.start();
+  } catch {
+    state.recorder.start(250);
+  }
   state.recordStopTimer = setTimeout(() => {
     if (state.recorder?.state === 'recording') {
       try {
@@ -646,7 +662,7 @@ function recordActiveScene() {
       }
       state.recorder.stop();
     }
-  }, scene.duration * 1000);
+  }, recMs);
 }
 
 async function playProjectPreview() {
@@ -754,6 +770,8 @@ function playSceneMedia(scene, duration) {
   }
   if (!scene.videoUrl || !els.sceneVideo) return;
   const video = els.sceneVideo;
+  video.muted = true;
+  video.playsInline = true;
   video.style.display = 'block';
   const start = Number(scene.videoOffset) || 0;
   try {
