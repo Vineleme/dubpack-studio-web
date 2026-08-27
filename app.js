@@ -13,7 +13,9 @@ const USERS_KEY = 'dubpack-users';
 const OWNER_EMAILS = [
   'viniciusleme@gmail.com',
   'vinicius.leme@gmail.com',
-  'vineleme@gmail.com'
+  'vineleme@gmail.com',
+  'vineleme@icloud.com',
+  'viniciusleme@icloud.com'
 ];
 
 const state = {
@@ -48,7 +50,7 @@ const state = {
   ffmpeg: null,
   exporting: false,
   user: null,
-  authMode: 'signup'
+  authMode: 'login'
 };
 
 const els = {
@@ -107,14 +109,16 @@ const els = {
   profileMeta: document.querySelector('#profileMeta'),
   authGate: document.querySelector('#authGate'),
   authForm: document.querySelector('#authForm'),
-  authName: document.querySelector('#authName'),
   authEmail: document.querySelector('#authEmail'),
   authPassword: document.querySelector('#authPassword'),
+  authName: document.querySelector('#authName'),
+  authNameWrap: document.querySelector('#authNameWrap'),
   authTitle: document.querySelector('#authTitle'),
   authLead: document.querySelector('#authLead'),
-  authNameWrap: document.querySelector('#authNameWrap'),
   authSubmitBtn: document.querySelector('#authSubmitBtn'),
   authSwitchBtn: document.querySelector('#authSwitchBtn'),
+  authForgotBtn: document.querySelector('#authForgotBtn'),
+  authError: document.querySelector('#authError'),
   logoutBtn: document.querySelector('#logoutBtn'),
   studioApp: document.querySelector('#studioApp'),
   takeRail: document.querySelector('#takeRail'),
@@ -168,10 +172,30 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=43').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=49').catch(() => undefined);
 }
 
 function bindUi() {
+  els.authForm?.addEventListener('submit', submitAuth);
+  els.authSubmitBtn?.addEventListener('click', (event) => {
+    event.preventDefault();
+    submitAuth(event);
+  });
+  els.authSwitchBtn?.addEventListener('click', () => {
+    if (state.authMode === 'reset') {
+      clearAuthError();
+      setAuthMode('login');
+      return;
+    }
+    clearAuthError();
+    setAuthMode(state.authMode === 'signup' ? 'login' : 'signup');
+  });
+  els.authForgotBtn?.addEventListener('click', showPasswordReset);
+  els.authEmail?.addEventListener('input', () => {
+    clearAuthError();
+    suggestSignupName();
+  });
+  els.authPassword?.addEventListener('input', clearAuthError);
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
   els.prevBtn?.addEventListener('click', () => setTab('packs'));
@@ -189,18 +213,14 @@ function bindUi() {
   els.exportVideoBtn?.addEventListener('click', requestFinalMp4);
   els.exportVideoBtnSide?.addEventListener('click', requestFinalMp4);
   els.generateMp4Btn?.addEventListener('click', requestFinalMp4);
-  els.helpBtn?.addEventListener('click', () => els.helpModal.classList.remove('is-hidden'));
-  els.helpCloseBtn?.addEventListener('click', () => els.helpModal.classList.add('is-hidden'));
-  els.helpModal.addEventListener('click', (event) => {
+  els.helpBtn?.addEventListener('click', () => els.helpModal?.classList.remove('is-hidden'));
+  els.helpCloseBtn?.addEventListener('click', () => els.helpModal?.classList.add('is-hidden'));
+  els.helpModal?.addEventListener('click', (event) => {
     if (event.target === els.helpModal) els.helpModal.classList.add('is-hidden');
   });
   els.proBtn?.addEventListener('click', () => setTab('credits'));
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
-  els.authForm?.addEventListener('submit', submitAuth);
-  els.authSwitchBtn?.addEventListener('click', () => {
-    setAuthMode(state.authMode === 'signup' ? 'login' : 'signup');
-  });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && !state.exporting) abortCapture();
   });
@@ -243,6 +263,10 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 function readUsers() {
   try {
     return JSON.parse(localStorage.getItem(USERS_KEY) || '{}');
@@ -273,22 +297,50 @@ function isOwner(user = state.user) {
 
 function showAuthGate(on) {
   els.authGate?.classList.toggle('is-hidden', !on);
-  if (on) setAuthMode(state.authMode || 'signup');
+  document.body.classList.toggle('needs-auth', Boolean(on));
+  if (on) setAuthMode(state.authMode === 'signup' || state.authMode === 'reset' ? state.authMode : 'login');
 }
 
 function setAuthMode(mode) {
-  state.authMode = mode === 'login' ? 'login' : 'signup';
+  state.authMode = mode === 'reset' ? 'reset' : mode === 'login' ? 'login' : 'signup';
   const login = state.authMode === 'login';
-  if (els.authNameWrap) els.authNameWrap.classList.toggle('is-hidden', login);
-  if (els.authName) els.authName.required = !login;
-  if (els.authTitle) els.authTitle.textContent = login ? 'Entrar' : 'Criar conta';
-  if (els.authLead) {
-    els.authLead.textContent = login
-      ? 'E-mail e senha para voltar ao Studio.'
-      : 'Nome, e-mail e senha. Depois você entra no Studio.';
+  const reset = state.authMode === 'reset';
+  if (els.authNameWrap) els.authNameWrap.classList.toggle('is-hidden', login || reset);
+  if (els.authName) {
+    els.authName.required = false;
+    if (login || reset) els.authName.value = '';
   }
-  if (els.authSubmitBtn) els.authSubmitBtn.textContent = login ? 'Entrar' : 'Entrar no Studio';
-  if (els.authSwitchBtn) els.authSwitchBtn.textContent = login ? 'Criar conta nova' : 'Já tenho conta';
+  const passWrap = els.authPassword?.closest('label');
+  if (passWrap) passWrap.classList.toggle('is-hidden', reset);
+  if (els.authTitle) {
+    els.authTitle.textContent = reset ? 'Alterar senha' : login ? 'Entrar' : 'Criar conta';
+  }
+  if (els.authLead) {
+    els.authLead.textContent = reset
+      ? 'Informe o e-mail da conta. O link de nova senha chega no e-mail quando o envio automático estiver ligado.'
+      : login
+        ? 'Entre para começar a dublar agora.'
+        : 'Crie sua conta para começar a dublar agora.';
+  }
+  if (els.authSubmitBtn) els.authSubmitBtn.textContent = reset ? 'Enviar no e-mail' : login ? 'Entrar' : 'Entrar no Studio';
+  if (els.authSwitchBtn) {
+    els.authSwitchBtn.textContent = reset ? 'Voltar' : login ? 'Criar conta nova' : 'Já tenho conta';
+  }
+  if (els.authForgotBtn) els.authForgotBtn.classList.toggle('is-hidden', reset);
+  if (!login && !reset) suggestSignupName();
+}
+
+function displayNameFromEmail(email) {
+  const local = String(email || '').split('@')[0];
+  return local || 'Conta';
+}
+
+function suggestSignupName() {
+  if (state.authMode === 'login' || !els.authName) return;
+  const suggested = displayNameFromEmail(els.authEmail?.value);
+  els.authName.placeholder = suggested && suggested !== 'Conta'
+    ? `Sugestão: ${suggested}`
+    : 'Como você quer ser chamado?';
 }
 
 function showStudio() {
@@ -335,11 +387,17 @@ function finishLogin(account) {
 function submitAuth(event) {
   event.preventDefault();
   const email = normalizeEmail(els.authEmail?.value);
-  const name = String(els.authName?.value || '').trim();
   const password = String(els.authPassword?.value || '');
-  const login = state.authMode === 'login';
+  if (state.authMode === 'reset') {
+    sendPasswordReset(email);
+    return;
+  }
   if (!email) {
     toast('Informe o e-mail.');
+    return;
+  }
+  if (!isValidEmail(email)) {
+    toast('E-mail incompleto. Use o @, tipo voce@icloud.com.');
     return;
   }
   if (!password || password.length < 4) {
@@ -350,14 +408,9 @@ function submitAuth(event) {
   const existing = users[email];
   const owner = OWNER_EMAILS.includes(email) || Boolean(existing?.owner);
 
-  if (login) {
-    if (!existing) {
-      toast('Não achei essa conta. Crie uma conta nova.');
-      setAuthMode('signup');
-      return;
-    }
+  if (existing) {
     if (existing.password !== password) {
-      toast('Senha não confere.');
+      showWrongPassword();
       return;
     }
     if (owner && !existing.owner) {
@@ -365,21 +418,13 @@ function submitAuth(event) {
       users[email] = existing;
       writeUsers(users);
     }
+    clearAuthError();
     finishLogin(existing);
     return;
   }
 
-  if (existing) {
-    toast('Esse e-mail já tem conta. Entre com a senha.');
-    setAuthMode('login');
-    return;
-  }
-  if (!name) {
-    toast('Informe seu nome para criar a conta.');
-    return;
-  }
   const created = {
-    name,
+    name: String(els.authName?.value || '').trim() || displayNameFromEmail(email),
     email,
     password,
     owner,
@@ -388,7 +433,43 @@ function submitAuth(event) {
   users[email] = created;
   writeUsers(users);
   if (!owner) localStorage.setItem(`dubpack-credits:${email}`, '1');
+  clearAuthError();
   finishLogin(created);
+}
+
+function clearAuthError() {
+  els.authError?.classList.add('is-hidden');
+  els.authForgotBtn?.classList.remove('is-alert');
+  els.authPassword?.classList.remove('is-invalid');
+}
+
+function showWrongPassword() {
+  setAuthMode('login');
+  if (els.authError) {
+    els.authError.textContent = 'Senha errada.';
+    els.authError.classList.remove('is-hidden');
+  }
+  els.authPassword?.classList.add('is-invalid');
+  els.authForgotBtn?.classList.remove('is-hidden');
+  els.authForgotBtn?.classList.add('is-alert');
+  toast('Senha errada. Toque em Esqueci a senha.');
+}
+
+function showPasswordReset() {
+  clearAuthError();
+  setAuthMode('reset');
+}
+
+function sendPasswordReset(email) {
+  if (!email) {
+    toast('Informe o e-mail da conta.');
+    return;
+  }
+  if (!isValidEmail(email)) {
+    toast('E-mail incompleto. Use o @, tipo voce@icloud.com.');
+    return;
+  }
+  toast('O e-mail automático ainda não está ligado. Quando ligarmos, o link de nova senha chega sozinho na caixa de entrada.');
 }
 
 function logoutUser() {
@@ -1347,10 +1428,10 @@ function abortCapture({ keepPreview = false } = {}) {
   state.progressTimer = null;
   state.playbackTimer = null;
   state.videoTimer = null;
-  els.countdownBadge.style.display = 'none';
-  els.recordingOverlay.style.display = 'none';
-  els.recordBtn.classList.remove('recording');
-  els.recordBtn.setAttribute('aria-label', 'Gravar');
+  els.countdownBadge && (els.countdownBadge.style.display = 'none');
+  if (els.recordingOverlay) els.recordingOverlay.style.display = 'none';
+  els.recordBtn?.classList.remove('recording');
+  els.recordBtn?.setAttribute('aria-label', 'Gravar');
   stopActivePlayback();
   if (els.sceneVideo) els.sceneVideo.pause();
   if (state.recorder?.state === 'recording') {

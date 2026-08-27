@@ -11,28 +11,32 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=43" />
+    <link rel="stylesheet" href="./styles.css?v=49" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
 
     <div id="authGate" class="auth-gate">
-      <form id="authForm" class="auth-card">
-        <img src="./assets/dubpack-logo.jpg" alt="" />
-        <h1 id="authTitle">Criar conta</h1>
-        <p id="authLead">Nome, e-mail e senha. Depois você entra no Studio.</p>
-        <label id="authNameWrap">Nome
-          <input id="authName" type="text" autocomplete="name" placeholder="Seu nome" />
+      <form id="authForm" class="auth-card" novalidate>
+        <div class="auth-brand">
+          <strong>Dub<span>Pack</span> Studio</strong>
+          <em>Sua voz no filme da cena. Grave, finalize e compartilhe.</em>
+        </div>
+        <h1 id="authTitle">Entrar</h1>
+        <p id="authLead">Entre para começar a dublar agora.</p>
+        <label id="authNameWrap" class="is-hidden">Nome
+          <input id="authName" type="text" autocomplete="nickname" placeholder="Como você quer ser chamado?" />
         </label>
         <label>E-mail
-          <input id="authEmail" type="email" autocomplete="email" placeholder="voce@email.com" required />
+          <input id="authEmail" type="text" inputmode="email" autocomplete="email" placeholder="voce@icloud.com" required />
         </label>
         <label>Senha
           <input id="authPassword" type="password" autocomplete="current-password" placeholder="Sua senha" />
         </label>
-        <button id="authSubmitBtn" class="primary wide" type="submit">Entrar no Studio</button>
-        <button id="authSwitchBtn" class="ghost wide" type="button">Já tenho conta</button>
-        <small>A conta fica neste navegador. Quem já é dono entra só com o e-mail e a senha — o Studio reconhece sozinho.</small>
+        <p id="authError" class="auth-error is-hidden" role="alert">Senha errada.</p>
+        <button id="authForgotBtn" class="auth-forgot" type="button">Esqueci a senha</button>
+        <button id="authSubmitBtn" class="primary wide" type="button">Entrar</button>
+        <button id="authSwitchBtn" class="ghost wide" type="button">Criar conta nova</button>
       </form>
     </div>
     <div id="helpModal" class="help-modal is-hidden" role="dialog" aria-labelledby="helpTitle" aria-modal="true">
@@ -80,6 +84,10 @@
           <div>
             <h1 id="welcomeTitle">Bem-vindo ao Studio</h1>
             <p id="topbarHint">Escolha um pack e comece a dublar.</p>
+          </div>
+          <div class="top-brand" aria-hidden="false">
+            <img src="./assets/dubpack-logo.jpg" alt="DubPack Studio" />
+            <strong>Dub<span>Pack</span> Studio</strong>
           </div>
           <div class="search-row">
             <button id="helpBtn" class="ghost" type="button" aria-label="Ajuda">?</button>
@@ -258,7 +266,7 @@
     </main>
     <footer class="site-footer">DubPack Studio © 2026 · Feito para dubladores apaixonados</footer>
 
-    <script src="./vendor/fflate.min.js?v=43"></script>
-    <script src="./app.js?v=43"></script>
+    <script src="./vendor/fflate.min.js?v=49"></script>
+    <script src="./app.js?v=49"></script>
   </body>
 </html>
