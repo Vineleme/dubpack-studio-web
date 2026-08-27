@@ -160,37 +160,41 @@ const els = {
   bellBtn: document.querySelector('#bellBtn')
 };
 
-bindUi();
+try {
+  bindUi();
+} catch (error) {
+  console.error(error);
+}
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=43').catch(() => undefined);
 }
 
 function bindUi() {
-  els.packInput.addEventListener('change', importPack);
-  els.packInputEmpty.addEventListener('change', importPack);
-  els.prevBtn.addEventListener('click', () => setTab('packs'));
-  els.prevSceneBtn.addEventListener('click', () => selectScene(state.activeIndex - 1));
-  els.nextSceneBtn.addEventListener('click', goNextScene);
-  els.nextBtn.addEventListener('click', goNextScene);
-  els.referenceBtn.addEventListener('click', playReference);
+  els.packInput?.addEventListener('change', importPack);
+  els.packInputEmpty?.addEventListener('change', importPack);
+  els.prevBtn?.addEventListener('click', () => setTab('packs'));
+  els.prevSceneBtn?.addEventListener('click', () => selectScene(state.activeIndex - 1));
+  els.nextSceneBtn?.addEventListener('click', goNextScene);
+  els.nextBtn?.addEventListener('click', goNextScene);
+  els.referenceBtn?.addEventListener('click', playReference);
   els.referenceBtnBottom?.addEventListener('click', playReference);
-  els.recordBtn.addEventListener('click', startTakeFlow);
+  els.recordBtn?.addEventListener('click', startTakeFlow);
   els.downloadTakeBtn?.addEventListener('click', downloadTake);
-  els.previewBtn.addEventListener('click', playCurrentTake);
-  els.listenTakeBtn.addEventListener('click', playCurrentTake);
+  els.previewBtn?.addEventListener('click', playCurrentTake);
+  els.listenTakeBtn?.addEventListener('click', playCurrentTake);
   els.previewBtnAlt?.addEventListener('click', playProjectPreview);
   els.stopPreviewBtn?.addEventListener('click', stopProjectPreview);
-  els.exportVideoBtn.addEventListener('click', requestFinalMp4);
+  els.exportVideoBtn?.addEventListener('click', requestFinalMp4);
   els.exportVideoBtnSide?.addEventListener('click', requestFinalMp4);
   els.generateMp4Btn?.addEventListener('click', requestFinalMp4);
-  els.helpBtn.addEventListener('click', () => els.helpModal.classList.remove('is-hidden'));
-  els.helpCloseBtn.addEventListener('click', () => els.helpModal.classList.add('is-hidden'));
+  els.helpBtn?.addEventListener('click', () => els.helpModal.classList.remove('is-hidden'));
+  els.helpCloseBtn?.addEventListener('click', () => els.helpModal.classList.add('is-hidden'));
   els.helpModal.addEventListener('click', (event) => {
     if (event.target === els.helpModal) els.helpModal.classList.add('is-hidden');
   });
-  els.proBtn.addEventListener('click', () => setTab('credits'));
+  els.proBtn?.addEventListener('click', () => setTab('credits'));
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
   els.authForm?.addEventListener('submit', submitAuth);

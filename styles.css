@@ -1794,12 +1794,11 @@ button, label, a { border: 0; text-decoration: none; }
 .auth-gate {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 80;
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(5, 4, 13, 0.62);
-  backdrop-filter: blur(12px);
+  background: rgb(8, 6, 20);
 }
 .auth-gate.is-hidden { display: none; }
 .auth-card {
@@ -1808,9 +1807,11 @@ button, label, a { border: 0; text-decoration: none; }
   gap: 12px;
   padding: 28px 24px;
   border-radius: 22px;
-  background: #120e24;
-  border: 1px solid rgba(245, 46, 131, 0.28);
+  background: #1c1633;
+  border: 1px solid rgba(245, 46, 131, 0.45);
   position: relative;
+  color: #fff;
+  isolation: isolate;
 }
 .auth-card img {
   width: 72px;
