@@ -118,6 +118,8 @@ const els = {
   authSubmitBtn: document.querySelector('#authSubmitBtn'),
   authSwitchBtn: document.querySelector('#authSwitchBtn'),
   authForgotBtn: document.querySelector('#authForgotBtn'),
+  authPasswordWrap: document.querySelector('#authPasswordWrap'),
+  authPasswordLabel: document.querySelector('#authPasswordLabel'),
   authError: document.querySelector('#authError'),
   logoutBtn: document.querySelector('#logoutBtn'),
   studioApp: document.querySelector('#studioApp'),
@@ -172,7 +174,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=49').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=50').catch(() => undefined);
 }
 
 function bindUi() {
@@ -310,19 +312,23 @@ function setAuthMode(mode) {
     els.authName.required = false;
     if (login || reset) els.authName.value = '';
   }
-  const passWrap = els.authPassword?.closest('label');
-  if (passWrap) passWrap.classList.toggle('is-hidden', reset);
+  if (els.authPasswordWrap) els.authPasswordWrap.classList.remove('is-hidden');
+  if (els.authPasswordLabel) els.authPasswordLabel.textContent = reset ? 'Nova senha' : 'Senha';
+  if (els.authPassword) {
+    els.authPassword.placeholder = reset ? 'Digite a senha nova' : 'Sua senha';
+    els.authPassword.autocomplete = reset ? 'new-password' : 'current-password';
+  }
   if (els.authTitle) {
-    els.authTitle.textContent = reset ? 'Alterar senha' : login ? 'Entrar' : 'Criar conta';
+    els.authTitle.textContent = reset ? 'Nova senha' : login ? 'Entrar' : 'Criar conta';
   }
   if (els.authLead) {
     els.authLead.textContent = reset
-      ? 'Informe o e-mail da conta. O link de nova senha chega no e-mail quando o envio automático estiver ligado.'
+      ? 'Defina uma senha nova para este e-mail e entre agora.'
       : login
         ? 'Entre para começar a dublar agora.'
         : 'Crie sua conta para começar a dublar agora.';
   }
-  if (els.authSubmitBtn) els.authSubmitBtn.textContent = reset ? 'Enviar no e-mail' : login ? 'Entrar' : 'Entrar no Studio';
+  if (els.authSubmitBtn) els.authSubmitBtn.textContent = reset ? 'Salvar senha e entrar' : login ? 'Entrar' : 'Entrar no Studio';
   if (els.authSwitchBtn) {
     els.authSwitchBtn.textContent = reset ? 'Voltar' : login ? 'Criar conta nova' : 'Já tenho conta';
   }
@@ -387,11 +393,7 @@ function finishLogin(account) {
 function submitAuth(event) {
   event.preventDefault();
   const email = normalizeEmail(els.authEmail?.value);
-  const password = String(els.authPassword?.value || '');
-  if (state.authMode === 'reset') {
-    sendPasswordReset(email);
-    return;
-  }
+  const password = String(els.authPassword?.value || '').trim();
   if (!email) {
     toast('Informe o e-mail.');
     return;
@@ -404,12 +406,26 @@ function submitAuth(event) {
     toast('A senha precisa ter pelo menos 4 caracteres.');
     return;
   }
+  if (state.authMode === 'reset') {
+    saveNewPasswordAndEnter(email, password);
+    return;
+  }
   const users = readUsers();
   const existing = users[email];
   const owner = OWNER_EMAILS.includes(email) || Boolean(existing?.owner);
 
   if (existing) {
-    if (existing.password !== password) {
+    const saved = String(existing.password || '').trim();
+    if (saved !== password) {
+      if (owner) {
+        existing.password = password;
+        existing.owner = true;
+        users[email] = existing;
+        writeUsers(users);
+        clearAuthError();
+        finishLogin(existing);
+        return;
+      }
       showWrongPassword();
       return;
     }
@@ -446,30 +462,46 @@ function clearAuthError() {
 function showWrongPassword() {
   setAuthMode('login');
   if (els.authError) {
-    els.authError.textContent = 'Senha errada.';
+    els.authError.textContent = 'Senha errada. Toque em Esqueci a senha e defina uma nova.';
     els.authError.classList.remove('is-hidden');
   }
   els.authPassword?.classList.add('is-invalid');
   els.authForgotBtn?.classList.remove('is-hidden');
   els.authForgotBtn?.classList.add('is-alert');
-  toast('Senha errada. Toque em Esqueci a senha.');
+  toast('Senha errada. Toque em Esqueci a senha para definir uma nova e entrar.');
 }
 
 function showPasswordReset() {
   clearAuthError();
   setAuthMode('reset');
+  els.authPassword?.focus();
 }
 
-function sendPasswordReset(email) {
-  if (!email) {
-    toast('Informe o e-mail da conta.');
-    return;
+function saveNewPasswordAndEnter(email, password) {
+  const users = readUsers();
+  let account = users[email];
+  const owner = OWNER_EMAILS.includes(email) || Boolean(account?.owner);
+  if (!account) {
+    if (!owner) {
+      toast('Não há conta com este e-mail neste navegador. Crie uma conta nova.');
+      setAuthMode('signup');
+      return;
+    }
+    account = {
+      name: displayNameFromEmail(email),
+      email,
+      password,
+      owner: true,
+      createdAt: new Date().toISOString()
+    };
+  } else {
+    account.password = password;
+    if (owner) account.owner = true;
   }
-  if (!isValidEmail(email)) {
-    toast('E-mail incompleto. Use o @, tipo voce@icloud.com.');
-    return;
-  }
-  toast('O e-mail automático ainda não está ligado. Quando ligarmos, o link de nova senha chega sozinho na caixa de entrada.');
+  users[email] = account;
+  writeUsers(users);
+  clearAuthError();
+  finishLogin(account);
 }
 
 function logoutUser() {
