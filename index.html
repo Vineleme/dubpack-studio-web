@@ -6,12 +6,12 @@
     <meta name="theme-color" content="#090817" />
     <title>DubPack Studio</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="icon" href="./assets/dubpack-logo.jpg" type="image/jpeg" />
-    <link rel="apple-touch-icon" href="./assets/dubpack-logo.jpg" />
+    <link rel="icon" href="./assets/dubpack-logo-brand.jpg" type="image/jpeg" />
+    <link rel="apple-touch-icon" href="./assets/dubpack-logo-brand.jpg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=52" />
+    <link rel="stylesheet" href="./styles.css?v=53" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
@@ -57,9 +57,7 @@
     <main id="studioApp" class="dashboard">
       <aside class="sidebar">
         <a class="side-logo" href="#packsTab" data-tab="packs">
-          <img src="./assets/dubpack-logo.jpg" alt="DubPack Studio" />
-          <strong>DubPack</strong>
-          <small>— STUDIO —</small>
+          <img src="./assets/dubpack-logo-brand.jpg" alt="DubPack Studio" />
         </a>
 
         <nav class="side-nav" aria-label="Navegação principal">
@@ -84,16 +82,18 @@
             <h1 id="welcomeTitle">Bem-vindo ao Studio</h1>
             <p id="topbarHint">Escolha um pack e comece a dublar.</p>
           </div>
-          <div class="top-brand" aria-hidden="false">
-            <img src="./assets/dubpack-logo.jpg" alt="DubPack Studio" />
-            <strong>Dub<span>Pack</span> Studio</strong>
-          </div>
           <div class="search-row">
             <button id="helpBtn" class="ghost" type="button" aria-label="Ajuda">?</button>
             <button id="bellBtn" class="ghost" type="button" aria-label="Créditos">⌾</button>
             <button id="userChip" class="user-chip" type="button" data-tab="profile">
-              <img src="./assets/dubpack-logo.jpg" alt="" />
-              <span><strong id="userChipName">Conta</strong><small><b id="userChipRole">Pro</b> · <b id="creditBadge">1 crédito</b></small></span>
+              <span class="avatar-shell user-chip-avatar" id="userChipAvatar" aria-hidden="true">
+                <span class="avatar-fallback">👤</span>
+                <img alt="" hidden />
+              </span>
+              <span class="user-chip-meta">
+                <strong id="userChipName">Conta</strong>
+                <small id="creditBadge">1 crédito</small>
+              </span>
             </button>
           </div>
         </header>
@@ -218,7 +218,14 @@
         <section id="profileTab" class="tab-view info-card">
           <h2>Perfil</h2>
           <div class="profile-hero">
-            <img src="./assets/dubpack-logo.jpg" alt="" />
+            <label class="profile-avatar-picker">
+              <input id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+              <span class="avatar-shell profile-avatar" id="profileAvatar">
+                <span class="avatar-fallback">👤</span>
+                <img alt="" hidden />
+              </span>
+              <small>Tocar para trocar a foto</small>
+            </label>
             <div>
               <h3 id="profileName">Conta</h3>
               <p id="profileMeta">Faça login para dublar</p>
@@ -276,7 +283,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=52"></script>
-    <script src="./app.js?v=52"></script>
+    <script src="./vendor/fflate.min.js?v=53"></script>
+    <script src="./app.js?v=53"></script>
   </body>
 </html>

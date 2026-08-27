@@ -148,7 +148,9 @@ const els = {
   sideSceneTitle: document.querySelector('#sideSceneTitle'),
   welcomeTitle: document.querySelector('#welcomeTitle'),
   userChipName: document.querySelector('#userChipName'),
-  userChipRole: document.querySelector('#userChipRole'),
+  userChipAvatar: document.querySelector('#userChipAvatar'),
+  profileAvatar: document.querySelector('#profileAvatar'),
+  profileAvatarInput: document.querySelector('#profileAvatarInput'),
   profileName: document.querySelector('#profileName'),
   profileMeta: document.querySelector('#profileMeta'),
   authGate: document.querySelector('#authGate'),
@@ -221,7 +223,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=52').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=53').catch(() => undefined);
 }
 
 function bindUi() {
@@ -270,6 +272,7 @@ function bindUi() {
   els.proBtn?.addEventListener('click', () => setTab('credits'));
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
+  els.profileAvatarInput?.addEventListener('change', handleAvatarUpload);
   els.packRailNext?.addEventListener('click', () => {
     els.packGrid?.scrollBy({ left: 240, behavior: 'smooth' });
   });
@@ -416,14 +419,98 @@ function refreshAccountUi() {
   const owner = isOwner(user);
   if (els.welcomeTitle) els.welcomeTitle.textContent = `Bem-vindo de volta, ${first}!`;
   if (els.userChipName) els.userChipName.textContent = user?.name || 'Conta';
-  if (els.userChipRole) els.userChipRole.textContent = owner ? 'Dono' : 'Pro';
   if (els.profileName) els.profileName.textContent = user?.name || 'Conta';
   if (els.profileMeta) {
     els.profileMeta.textContent = owner
       ? `${user.email} · dono do estúdio · créditos infinitos`
       : `${user?.email || ''} · packs duram 2 dias nesta conta`;
   }
+  renderAvatars();
   updateCreditUi();
+}
+
+const AVATAR_MAX_PX = 320;
+
+function avatarStorageKey(email = state.user?.email) {
+  const normalized = normalizeEmail(email);
+  return normalized ? `dubpack-avatar:${normalized}` : '';
+}
+
+function readAvatarUrl(email = state.user?.email) {
+  const key = avatarStorageKey(email);
+  return key ? localStorage.getItem(key) || '' : '';
+}
+
+function paintAvatarShell(shell, url) {
+  if (!shell) return;
+  const img = shell.querySelector('img');
+  const fallback = shell.querySelector('.avatar-fallback');
+  if (!img) return;
+  if (url) {
+    img.src = url;
+    img.hidden = false;
+    if (fallback) fallback.hidden = true;
+  } else {
+    img.removeAttribute('src');
+    img.hidden = true;
+    if (fallback) fallback.hidden = false;
+  }
+}
+
+function renderAvatars() {
+  const url = readAvatarUrl();
+  paintAvatarShell(els.userChipAvatar, url);
+  paintAvatarShell(els.profileAvatar, url);
+}
+
+async function handleAvatarUpload(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  if (!state.user?.email) {
+    toast('Entre na conta para trocar a foto.');
+    return;
+  }
+  if (!file.type.startsWith('image/')) {
+    toast('Escolha uma imagem (jpg, png ou webp).');
+    return;
+  }
+  try {
+    const url = await resizeAvatarFile(file);
+    localStorage.setItem(avatarStorageKey(), url);
+    renderAvatars();
+    toast('Foto de perfil atualizada.');
+  } catch {
+    toast('Não foi possível usar esta imagem. Tente outra foto.');
+  }
+}
+
+function resizeAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read-failed'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('image-failed'));
+      image.onload = () => {
+        const scale = Math.min(1, AVATAR_MAX_PX / Math.max(image.width, image.height, 1));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('canvas-failed'));
+          return;
+        }
+        ctx.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.86));
+      };
+      image.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function finishLogin(account, options = {}) {
