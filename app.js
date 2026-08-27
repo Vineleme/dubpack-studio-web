@@ -21,7 +21,6 @@ const state = {
   packs: [],
   activePackId: null,
   activeIndex: 0,
-  packFilter: '',
   recorder: null,
   chunks: [],
   liveStream: null,
@@ -56,7 +55,6 @@ const els = {
   packInputEmpty: document.querySelector('#packInputEmpty'),
   packGrid: document.querySelector('#packGrid'),
   packEmpty: document.querySelector('#packEmpty'),
-  packSearch: document.querySelector('#packSearch'),
   sceneVideo: document.querySelector('#sceneVideo'),
   sceneImage: document.querySelector('#sceneImage'),
   emptyFrame: document.querySelector('#emptyFrame'),
@@ -166,10 +164,6 @@ if ('serviceWorker' in navigator) {
 function bindUi() {
   els.packInput.addEventListener('change', importPack);
   els.packInputEmpty.addEventListener('change', importPack);
-  els.packSearch.addEventListener('input', () => {
-    state.packFilter = els.packSearch.value.trim().toLowerCase();
-    renderPackGrid();
-  });
   els.prevBtn.addEventListener('click', () => setTab('packs'));
   els.prevSceneBtn.addEventListener('click', () => selectScene(state.activeIndex - 1));
   els.nextSceneBtn.addEventListener('click', goNextScene);
@@ -1114,8 +1108,7 @@ async function exportTakesZip() {
 }
 
 function renderPackGrid() {
-  const query = state.packFilter;
-  const packs = state.packs.filter((pack) => !query || pack.name.toLowerCase().includes(query));
+  const packs = state.packs;
   els.packEmpty.classList.toggle('is-hidden', state.packs.length > 0);
   els.packGrid.replaceChildren();
   packs.forEach((pack) => {
@@ -1165,12 +1158,6 @@ function renderPackGrid() {
     els.packGrid.append(card);
   });
   renderActivity();
-  if (state.packs.length && !packs.length) {
-    const empty = document.createElement('p');
-    empty.className = 'hint-copy';
-    empty.textContent = 'Nenhum pack com esse nome.';
-    els.packGrid.append(empty);
-  }
 }
 
 function openPack(id) {
