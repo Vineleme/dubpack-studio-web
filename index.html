@@ -21,7 +21,7 @@
         <ol>
           <li>Importe um pack <strong>.zip</strong> com os áudios das falas (e vídeo ou imagens, se houver).</li>
           <li>Toque em <strong>Referência</strong> para ouvir o original.</li>
-          <li>Use fone de ouvido. Toque no microfone: countdown de 3 segundos, depois grave no tempo da fala. A referência fica bem baixa para não tapar a sua voz.</li>
+          <li>Toque no microfone: countdown de 3 segundos, depois grave no tempo da fala. Fone ajuda, mas não é obrigatório.</li>
           <li>Toque de novo no microfone para cancelar o countdown ou encerrar a gravação.</li>
           <li>Avance de fala, ouça o take e baixe os áudios quando terminar.</li>
         </ol>
@@ -42,6 +42,7 @@
         <nav class="side-nav" aria-label="Navegação principal">
           <button class="active" type="button" data-tab="packs"><span class="nav-ico" aria-hidden="true">⌂</span><span class="nav-label">Meus Packs</span></button>
           <button type="button" data-tab="record"><span class="nav-ico" aria-hidden="true">🎙</span><span class="nav-label">Gravar</span></button>
+          <button type="button" data-tab="dub"><span class="nav-ico" aria-hidden="true">▶</span><span class="nav-label">Finalizar</span></button>
           <button type="button" data-tab="profile"><span class="nav-ico" aria-hidden="true">○</span><span class="nav-label">Perfil</span></button>
           <button type="button" data-tab="credits"><span class="nav-ico" aria-hidden="true">✦</span><span class="nav-label">Créditos</span></button>
           <a class="gamebanana-link" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">🎮 GameBanana</a>
@@ -103,7 +104,7 @@
                 <h2>Nova dublagem</h2>
                 <p id="projectMeta">Siga os passos e grave no tempo certo.</p>
               </div>
-              <button id="exportVideoBtn" class="primary is-hidden" type="button">Gerar MP4</button>
+              <button id="exportVideoBtn" class="primary is-hidden" type="button">Finalizar dublagem</button>
             </header>
 
             <div class="choicer-stage">
@@ -184,7 +185,7 @@
             <div class="export-progress-track"><b id="exportProgressBar"></b></div>
             <strong id="exportProgressLabel">0%</strong>
           </div>
-          <button id="generateMp4Btn" class="primary wide" type="button">Gerar vídeo final (1 crédito)</button>
+          <button id="generateMp4Btn" class="primary wide" type="button">Finalizar dublagem</button>
           <a id="downloadMp4Btn" class="primary wide is-hidden" download>Baixar vídeo</a>
         </section>
 

@@ -349,7 +349,7 @@ function decorateScene(scene) {
 }
 
 function setTab(tab) {
-  if (tab === 'record' && !currentPack()) {
+  if ((tab === 'record' || tab === 'dub') && !currentPack()) {
     toast('Importe um pack para gravar.');
     tab = 'packs';
   }
@@ -400,11 +400,14 @@ function selectScene(index) {
   if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
   els.stageState.textContent = take ? 'Take gravado' : 'Pronto para gravar';
   els.stageState.className = `stage-state ${take ? 'recorded' : ''}`;
-  els.nextBtn.disabled = !canGoNext;
-  els.nextSceneBtn.disabled = !canGoNext;
+  const canFinish = !canGoNext && packIsComplete(pack);
+  els.nextBtn.disabled = !(canGoNext || canFinish);
+  els.nextSceneBtn.disabled = !(canGoNext || canFinish);
   els.prevSceneBtn.disabled = !canGoPrev;
-  els.nextBtn.classList.toggle('pulse-next', Boolean(take) && canGoNext);
-  els.nextSceneBtn.classList.toggle('pulse-next', Boolean(take) && canGoNext);
+  els.nextBtn.textContent = canFinish ? 'Finalizar dublagem' : 'Próxima cena →';
+  els.nextSceneBtn.textContent = canFinish ? 'Finalizar dublagem' : 'Próxima cena →';
+  els.nextBtn.classList.toggle('pulse-next', (Boolean(take) && canGoNext) || canFinish);
+  els.nextSceneBtn.classList.toggle('pulse-next', (Boolean(take) && canGoNext) || canFinish);
   els.previewBtn.disabled = !take;
   els.listenTakeBtn.disabled = !take;
   els.listenTakeBtn.classList.toggle('is-hidden', !take);
@@ -441,13 +444,23 @@ function packIsComplete(pack) {
   return Boolean(pack?.scenes.length && pack.scenes.every((scene) => pack.takes[scene.id]));
 }
 
+function finishCtaLabel(pack) {
+  return pack?.finalUrl ? 'Gerar de novo' : 'Finalizar dublagem';
+}
+
 function updateFinishCta(pack) {
   const done = packIsComplete(pack);
-  const hasFinal = Boolean(pack?.finalUrl);
-  els.exportVideoBtn?.classList.toggle('is-hidden', !done || hasFinal);
-  els.exportVideoBtn?.classList.toggle('pulse-next', done && !hasFinal);
+  const label = finishCtaLabel(pack);
+  els.exportVideoBtn?.classList.toggle('is-hidden', !done);
+  els.exportVideoBtn?.classList.toggle('pulse-next', done && !pack?.finalUrl);
+  if (els.exportVideoBtn) {
+    els.exportVideoBtn.disabled = false;
+    els.exportVideoBtn.textContent = label;
+  }
   if (els.generateMp4Btn) {
-    els.generateMp4Btn.classList.toggle('is-hidden', hasFinal || !done);
+    els.generateMp4Btn.classList.toggle('is-hidden', !done);
+    els.generateMp4Btn.disabled = false;
+    els.generateMp4Btn.textContent = label;
   }
 }
 
@@ -462,10 +475,10 @@ function goNextScene() {
   if (state.activeIndex >= pack.scenes.length - 1) {
     const finished = pack.scenes.every((item) => pack.takes[item.id]);
     if (finished) {
-      toast('Tudo gravado. Montando o vídeo com a sua voz...');
-      requestFinalMp4();
+      setTab('dub');
+      toast('Tudo gravado. Toque em Finalizar dublagem.');
     } else {
-      toast('Última fala. Grave as que faltam e toque em Gerar MP4.');
+      toast('Última fala. Grave as que faltam para finalizar.');
     }
     return;
   }
@@ -522,12 +535,6 @@ async function startTakeFlow() {
   }
 
   state.liveStream = stream;
-  try {
-    state.meterStream = stream.clone();
-    startMeter(state.meterStream);
-  } catch {
-    state.meterStream = null;
-  }
   stream.getAudioTracks().forEach((track) => {
     track.enabled = true;
   });
@@ -612,11 +619,6 @@ function recordActiveScene() {
     } catch {
       decodedPeak = 0;
     }
-    if (decoded && decodedPeak < 0.03 && livePeak >= 0.08) {
-      toast('O microfone ouviu você, mas o take saiu mudo. Grave de novo.');
-      selectScene(state.activeIndex);
-      return;
-    }
     const profile = await profileTakeAudio(blob).catch(() => ({}));
     const voicePeak = Math.max(livePeak, decodedPeak, profile.peak || 0);
     if (pack.takes[scene.id]?.url) URL.revokeObjectURL(pack.takes[scene.id].url);
@@ -646,7 +648,7 @@ function recordActiveScene() {
     setVoiceMeter(voicePeak, false);
     const finished = pack.scenes.every((item) => pack.takes[item.id]);
     if (finished) {
-      toast('Pack concluído. Toque em Gerar MP4 no topo para assistir e baixar.');
+      toast('Pack concluído. Toque em Finalizar dublagem.');
     }
   };
 
@@ -1476,7 +1478,6 @@ function showFinalVideo(pack) {
   if (els.exportStatus && has) {
     els.exportStatus.textContent = 'Vídeo pronto. 1 crédito já foi usado. Assista acima ou baixe o arquivo.';
   }
-  if (els.generateMp4Btn) els.generateMp4Btn.classList.toggle('is-hidden', has || !packIsComplete(pack));
   updateFinishCta(pack);
 }
 
