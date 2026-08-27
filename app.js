@@ -18,6 +18,25 @@ const OWNER_EMAILS = [
   'viniciusleme@icloud.com'
 ];
 
+const STUDIO_TIPS = [
+  {
+    title: 'Foque na emoção!',
+    body: 'Transmita sentimento na sua voz. Isso faz toda a diferença na dublagem.'
+  },
+  {
+    title: 'Ouça uma vez, depois grave',
+    body: 'A referência é o guia. No take, só a sua voz no tempo da fala.'
+  },
+  {
+    title: 'O countdown é o “ação”',
+    body: 'Três segundos para respirar. Toque no microfone de novo para parar.'
+  },
+  {
+    title: 'Fone ajuda, não é obrigatório',
+    body: 'Use fone se puder, para a referência não vazar no take.'
+  }
+];
+
 const state = {
   packs: [],
   activePackId: null,
@@ -50,13 +69,16 @@ const state = {
   ffmpeg: null,
   exporting: false,
   user: null,
-  authMode: 'login'
+  authMode: 'login',
+  tipIndex: 0,
+  tipTimer: 0
 };
 
 const els = {
   packInput: document.querySelector('#packInput'),
   packInputEmpty: document.querySelector('#packInputEmpty'),
   packGrid: document.querySelector('#packGrid'),
+  packRailNext: document.querySelector('#packRailNext'),
   packEmpty: document.querySelector('#packEmpty'),
   sceneVideo: document.querySelector('#sceneVideo'),
   sceneImage: document.querySelector('#sceneImage'),
@@ -121,6 +143,9 @@ const els = {
   authPasswordWrap: document.querySelector('#authPasswordWrap'),
   authPasswordLabel: document.querySelector('#authPasswordLabel'),
   authError: document.querySelector('#authError'),
+  tipTitle: document.querySelector('#tipTitle'),
+  tipBody: document.querySelector('#tipBody'),
+  tipDots: document.querySelector('#tipDots'),
   logoutBtn: document.querySelector('#logoutBtn'),
   studioApp: document.querySelector('#studioApp'),
   takeRail: document.querySelector('#takeRail'),
@@ -174,7 +199,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=50').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=51').catch(() => undefined);
 }
 
 function bindUi() {
@@ -223,6 +248,10 @@ function bindUi() {
   els.proBtn?.addEventListener('click', () => setTab('credits'));
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
+  els.packRailNext?.addEventListener('click', () => {
+    els.packGrid?.scrollBy({ left: 240, behavior: 'smooth' });
+  });
+  startStudioTips();
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && !state.exporting) abortCapture();
   });
@@ -1323,39 +1352,80 @@ async function exportTakesZip() {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+function startStudioTips() {
+  if (!els.tipDots || !els.tipTitle) return;
+  els.tipDots.replaceChildren();
+  STUDIO_TIPS.forEach((tip, index) => {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.setAttribute('aria-label', tip.title);
+    dot.addEventListener('click', () => showStudioTip(index, true));
+    els.tipDots.append(dot);
+  });
+  showStudioTip(0);
+  clearInterval(state.tipTimer);
+  state.tipTimer = setInterval(() => {
+    showStudioTip((state.tipIndex + 1) % STUDIO_TIPS.length);
+  }, 6500);
+}
+
+function showStudioTip(index, pause) {
+  state.tipIndex = index;
+  const tip = STUDIO_TIPS[index];
+  if (els.tipTitle) els.tipTitle.innerHTML = `<strong>${tip.title}</strong>`;
+  if (els.tipBody) els.tipBody.textContent = tip.body;
+  els.tipDots?.querySelectorAll('button').forEach((dot, i) => {
+    dot.classList.toggle('is-on', i === index);
+  });
+  if (pause) {
+    clearInterval(state.tipTimer);
+    state.tipTimer = setInterval(() => {
+      showStudioTip((state.tipIndex + 1) % STUDIO_TIPS.length);
+    }, 6500);
+  }
+}
+
+function packCover(pack) {
+  const visual = pack.scenes.find((scene) => scene.imageUrl || scene.videoUrl);
+  if (visual?.imageUrl) return { type: 'img', src: visual.imageUrl };
+  if (visual?.videoUrl) return { type: 'video', src: visual.videoUrl };
+  if (pack.filmUrl) return { type: 'video', src: pack.filmUrl };
+  return { type: 'empty' };
+}
+
 function renderPackGrid() {
   const packs = state.packs;
   els.packEmpty.classList.toggle('is-hidden', state.packs.length > 0);
   els.packGrid.replaceChildren();
-  packs.forEach((pack) => {
+  const tones = ['', 'tone-orange', 'tone-violet'];
+  packs.forEach((pack, index) => {
     const recorded = pack.scenes.filter((scene) => pack.takes[scene.id]).length;
     const percent = pack.scenes.length ? Math.round((recorded / pack.scenes.length) * 100) : 0;
     const card = document.createElement('article');
-    card.className = `pack-card${pack.id === state.activePackId ? ' active' : ''}`;
+    card.className = `pack-card ${tones[index % 3]}${pack.id === state.activePackId ? ' active' : ''}`.trim();
     const preview = document.createElement('div');
     preview.className = 'pack-preview';
-    const visual = pack.scenes.find((scene) => scene.imageUrl || scene.videoUrl);
-    if (visual?.imageUrl) {
+    const cover = packCover(pack);
+    if (cover.type === 'img') {
       const img = document.createElement('img');
-      img.src = visual.imageUrl;
+      img.src = cover.src;
       img.alt = '';
       preview.append(img);
+    } else if (cover.type === 'video') {
+      const video = document.createElement('video');
+      video.src = cover.src;
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'metadata';
+      preview.append(video);
+    } else {
+      preview.classList.add('is-empty');
+      preview.textContent = '🎙';
     }
-    const play = document.createElement('button');
-    play.type = 'button';
-    play.textContent = '▷';
-    play.addEventListener('click', (event) => {
-      event.stopPropagation();
-      openPack(pack.id);
-      playReference();
-    });
-    const label = document.createElement('span');
-    label.textContent = 'PRÉVIA DO PACK';
-    preview.append(play, label);
     const title = document.createElement('h3');
     title.textContent = pack.name;
     const subtitle = document.createElement('p');
-    subtitle.textContent = `${pack.scenes.length} ${pack.scenes.length === 1 ? 'fala' : 'falas'} · ${recorded} gravadas · ${remainingLabel(pack)}`;
+    subtitle.textContent = `${pack.scenes.length} ${pack.scenes.length === 1 ? 'cena' : 'cenas'} · ${recorded} ${recorded === 1 ? 'dublada' : 'dubladas'}`;
     const progress = document.createElement('div');
     progress.className = 'progress-line';
     const bar = document.createElement('i');
@@ -1373,6 +1443,9 @@ function renderPackGrid() {
     card.append(preview, title, subtitle, progress, button);
     els.packGrid.append(card);
   });
+  if (els.packRailNext) {
+    els.packRailNext.hidden = packs.length < 3;
+  }
   renderActivity();
 }
 

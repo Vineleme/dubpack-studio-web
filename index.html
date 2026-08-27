@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=50" />
+    <link rel="stylesheet" href="./styles.css?v=51" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
@@ -58,9 +58,8 @@
       <aside class="sidebar">
         <a class="side-logo" href="#packsTab" data-tab="packs">
           <img src="./assets/dubpack-logo.jpg" alt="DubPack Studio" />
-          <strong>Dub<span>Pack</span></strong>
-          <small>STUDIO</small>
-          <em>Duble. Jogue. Compartilhe.</em>
+          <strong>DubPack</strong>
+          <small>— STUDIO —</small>
         </a>
 
         <nav class="side-nav" aria-label="Navegação principal">
@@ -117,7 +116,10 @@
             </label>
           </div>
 
-          <div id="packGrid" class="pack-grid"></div>
+          <div class="pack-rail">
+            <div id="packGrid" class="pack-grid"></div>
+            <button id="packRailNext" class="pack-rail-next" type="button" aria-label="Ver mais packs">›</button>
+          </div>
         </section>
 
         <section id="recordTab" class="tab-view">
@@ -257,16 +259,22 @@
           </div>
         </section>
 
-        <section class="tips-card">
-          <h2>Dicas do Studio</h2>
-          <p><strong>Foque na emoção!</strong></p>
-          <p>Ouça a referência uma vez, depois grave. O countdown de 3 segundos é o seu “ação”. Toque no microfone de novo para parar.</p>
+        <section class="tips-card" aria-live="polite">
+          <h2><span aria-hidden="true">✦</span> Dicas do Studio</h2>
+          <div class="tips-body">
+            <div>
+              <p id="tipTitle"><strong>Foque na emoção!</strong></p>
+              <p id="tipBody">Transmita sentimento na sua voz. Isso faz toda a diferença na dublagem.</p>
+            </div>
+            <img class="tips-mic" src="./assets/studio-mic-neon.png" alt="" />
+          </div>
+          <div id="tipDots" class="tip-dots" role="tablist" aria-label="Dicas do Studio"></div>
         </section>
       </aside>
     </main>
     <footer class="site-footer">DubPack Studio © 2026 · Feito para dubladores apaixonados</footer>
 
-    <script src="./vendor/fflate.min.js?v=50"></script>
-    <script src="./app.js?v=50"></script>
+    <script src="./vendor/fflate.min.js?v=51"></script>
+    <script src="./app.js?v=51"></script>
   </body>
 </html>
