@@ -1602,7 +1602,7 @@ body.needs-auth .dashboard {
   .export-progress {
     width: 100%;
   }
-  .credit-shop { grid-template-columns: 1fr; }
+  .credit-pack-grid { grid-template-columns: 1fr; }
   .info-card { padding: 14px; }
 }
 
@@ -1856,9 +1856,37 @@ body.needs-auth .dashboard {
 }
 .credit-shop {
   display: grid;
+  gap: 16px;
+  margin: 16px 0;
+}
+.credit-pack-grid {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin: 16px 0;
+}
+.pro-plan-card {
+  padding: 20px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(53, 24, 79, 0.95), rgba(16, 13, 38, 0.95));
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.12);
+}
+.pro-plan-card.is-active {
+  border-color: rgba(255, 210, 30, 0.55);
+  box-shadow: 0 0 24px rgba(255, 210, 30, 0.12);
+}
+.pro-plan-card strong {
+  display: block;
+  font-size: 30px;
+  margin-bottom: 4px;
+}
+.pro-plan-card b {
+  color: #ffd21e;
+  font-size: 22px;
+}
+.shop-section-title {
+  margin: 8px 0 0;
+  font-size: 18px;
 }
 .credit-card {
   padding: 18px;
@@ -1922,7 +1950,7 @@ body.needs-auth .dashboard {
     width: max-content;
     justify-self: start;
   }
-  .credit-shop { grid-template-columns: 1fr; }
+  .credit-pack-grid { grid-template-columns: 1fr; }
   .site-footer {
     padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }

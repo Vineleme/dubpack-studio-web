@@ -9,6 +9,9 @@ const BED_DUCK = 0.09;
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
+const PRO_MONTHLY_PRICE = 19.9;
+const PRO_MONTHLY_CREDITS = 5;
+const PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_USER_KEY = 'dubpack-user';
 const USERS_KEY = 'dubpack-users';
 const OWNER_EMAILS = [
@@ -226,7 +229,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=60').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=61').catch(() => undefined);
 }
 
 function bindUi() {
@@ -363,6 +366,76 @@ function isOwner(user = state.user) {
   return OWNER_EMAILS.includes(email);
 }
 
+function proStorageKey(email = state.user?.email) {
+  const normalized = normalizeEmail(email);
+  return normalized ? `dubpack-pro:${normalized}` : '';
+}
+
+function readProState(email = state.user?.email) {
+  const key = proStorageKey(email);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeProState(stateObj, email = state.user?.email) {
+  const key = proStorageKey(email);
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(stateObj));
+}
+
+function isPro(user = state.user) {
+  if (isOwner(user)) return true;
+  const pro = readProState(user?.email);
+  if (!pro?.active) return false;
+  return Date.now() < Number(pro.periodEnd || 0);
+}
+
+function ensureProMonthlyCredits() {
+  if (!isPro() || isOwner()) return;
+  const pro = readProState();
+  if (!pro) return;
+  const monthKey = new Date().toISOString().slice(0, 7);
+  if (pro.lastCreditMonth === monthKey) return;
+  setCredits(getCredits() + PRO_MONTHLY_CREDITS);
+  writeProState({ ...pro, lastCreditMonth: monthKey });
+}
+
+function subscribePro() {
+  if (isOwner()) {
+    toast('Conta de dono já tem acesso total.');
+    return;
+  }
+  if (isPro()) {
+    toast('Você já é DubPack PRO neste aparelho.');
+    return;
+  }
+  const now = Date.now();
+  writeProState({
+    active: true,
+    subscribedAt: now,
+    periodEnd: now + PRO_PERIOD_MS,
+    lastCreditMonth: ''
+  });
+  ensureProMonthlyCredits();
+  refreshAccountUi();
+  toast(`DubPack PRO ativo. +${PRO_MONTHLY_CREDITS} créditos neste mês.`);
+}
+
+function proStatusLabel() {
+  if (isOwner()) return 'Dono · acesso total';
+  if (!isPro()) return 'Plano gratuito';
+  const pro = readProState();
+  const days = pro?.periodEnd
+    ? Math.max(0, Math.ceil((Number(pro.periodEnd) - Date.now()) / (24 * 60 * 60 * 1000)))
+    : 0;
+  return `DubPack PRO · ${days} ${days === 1 ? 'dia' : 'dias'} restantes`;
+}
+
 function showAuthGate(on) {
   els.authGate?.classList.toggle('is-hidden', !on);
   document.body.classList.toggle('needs-auth', Boolean(on));
@@ -425,14 +498,19 @@ function refreshAccountUi() {
   const user = state.user;
   const first = String(user?.name || 'dublador').split(' ')[0];
   const owner = isOwner(user);
+  const pro = isPro(user);
   if (els.welcomeTitle) els.welcomeTitle.textContent = `Bem-vindo de volta, ${first}!`;
   if (els.userChipName) els.userChipName.textContent = user?.name || 'Conta';
   if (els.profileName) els.profileName.textContent = user?.name || 'Conta';
   if (els.profileMeta) {
     els.profileMeta.textContent = owner
       ? `${user.email} · dono do estúdio · créditos infinitos`
-      : `${user?.email || ''} · packs duram 2 dias · você pode apagar quando quiser`;
+      : `${user?.email || ''} · ${proStatusLabel()}`;
   }
+  if (els.proBtn) {
+    els.proBtn.textContent = owner ? 'Créditos infinitos' : pro ? 'Gerenciar PRO' : 'Seja PRO';
+  }
+  ensureProMonthlyCredits();
   renderAvatars();
   updateCreditUi();
 }
@@ -919,7 +997,10 @@ function setTab(tab) {
   if (tab !== 'record') abortCapture();
   if (tab === 'record' && !state.previewing) selectScene(state.activeIndex);
   if (tab === 'dub') showFinalVideo(currentPack());
-  if (tab === 'credits' || tab === 'profile') updateCreditUi();
+  if (tab === 'credits' || tab === 'profile') {
+    updateCreditUi();
+    renderCreditShop();
+  }
   if (tab === 'packs') renderActivity();
 }
 
@@ -2225,9 +2306,14 @@ function creditLabel(count) {
 function updateCreditUi() {
   const count = getCredits();
   const label = creditLabel(count);
-  if (els.creditBadge) els.creditBadge.textContent = label;
+  if (els.creditBadge) {
+    els.creditBadge.textContent = isPro() && !isOwner() ? `PRO · ${label}` : label;
+  }
   if (els.creditsBalance) els.creditsBalance.textContent = label;
   if (els.profileCredits) els.profileCredits.textContent = label;
+  if (els.proBtn) {
+    els.proBtn.textContent = isOwner() ? 'Créditos infinitos' : isPro() ? 'Gerenciar PRO' : 'Seja PRO';
+  }
 }
 
 function renderCreditShop() {
@@ -2236,10 +2322,41 @@ function renderCreditShop() {
   if (isOwner()) {
     const note = document.createElement('p');
     note.className = 'hint-copy';
-    note.textContent = 'Conta de dono: créditos infinitos. Quem usa o Studio gasta crédito de novo se quiser gerar o vídeo outra vez.';
+    note.textContent = 'Conta de dono: créditos infinitos e exportação sem marca d\'água.';
     els.creditShop.append(note);
     return;
   }
+
+  const proCard = document.createElement('article');
+  proCard.className = `pro-plan-card${isPro() ? ' is-active' : ''}`;
+  const proTitle = document.createElement('strong');
+  proTitle.textContent = 'DubPack PRO';
+  const proPrice = document.createElement('b');
+  proPrice.textContent = `R$ ${PRO_MONTHLY_PRICE.toFixed(2).replace('.', ',')}/mês`;
+  const proHint = document.createElement('p');
+  proHint.className = 'hint-copy';
+  proHint.textContent = isPro()
+    ? `${proStatusLabel()}. ${PRO_MONTHLY_CREDITS} créditos por mês, sem marca d'água, packs por 2 dias.`
+    : `${PRO_MONTHLY_CREDITS} créditos por mês, exportação sem marca d'água e suporte ao Studio. Dublar continua grátis.`;
+  const proBtn = document.createElement('button');
+  proBtn.type = 'button';
+  proBtn.className = 'primary wide';
+  proBtn.textContent = isPro() ? 'PRO ativo neste aparelho' : 'Assinar DubPack PRO';
+  proBtn.disabled = isPro();
+  proBtn.addEventListener('click', subscribePro);
+  proCard.append(proTitle, proPrice, proHint, proBtn);
+  els.creditShop.append(proCard);
+
+  const packsTitle = document.createElement('h3');
+  packsTitle.className = 'shop-section-title';
+  packsTitle.textContent = 'Créditos extras';
+  const packsHint = document.createElement('p');
+  packsHint.className = 'hint-copy';
+  packsHint.textContent = 'Importar, gravar e ouvir takes é grátis. Créditos servem para gerar o MP4 final.';
+  els.creditShop.append(packsTitle, packsHint);
+
+  const packGrid = document.createElement('div');
+  packGrid.className = 'credit-pack-grid';
   CREDIT_PACKS.forEach((pack) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -2252,8 +2369,9 @@ function renderCreditShop() {
     hint.textContent = pack.hint;
     button.append(title, price, hint);
     button.addEventListener('click', () => buyCredits(pack));
-    els.creditShop.append(button);
+    packGrid.append(button);
   });
+  els.creditShop.append(packGrid);
 }
 
 function buyCredits(pack) {
@@ -2350,8 +2468,10 @@ async function requestFinalMp4() {
     setTab('record');
     return;
   }
-  if (!isOwner() && getCredits() < 1) {
-    toast('Sem créditos. Escolha um pacote para finalizar de novo.');
+  if (!canExportVideo()) {
+    toast(isPro()
+      ? 'Créditos do mês acabaram. Compre extras ou aguarde a renovação PRO.'
+      : 'Sem créditos. Assine o PRO ou compre um pacote para gerar o MP4.');
     setTab('credits');
     return;
   }
@@ -2361,7 +2481,7 @@ async function requestFinalMp4() {
   }
   const watermarked = shouldWatermarkExport();
   if (watermarked) {
-    toast(`Com 1 crédito, o vídeo sai com marca d'água ${EXPORT_WATERMARK_LABEL}.`);
+    toast(`Plano gratuito com 1 crédito: o MP4 sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
   }
   stopProjectPreview();
   abortCapture();
@@ -2376,29 +2496,23 @@ async function requestFinalMp4() {
     let output = composed;
     if (!composed.type.includes('mp4')) {
       setExportProgress(92, 'Convertendo para MP4');
-      try {
-        output = await convertToMp4(composed);
-      } catch (error) {
-        output = composed;
-        toast(error.message || 'A conversão MP4 falhou. O arquivo ficou em WebM.');
-      }
+      output = await convertToMp4(composed);
+    }
+    if (!output.type.includes('mp4')) {
+      throw new Error('Não consegui gerar MP4 neste aparelho. Tente de novo com Wi‑Fi ligado.');
     }
     setExportProgress(100, 'Pronto');
     if (pack.finalUrl) URL.revokeObjectURL(pack.finalUrl);
     pack.finalBlob = output;
-    pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
+    pack.finalExt = 'mp4';
     pack.watermarked = watermarked;
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
-    if (!isOwner()) setCredits(getCredits() - 1);
+    consumeExportCredit();
     showFinalVideo(pack);
     scheduleSave();
-    toast(pack.finalExt === 'mp4'
-      ? watermarked
-        ? `Dublagem pronta em MP4 com marca d'água ${EXPORT_WATERMARK_LABEL}.`
-        : 'Dublagem pronta em MP4. Assista ou baixe.'
-      : watermarked
-        ? `Dublagem pronta em WebM com marca d'água ${EXPORT_WATERMARK_LABEL}.`
-        : 'Dublagem pronta em WebM. A conversão MP4 não rodou neste navegador.');
+    toast(watermarked
+      ? `Dublagem pronta em MP4 com marca d'água ${EXPORT_WATERMARK_LABEL}.`
+      : 'Dublagem pronta em MP4. Assista ou baixe.');
     els.exportVideoBtn?.classList.remove('pulse-next');
     els.exportVideoBtnSide?.classList.remove('pulse-next');
     if (els.finalVideo) {
@@ -2420,8 +2534,24 @@ async function requestFinalMp4() {
 }
 
 function pickVideoMime() {
-  const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  const iosTypes = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs=h264,aac',
+    'video/mp4'
+  ];
+  const defaultTypes = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4'
+  ];
+  const types = isIOS() ? [...iosTypes, ...defaultTypes] : defaultTypes;
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function exportVideoBitrate() {
+  return isPhone() ? 1_800_000 : 3_500_000;
 }
 
 function loadImage(src) {
@@ -2708,7 +2838,16 @@ function coverDraw(ctx, media, width, height) {
 }
 
 function shouldWatermarkExport() {
-  return !isOwner() && getCredits() === 1;
+  return !isOwner() && !isPro() && getCredits() <= 1;
+}
+
+function canExportVideo() {
+  return isOwner() || getCredits() >= 1;
+}
+
+function consumeExportCredit() {
+  if (isOwner()) return;
+  setCredits(getCredits() - 1);
 }
 
 function roundRectPath(ctx, x, y, w, h, r) {
@@ -2889,7 +3028,9 @@ async function composeDubbedVideo(pack, onProgress) {
       ...dest.stream.getAudioTracks()
     ]);
     try {
-      recorder = mimeType ? new MediaRecorder(mixed, { mimeType, videoBitsPerSecond: 3_500_000 }) : new MediaRecorder(mixed);
+      recorder = mimeType
+        ? new MediaRecorder(mixed, { mimeType, videoBitsPerSecond: exportVideoBitrate() })
+        : new MediaRecorder(mixed);
     } catch {
       recorder = new MediaRecorder(mixed);
     }
@@ -2904,7 +3045,7 @@ async function composeDubbedVideo(pack, onProgress) {
     });
 
     if (bed) bed.el.currentTime = 0;
-    recorder.start(250);
+    recorder.start(isIOS() ? 100 : 250);
     recordingStarted = true;
     await film.play()?.catch?.(() => undefined);
     if (bed) await bed.el.play().catch(() => undefined);
@@ -3019,6 +3160,7 @@ async function loadFfmpeg() {
 }
 
 async function convertToMp4(blob) {
+  const mobile = isPhone();
   const work = (async () => {
     setExportProgress(92, 'Carregando conversor MP4');
     const ffmpeg = await loadFfmpeg();
@@ -3028,10 +3170,15 @@ async function convertToMp4(blob) {
     });
     const input = blob.type.includes('mp4') ? 'input.mp4' : 'input.webm';
     ffmpeg.FS('writeFile', input, await fetchFile(blob));
-    const recipes = [
-      ['-i', input, '-vf', 'scale=-2:720', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', 'output.mp4'],
-      ['-i', input, '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', 'output.mp4']
-    ];
+    const recipes = mobile
+      ? [
+        ['-i', input, '-vf', 'scale=-2:480', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '30', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', 'output.mp4'],
+        ['-i', input, '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', 'output.mp4']
+      ]
+      : [
+        ['-i', input, '-vf', 'scale=-2:720', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', 'output.mp4'],
+        ['-i', input, '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', 'output.mp4']
+      ];
     let converted = false;
     let lastError;
     for (const args of recipes) {
@@ -3051,12 +3198,12 @@ async function convertToMp4(blob) {
     const data = ffmpeg.FS('readFile', 'output.mp4');
     try { ffmpeg.FS('unlink', 'output.mp4'); } catch { /* ignore */ }
     if (!data?.length) throw new Error('O MP4 saiu vazio.');
-    return new Blob([data.buffer], { type: 'video/mp4' });
+    return new Blob([data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)], { type: 'video/mp4' });
   })();
   return Promise.race([
     work,
-    wait(180000).then(() => {
-      throw new Error('Conversão MP4 demorou demais');
+    wait(mobile ? 300000 : 180000).then(() => {
+      throw new Error('Conversão MP4 demorou demais. Tente de novo com Wi‑Fi ligado.');
     })
   ]);
 }
