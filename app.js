@@ -4,8 +4,8 @@ const VIDEO_EXTS = ['mp4', 'mov', 'webm', 'ogv', 'm4v'];
 const MAX_LINE_SECONDS = 600;
 const GUIDE_VOLUME = 0.08;
 const BED_VOLUME = 0.03;
-const BED_EXPORT = 0.4;
-const BED_DUCK = 0.09;
+const BED_EXPORT = 0.06;
+const BED_DUCK = 0.012;
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
@@ -229,7 +229,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=61').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=62').catch(() => undefined);
 }
 
 function bindUi() {
