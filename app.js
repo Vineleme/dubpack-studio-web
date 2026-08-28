@@ -82,6 +82,7 @@ const state = {
   toastTimer: null,
   saveTimer: null,
   objectUrls: [],
+  blobByUrl: new Map(),
   ffmpeg: null,
   exporting: false,
   user: null,
@@ -217,8 +218,21 @@ try {
 }
 bootApp();
 
+const SW_SCRIPT = './sw.js?v=81';
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=67').catch(() => undefined);
+  navigator.serviceWorker.getRegistrations()
+    .then((regs) => Promise.all(regs.map((reg) => {
+      const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || '');
+      return script.includes('sw.js?v=81') ? Promise.resolve() : reg.unregister();
+    })))
+    .then(() => navigator.serviceWorker.register(SW_SCRIPT))
+    .then((reg) => reg.update())
+    .catch(() => undefined);
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (sessionStorage.getItem('dubpack-sw-81') === '1') return;
+    sessionStorage.setItem('dubpack-sw-81', '1');
+    location.reload();
+  });
 }
 
 function bindUi() {
@@ -883,7 +897,8 @@ async function buildPack(name, zipBytes) {
   const objectUrl = (entry) => {
     if (!entry) return '';
     if (urlCache.has(entry.name)) return urlCache.get(entry.name);
-    const url = rememberUrl(URL.createObjectURL(new Blob([entry.data], { type: mimeFor(entry.ext) })));
+    const blob = new Blob([entry.data], { type: mimeFor(entry.ext) });
+    const url = rememberUrl(URL.createObjectURL(blob), blob);
     urlCache.set(entry.name, url);
     return url;
   };
@@ -1363,7 +1378,7 @@ function recordActiveScene() {
     const profile = await profileTakeAudio(blob).catch(() => ({}));
     const voicePeak = Math.max(livePeak, decodedPeak, profile.peak || 0);
     if (pack.takes[scene.id]?.url) URL.revokeObjectURL(pack.takes[scene.id].url);
-    const url = rememberUrl(URL.createObjectURL(blob));
+    const url = rememberUrl(URL.createObjectURL(blob), blob);
     pack.takes[scene.id] = {
       url,
       blob,
@@ -1493,11 +1508,11 @@ function playCurrentTake() {
   stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
-  const takeUrl = take.url || (take.blob ? rememberUrl(URL.createObjectURL(take.blob)) : '');
+  const takeUrl = take.url;
   playLayersHtml([
-    { url: takeUrl, volume: 1 },
+    { url: takeUrl, blob: take.blob, volume: 1 },
     { url: scene.audioUrl, volume: BED_VOLUME }
-  ].filter((layer) => layer.url), Math.max(scene.duration, Number(take.duration) || 1));
+  ].filter((layer) => layer.url || layer.blob), Math.max(scene.duration, Number(take.duration) || 1));
 }
 
 function bindSceneVisual(scene) {
@@ -1635,12 +1650,13 @@ async function playLayers(layers, duration) {
 }
 
 function playLayersHtml(layers, duration) {
-  const items = layers.filter((layer) => layer.url);
+  const items = layers.filter((layer) => layer.url || layer.blob);
   state.activeAudios = items.map((layer) => {
     const audio = new Audio();
     audio.preload = 'auto';
-    audio.volume = Math.min(1, Math.max(0, layer.volume));
-    audio.src = layer.url;
+    audio.volume = Math.min(1, Math.max(0, Number(layer.volume) || 1));
+    const blob = layer.blob || state.blobByUrl.get(layer.url);
+    audio.src = blob ? rememberUrl(URL.createObjectURL(blob), blob) : layer.url;
     audio.play().catch(() => toast(iosAudioHint()));
     return audio;
   });
@@ -2221,8 +2237,9 @@ function formatClock(value) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function rememberUrl(url) {
+function rememberUrl(url, blob) {
   if (url) state.objectUrls.push(url);
+  if (url && blob) state.blobByUrl.set(url, blob);
   return url;
 }
 
@@ -2234,11 +2251,13 @@ function forgetUrl(url) {
     // ignore
   }
   state.objectUrls = state.objectUrls.filter((item) => item !== url);
+  state.blobByUrl.delete(url);
 }
 
 function revokeAllObjectUrls() {
   const urls = [...new Set(state.objectUrls)];
   state.objectUrls = [];
+  state.blobByUrl.clear();
   urls.forEach((url) => {
     try {
       URL.revokeObjectURL(url);
