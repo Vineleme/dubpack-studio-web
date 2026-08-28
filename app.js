@@ -84,6 +84,8 @@ const state = {
   videoTimer: null,
   activeAudio: null,
   activeAudios: [],
+  playbackCtx: null,
+  playbackStops: [],
   previewing: false,
   previewGen: 0,
   toastTimer: null,
@@ -224,7 +226,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=54').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=56').catch(() => undefined);
 }
 
 function bindUi() {
@@ -277,6 +279,11 @@ function bindUi() {
   els.packRailNext?.addEventListener('click', () => {
     els.packGrid?.scrollBy({ left: 240, behavior: 'smooth' });
   });
+  const unlockAudioOnce = () => {
+    unlockAudio().catch(() => undefined);
+  };
+  document.addEventListener('touchstart', unlockAudioOnce, { once: true, passive: true });
+  document.addEventListener('click', unlockAudioOnce, { once: true });
   startStudioTips();
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && !state.exporting) abortCapture();
@@ -424,7 +431,7 @@ function refreshAccountUi() {
   if (els.profileMeta) {
     els.profileMeta.textContent = owner
       ? `${user.email} · dono do estúdio · créditos infinitos`
-      : `${user?.email || ''} · packs duram 2 dias nesta conta`;
+      : `${user?.email || ''} · packs duram 2 dias · você pode apagar quando quiser`;
   }
   renderAvatars();
   updateCreditUi();
@@ -747,6 +754,7 @@ async function importPack(event) {
     selectScene(0);
     setTab('record');
     scheduleSave();
+    warmSceneAudio(pack.scenes);
     const count = pack.scenes.length;
     toast(`${count} ${count === 1 ? 'fala' : 'falas'} em “${pack.name}”.`);
   } catch (error) {
@@ -1040,12 +1048,26 @@ function playReference() {
     toast('Importe um pack para ouvir a referência.');
     return;
   }
-  playTimedAudio(scene.audioUrl, scene.duration);
+  void unlockAudio();
+  stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
+  const layers = [{ url: scene.audioUrl, volume: 1 }];
+  if (isIOS()) {
+    playLayersHtml(layers, scene.duration);
+  } else {
+    void playLayers(layers, scene.duration).catch(() => toast(iosAudioHint()));
+  }
+}
+
+function iosAudioHint() {
+  return isIOS()
+    ? 'Sem som? Desligue o modo silencioso do iPhone (chave lateral) e toque de novo.'
+    : 'Não consegui tocar o áudio. Toque de novo.';
 }
 
 async function startTakeFlow() {
+  void unlockAudio();
   const scene = currentScene();
   if (!scene) {
     toast('Importe um pack para gravar.');
@@ -1069,6 +1091,7 @@ async function startTakeFlow() {
   }
 
   abortCapture();
+  stopActivePlayback();
   const gen = state.captureGen;
   await wait(isPhone() ? 80 : 0);
   let stream;
@@ -1129,6 +1152,73 @@ function isPhone() {
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     || window.matchMedia('(pointer: coarse)').matches;
+}
+
+function isIOS() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+async function ensurePlaybackAudio() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!state.playbackCtx || state.playbackCtx.state === 'closed') {
+    state.playbackCtx = new AudioCtx();
+  }
+  if (state.playbackCtx.state === 'suspended') {
+    await state.playbackCtx.resume();
+  }
+  return state.playbackCtx;
+}
+
+async function unlockAudio() {
+  const ctx = await ensurePlaybackAudio();
+  if (!ctx) return;
+  try {
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+    source.stop(ctx.currentTime + 0.001);
+  } catch {
+    // ignore
+  }
+}
+
+const audioBufferCache = new Map();
+
+async function getCachedAudioBuffer(ctx, url) {
+  if (audioBufferCache.has(url)) return audioBufferCache.get(url);
+  const buffer = await fetchAudioBuffer(ctx, url);
+  audioBufferCache.set(url, buffer);
+  return buffer;
+}
+
+function warmSceneAudio(scenes) {
+  if (!scenes?.length) return;
+  void ensurePlaybackAudio().then((ctx) => {
+    if (!ctx) return;
+    scenes.forEach((scene) => {
+      if (scene.audioUrl) {
+        void getCachedAudioBuffer(ctx, scene.audioUrl).catch(() => undefined);
+      }
+    });
+  });
+}
+
+async function fetchAudioBuffer(ctx, url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('fetch-audio');
+  const data = await response.arrayBuffer();
+  return ctx.decodeAudioData(data.slice(0));
+}
+
+function takeLooksLikeWebm(take) {
+  if (!take) return false;
+  return take.ext === 'webm'
+    || String(take.blob?.type || '').includes('webm')
+    || String(take.url || '').includes('webm');
 }
 
 function recordActiveScene() {
@@ -1192,7 +1282,7 @@ function recordActiveScene() {
       subtitle: scene.subtitle,
       createdAt: new Date().toISOString(),
       duration: elapsed,
-      ext: blob.type.includes('mp4') ? 'm4a' : 'webm',
+      ext: /mp4|m4a|aac/i.test(blob.type) ? 'm4a' : 'webm',
       peak: voicePeak,
       onset: profile.onset,
       release: profile.release,
@@ -1231,9 +1321,17 @@ function recordActiveScene() {
   }, 100);
 
   try {
-    state.recorder.start();
+    if (isIOS()) {
+      state.recorder.start(100);
+    } else {
+      state.recorder.start(250);
+    }
   } catch {
-    state.recorder.start(250);
+    try {
+      state.recorder.start();
+    } catch {
+      state.recorder.start(250);
+    }
   }
   state.recordStopTimer = setTimeout(() => {
     if (state.recorder?.state === 'recording') {
@@ -1260,6 +1358,7 @@ async function playProjectPreview() {
 
   state.previewing = true;
   const gen = ++state.previewGen;
+  void unlockAudio();
   if (els.previewBtnAlt) els.previewBtnAlt.textContent = 'Parar prévia';
   els.stopPreviewBtn?.classList.remove('is-hidden');
   setTab('record');
@@ -1271,13 +1370,17 @@ async function playProjectPreview() {
     const take = pack.takes[scene.id];
     playSceneMedia(scene, scene.duration);
     animateProgress(scene.duration);
-    if (take) {
-      playLayers([
-        { url: take.url, volume: 1 },
-        { url: scene.audioUrl, volume: BED_VOLUME }
-      ], scene.duration);
+    const layers = take && !(isIOS() && takeLooksLikeWebm(take))
+      ? [{ url: take.url, volume: 1 }, { url: scene.audioUrl, volume: BED_VOLUME }]
+      : [{ url: scene.audioUrl, volume: 1 }];
+    if (isIOS()) {
+      playLayersHtml(layers, scene.duration);
     } else {
-      playTimedAudio(scene.audioUrl, scene.duration);
+      try {
+        await playLayers(layers, scene.duration);
+      } catch {
+        toast(iosAudioHint());
+      }
     }
     await wait((scene.duration * 1000) + 180);
   }
@@ -1301,12 +1404,23 @@ function playCurrentTake() {
     els.previewHint.textContent = 'Grave este take primeiro';
     return;
   }
-  playLayers([
-    { url: take.url, volume: 1 },
-    { url: scene.audioUrl, volume: BED_VOLUME }
-  ], scene.duration);
+  if (isIOS() && takeLooksLikeWebm(take)) {
+    toast('Este take não toca no iPhone. Grave esta fala de novo.');
+    return;
+  }
+  void unlockAudio();
+  stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
+  const layers = [
+    { url: take.url, volume: 1 },
+    { url: scene.audioUrl, volume: BED_VOLUME }
+  ];
+  if (isIOS()) {
+    playLayersHtml(layers, scene.duration);
+  } else {
+    void playLayers(layers, scene.duration).catch(() => toast(iosAudioHint()));
+  }
 }
 
 function bindSceneVisual(scene) {
@@ -1403,15 +1517,55 @@ function paintEmptyScene(scene) {
 }
 
 function playTimedAudio(url, duration, volume = 1) {
-  playLayers([{ url, volume }], duration);
+  return playLayers([{ url, volume }], duration);
 }
 
-function playLayers(layers, duration) {
+async function playLayers(layers, duration) {
   stopActivePlayback();
-  state.activeAudios = layers.filter((layer) => layer.url).map((layer) => {
+  const items = layers.filter((layer) => layer.url);
+  if (!items.length) return;
+
+  if (isIOS()) {
+    playLayersHtml(items, duration);
+    return;
+  }
+
+  try {
+    const ctx = await ensurePlaybackAudio();
+    if (!ctx) throw new Error('no-audio-context');
+    const startAt = ctx.currentTime + 0.06;
+    for (const layer of items) {
+      const buffer = await getCachedAudioBuffer(ctx, layer.url);
+      const gain = ctx.createGain();
+      gain.gain.value = Math.max(0, Math.min(1, layer.volume));
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start(startAt);
+      state.playbackStops.push(() => {
+        try { source.stop(0); } catch { /* ignore */ }
+        source.disconnect();
+        gain.disconnect();
+      });
+    }
+    clearTimeout(state.playbackTimer);
+    state.playbackTimer = setTimeout(stopActivePlayback, (duration * 1000) + 140);
+    return;
+  } catch {
+    playLayersHtml(items, duration);
+  }
+}
+
+function playLayersHtml(layers, duration) {
+  state.activeAudios = layers.map((layer) => {
     const audio = new Audio(layer.url);
-    audio.volume = layer.volume;
-    audio.play().catch(() => undefined);
+    audio.preload = 'auto';
+    audio.volume = Math.min(1, layer.volume);
+    const playPromise = audio.play();
+    if (playPromise) {
+      playPromise.catch(() => toast(iosAudioHint()));
+    }
     return audio;
   });
   state.activeAudio = state.activeAudios[0] || null;
@@ -1422,6 +1576,8 @@ function playLayers(layers, duration) {
 function stopActivePlayback() {
   clearTimeout(state.playbackTimer);
   state.playbackTimer = null;
+  state.playbackStops.forEach((stop) => stop?.());
+  state.playbackStops = [];
   const list = state.activeAudios?.length
     ? state.activeAudios
     : (state.activeAudio ? [state.activeAudio] : []);
@@ -1534,6 +1690,16 @@ function renderPackGrid() {
     const percent = pack.scenes.length ? Math.round((recorded / pack.scenes.length) * 100) : 0;
     const card = document.createElement('article');
     card.className = `pack-card ${tones[index % 3]}${pack.id === state.activePackId ? ' active' : ''}`.trim();
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'pack-delete';
+    deleteBtn.type = 'button';
+    deleteBtn.setAttribute('aria-label', `Apagar ${pack.name}`);
+    deleteBtn.title = 'Apagar pack';
+    deleteBtn.textContent = '✕';
+    deleteBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      deletePack(pack.id);
+    });
     const preview = document.createElement('div');
     preview.className = 'pack-preview';
     const cover = packCover(pack);
@@ -1571,7 +1737,7 @@ function renderPackGrid() {
       openPack(pack.id);
     });
     card.addEventListener('click', () => openPack(pack.id));
-    card.append(preview, title, subtitle, progress, button);
+    card.append(deleteBtn, preview, title, subtitle, progress, button);
     els.packGrid.append(card);
   });
   if (els.packRailNext) {
@@ -1592,6 +1758,43 @@ function openPack(id) {
   renderPackGrid();
   selectScene(0);
   setTab('record');
+}
+
+function deletePack(id) {
+  const pack = state.packs.find((item) => item.id === id);
+  if (!pack) return;
+  const ok = confirm(`Apagar “${pack.name}”?\n\nTakes e exportação serão removidos deste aparelho.`);
+  if (!ok) return;
+
+  abortCapture();
+  stopActivePlayback();
+  if (state.previewing) stopProjectPreview();
+  revokePackMedia(pack);
+
+  const wasActive = state.activePackId === id;
+  const packName = pack.name;
+  state.packs = state.packs.filter((item) => item.id !== id);
+
+  if (wasActive) {
+    state.activePackId = state.packs[0]?.id || null;
+    state.activeIndex = 0;
+  }
+
+  scheduleSave();
+  renderPackGrid();
+  updateScoreCard();
+  showFinalVideo(currentPack());
+
+  if (wasActive) {
+    if (currentPack()) {
+      selectScene(0);
+      setTab('record');
+    } else {
+      setTab('packs');
+    }
+  }
+
+  toast(`Pack “${packName}” apagado.`);
 }
 
 function renderTakeRail() {
@@ -2962,7 +3165,10 @@ async function restoreSession() {
   if (!currentPack() && state.packs[0]) state.activePackId = state.packs[0].id;
   renderPackGrid();
   updateScoreCard();
-  if (currentPack()) selectScene(state.activeIndex);
+  if (currentPack()) {
+    selectScene(state.activeIndex);
+    warmSceneAudio(currentPack().scenes);
+  }
 }
 
 function findSceneArt(choicer, index, images, objectUrl, audioEntry) {
@@ -3098,7 +3304,9 @@ function mimeFor(ext) {
 }
 
 function pickRecorderMime() {
-  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4'];
+  const iosTypes = ['audio/mp4', 'audio/mp4;codecs=mp4a.40.2', 'audio/aac'];
+  const defaultTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4'];
+  const types = isIOS() ? [...iosTypes, ...defaultTypes] : defaultTypes;
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
 

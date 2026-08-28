@@ -209,9 +209,36 @@ body.needs-auth .dashboard {
 }
 
 .pack-card {
+  position: relative;
   flex: 0 0 228px;
   padding: 12px;
   scroll-snap-align: start;
+}
+
+.pack-delete {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 6, 20, 0.82);
+  color: #ffb4c8;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.pack-delete:hover,
+.pack-delete:focus-visible {
+  background: rgba(120, 20, 48, 0.92);
+  border-color: rgba(245, 46, 131, 0.55);
+  color: #fff;
 }
 
 .pack-preview img,
