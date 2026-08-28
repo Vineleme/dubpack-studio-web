@@ -124,7 +124,9 @@ export function recordActiveScene() {
   state.recorder = new MediaRecorder(stream);
   }
   const startedAt = Date.now();
-  const recMs = Math.round(Math.max(1.6, Number(scene.duration) || 2) * 1000);
+  // iOS corta o fim se parar no tempo exato; dá folga e flusha o último chunk antes do stop.
+  const tailMs = isIOS() ? 420 : isPhone() ? 280 : 180;
+  const recMs = Math.round(Math.max(1.6, Number(scene.duration) || 2) * 1000) + tailMs;
 
   state.recorder.ondataavailable = (event) => {
     if (event.data?.size) state.chunks.push(event.data);
@@ -219,14 +221,22 @@ export function recordActiveScene() {
     }
   }
   state.recordStopTimer = setTimeout(() => {
-    if (state.recorder?.state === 'recording') {
+    void (async () => {
+      if (state.recorder?.state !== 'recording') return;
       try {
         state.recorder.requestData();
       } catch {
         // Alguns browsers só entregam o áudio no stop.
       }
-      state.recorder.stop();
-    }
+      await wait(isIOS() ? 220 : 120);
+      if (state.recorder?.state === 'recording') {
+        try {
+          state.recorder.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+    })();
   }, recMs);
 }
 
