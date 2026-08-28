@@ -222,9 +222,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
-      return script.includes('sw.js?v=83') ? Promise.resolve() : reg.unregister();
+      return script.includes('sw.js?v=84') ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register('./sw.js?v=83'))
+    .then(() => navigator.serviceWorker.register('./sw.js?v=84'))
     .catch(() => undefined);
 }
 
@@ -424,7 +424,7 @@ function subscribePro() {
 }
 
 function proStatusLabel() {
-  if (isOwner()) return t('plan.owner');
+  if (isOwner()) return t('pro.card.title');
   if (!isPro()) return t('plan.free');
   const pro = readProState();
   const days = pro?.periodEnd
@@ -2471,16 +2471,16 @@ function updateCreditUi() {
   const badgeHtml = creditBadgeHtml(count);
   if (els.creditBadge) {
     if (isOwner()) {
-      els.creditBadge.innerHTML = `<span class="credit-word">${t('plan.owner')}</span>`;
+      els.creditBadge.innerHTML = `<span class="credit-word">${t('pro.card.title')}</span>`;
     } else if (isPro()) {
       els.creditBadge.innerHTML = `PRO · ${badgeHtml}`;
     } else {
       els.creditBadge.innerHTML = badgeHtml;
     }
   }
-  if (els.creditsBalance) els.creditsBalance.innerHTML = isOwner() ? `<span class="credit-word">${t('plan.owner')}</span>` : badgeHtml;
+  if (els.creditsBalance) els.creditsBalance.innerHTML = isOwner() ? `<span class="credit-word">${t('pro.card.title')}</span>` : badgeHtml;
   if (els.profileCreditsLine) {
-    els.profileCreditsLine.innerHTML = t('profile.body', { credits: isOwner() ? t('plan.owner') : badgeHtml });
+    els.profileCreditsLine.innerHTML = t('profile.body', { credits: isOwner() ? t('pro.card.title') : badgeHtml });
   }
   if (els.proBtn) {
     els.proBtn.textContent = isOwner() ? t('pro.btn.owner') : isPro() ? t('pro.btn.manage') : t('pro.btn');
