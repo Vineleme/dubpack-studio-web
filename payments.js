@@ -204,6 +204,7 @@ async function checkoutCart() {
   }
   const user = cartState.hooks.getUser();
   if (!user?.email) {
+    cartState.hooks.requireAuth?.();
     cartState.hooks.toast(cartState.hooks.t('cart.login'));
     return;
   }

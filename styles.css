@@ -332,8 +332,8 @@ button, label, a { border: 0; text-decoration: none; }
   margin-bottom: 34px;
 }
 body.needs-auth .dashboard {
-  pointer-events: none;
-  user-select: none;
+  pointer-events: auto;
+  user-select: auto;
 }
 .topbar h1 {
   margin: 0 0 8px;
@@ -2414,13 +2414,24 @@ body.needs-auth .dashboard {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(9, 8, 23, 0.94);
+  background: rgba(9, 8, 23, 0.78);
   pointer-events: auto;
 }
 .auth-gate.is-hidden { display: none; }
 
-body.needs-auth #studioApp {
-  display: none !important;
+.beta-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  color: #f9a8d4;
+  background: rgba(245, 46, 131, 0.14);
+  border: 1px solid rgba(245, 46, 131, 0.28);
 }
 
 .auth-remember {

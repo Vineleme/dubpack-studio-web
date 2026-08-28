@@ -11,12 +11,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=99" />
+    <link rel="stylesheet" href="./styles.css?v=101" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
 
-    <div id="authGate" class="auth-gate">
+    <div id="authGate" class="auth-gate is-hidden">
       <form id="authForm" class="auth-card" novalidate>
         <div class="auth-brand">
           <strong>Dub<span>Pack</span> Studio</strong>
@@ -64,7 +64,7 @@
       </div>
     </div>
 
-    <main id="studioApp" class="dashboard is-hidden">
+    <main id="studioApp" class="dashboard">
       <aside class="sidebar">
         <a class="side-logo" href="#packsTab" data-tab="packs">
           <img src="./assets/dubpack-logo-brand.jpg" alt="DubPack Studio" />
@@ -272,8 +272,9 @@
             </div>
           </div>
           <p id="profileCreditsLine">Dublar é grátis — gravar, regravar e ouvir não consome crédito.</p>
+          <button id="profileLoginBtn" class="primary wide" type="button" data-i18n="auth.submit.login">Entrar</button>
           <button class="primary wide" type="button" data-tab="credits" data-i18n="profile.plans">Comprar créditos</button>
-          <button id="logoutBtn" class="secondary wide" type="button" data-i18n="profile.logout">Sair da conta</button>
+          <button id="logoutBtn" class="secondary wide is-hidden" type="button" data-i18n="profile.logout">Sair da conta</button>
         </section>
 
         <section id="creditsTab" class="tab-view info-card">
@@ -314,7 +315,7 @@
       <aside class="right-rail">
         <section class="score-card">
           <div>
-            <h2 data-i18n="score.title">Seu desempenho</h2>
+            <h2><span data-i18n="score.title">Seu desempenho</span> <small class="beta-pill" data-i18n="score.beta">beta</small></h2>
           </div>
           <div class="score-body">
             <div class="score-ring">
@@ -349,10 +350,10 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=99"></script>
-    <script src="./payments.config.js?v=99"></script>
-    <script src="./i18n.js?v=99"></script>
-    <script src="./payments.js?v=99"></script>
-    <script src="./app.js?v=99"></script>
+    <script src="./vendor/fflate.min.js?v=101"></script>
+    <script src="./payments.config.js?v=101"></script>
+    <script src="./i18n.js?v=101"></script>
+    <script src="./payments.js?v=101"></script>
+    <script src="./app.js?v=101"></script>
   </body>
 </html>

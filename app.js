@@ -107,7 +107,7 @@ function bindFirebaseAuthListener() {
     if (state.user) {
       state.user = null;
       localStorage.removeItem(SESSION_USER_KEY);
-      showAuthGate(true);
+      refreshAccountUi();
     }
   });
 }
@@ -271,7 +271,7 @@ const els = {
   tipTitle: document.querySelector('#tipTitle'),
   tipBody: document.querySelector('#tipBody'),
   tipDots: document.querySelector('#tipDots'),
-  logoutBtn: document.querySelector('#logoutBtn'),
+  profileLoginBtn: document.querySelector('#profileLoginBtn'),
   studioApp: document.querySelector('#studioApp'),
   takeRail: document.querySelector('#takeRail'),
   wavePlayhead: document.querySelector('#wavePlayhead'),
@@ -324,7 +324,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '99';
+  const swVersion = '101';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -356,6 +356,9 @@ function bindUi() {
   });
   els.authPassword?.addEventListener('input', clearAuthError);
   els.authPasswordToggle?.addEventListener('click', togglePasswordVisibility);
+  els.authGate?.addEventListener('click', (event) => {
+    if (event.target === els.authGate) showAuthGate(false);
+  });
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
   document.querySelectorAll('label.text-link, .pack-empty label.primary').forEach((label) => {
@@ -366,8 +369,14 @@ function bindUi() {
       requireAuth();
     });
   });
-  els.userChip?.addEventListener('click', () => openProfileTab());
-  els.profileNavBtn?.addEventListener('click', () => openProfileTab());
+  els.userChip?.addEventListener('click', () => {
+    if (!isLoggedIn()) {
+      requireAuth();
+      return;
+    }
+    applyTab('profile');
+  });
+  els.profileNavBtn?.addEventListener('click', () => setTab('profile'));
   els.prevBtn?.addEventListener('click', () => setTab('packs'));
   els.prevSceneBtn?.addEventListener('click', () => selectScene(state.activeIndex - 1));
   els.nextSceneBtn?.addEventListener('click', goNextScene);
@@ -395,6 +404,7 @@ function bindUi() {
   els.proBtn?.addEventListener('click', () => setTab('credits'));
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
+  els.profileLoginBtn?.addEventListener('click', () => requireAuth());
   els.profileAvatarInput?.addEventListener('change', handleAvatarUpload);
   els.packRailNext?.addEventListener('click', () => {
     els.packGrid?.scrollBy({ left: 240, behavior: 'smooth' });
@@ -425,30 +435,32 @@ function bindUi() {
 async function bootApp() {
   applyI18n();
   initAuthRememberUi();
-  hideStudio();
-  showAuthGate(true);
+  revealStudio();
+  refreshAccountUi();
   window.DubpackCart?.initCart({
     toast,
     t,
-    getUser: () => state.user
+    getUser: () => state.user,
+    requireAuth
   });
   handleCheckoutReturn();
   if (!firebaseAuth) {
     toast('Firebase não carregou. Recarregue a página.');
     return;
   }
-  await firebaseAuthReady;
-  let restored = await restoreAuthSession();
-  if (!restored && readSessionUser()?.email && readRememberMe()) {
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    if (firebaseAuth.currentUser) {
-      await finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false });
-      restored = true;
+  try {
+    await firebaseAuthReady;
+    let restored = await restoreAuthSession();
+    if (!restored && readSessionUser()?.email && readRememberMe()) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      if (firebaseAuth.currentUser) {
+        await finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false });
+        restored = true;
+      }
     }
-  }
-  if (!restored && !state.user) {
-    hideStudio();
-    showAuthGate(true);
+    if (!restored) refreshAccountUi();
+  } finally {
+    authBootDone = true;
   }
 }
 
@@ -558,24 +570,17 @@ function isLoggedIn() {
 }
 
 function requireAuth() {
-  hideStudio();
   showAuthGate(true);
   toast(t('auth.required'));
 }
 
-function hideStudio() {
-  els.studioApp?.classList.add('is-hidden');
-  document.body.classList.remove('in-studio');
-}
-
-function showStudio() {
+function revealStudio() {
   els.studioApp?.classList.remove('is-hidden');
   document.body.classList.add('in-studio');
 }
 
 function showAuthGate(on) {
   els.authGate?.classList.toggle('is-hidden', !on);
-  document.body.classList.toggle('needs-auth', Boolean(on));
   if (on) setAuthMode(state.authMode === 'signup' || state.authMode === 'reset' ? state.authMode : 'login');
 }
 
@@ -677,28 +682,42 @@ function openProfileTab() {
     requireAuth();
     return;
   }
+  if (!state.user && firebaseAuth?.currentUser) {
+    void finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false }).then(() => applyTab('profile'));
+    return;
+  }
   applyTab('profile');
 }
 
 function refreshAccountUi() {
   const user = state.user;
+  const loggedIn = Boolean(user?.email);
   const first = String(user?.name || 'dublador').split(' ')[0];
   const owner = isOwner(user);
   const pro = isPro(user);
   if (els.welcomeTitle) {
-    els.welcomeTitle.textContent = user
+    els.welcomeTitle.textContent = loggedIn
       ? t('welcome.back', { name: first })
       : t('welcome');
   }
-  if (els.userChipName) els.userChipName.textContent = user?.name || 'Conta';
-  if (els.profileName) els.profileName.textContent = user?.name || 'Conta';
-  if (els.profileMeta) {
-    els.profileMeta.textContent = `${user?.email || ''} · ${proStatusLabel()}`;
+  if (els.userChipName) {
+    els.userChipName.textContent = loggedIn ? user.name : t('auth.chip.login');
   }
+  if (els.creditBadge) els.creditBadge.hidden = !loggedIn;
+  if (els.profileName) {
+    els.profileName.textContent = loggedIn ? user.name : t('auth.chip.login');
+  }
+  if (els.profileMeta) {
+    els.profileMeta.textContent = loggedIn
+      ? `${user.email} · ${proStatusLabel()}`
+      : t('profile.guest');
+  }
+  if (els.logoutBtn) els.logoutBtn.classList.toggle('is-hidden', !loggedIn);
+  if (els.profileLoginBtn) els.profileLoginBtn.classList.toggle('is-hidden', loggedIn);
   if (els.proBtn) {
     els.proBtn.textContent = owner ? t('pro.btn.owner') : pro ? t('pro.btn.manage') : t('pro.btn');
   }
-  ensureProMonthlyCredits();
+  if (loggedIn) ensureProMonthlyCredits();
   renderAvatars();
   updateCreditUi();
 }
@@ -738,6 +757,10 @@ function renderAvatars() {
 }
 
 async function handleAvatarUpload(event) {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
@@ -797,7 +820,6 @@ async function finishLogin(account, options = {}) {
   };
   localStorage.setItem(SESSION_USER_KEY, JSON.stringify(state.user));
   showAuthGate(false);
-  showStudio();
   refreshAccountUi();
   if (showToast) {
     toast('Conta pronta. Packs duram 2 dias.');
@@ -947,9 +969,9 @@ async function logoutUser() {
   localStorage.removeItem(SESSION_USER_KEY);
   state.user = null;
   releasePackSession();
-  hideStudio();
   setAuthMode('login');
-  showAuthGate(true);
+  showAuthGate(false);
+  refreshAccountUi();
   toast('Você saiu. Até a próxima dublagem.');
 }
 
@@ -1174,10 +1196,6 @@ function decorateScene(scene) {
 }
 
 function setTab(tab) {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   if (!state.user && firebaseAuth?.currentUser) {
     void finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false }).then(() => applyTab(tab));
     return;
@@ -1378,6 +1396,10 @@ async function playBlobThroughContext(blob, volume) {
 }
 
 function playReference() {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   const scene = currentScene();
   if (!scene?.audioUrl) {
     toast('Importe um pack para ouvir a referência.');
@@ -1397,6 +1419,10 @@ function iosAudioHint() {
 }
 
 async function startTakeFlow() {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   void unlockAudio();
   const scene = currentScene();
   if (!scene) {
@@ -1690,6 +1716,10 @@ function recordActiveScene() {
 }
 
 async function playProjectPreview() {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   const pack = currentPack();
   if (!pack?.scenes.length) {
     toast('Importe um pack primeiro.');
@@ -1733,6 +1763,10 @@ function stopProjectPreview() {
 }
 
 function playCurrentTake() {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   const pack = currentPack();
   const scene = currentScene();
   const take = scene ? pack?.takes[scene.id] : null;
@@ -1933,6 +1967,10 @@ function animateProgress(duration) {
 }
 
 function downloadTake() {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   const pack = currentPack();
   const scene = currentScene();
   const take = scene ? pack?.takes[scene.id] : null;
@@ -2635,6 +2673,16 @@ function creditBadgeHtml(count) {
 }
 
 function updateCreditUi() {
+  if (!isLoggedIn()) {
+    if (els.creditBadge) {
+      els.creditBadge.textContent = '';
+      els.creditBadge.hidden = true;
+    }
+    if (els.creditsBalance) els.creditsBalance.textContent = '—';
+    if (els.profileCreditsLine) els.profileCreditsLine.textContent = t('profile.guest');
+    return;
+  }
+  if (els.creditBadge) els.creditBadge.hidden = false;
   const count = getCredits();
   const badgeHtml = creditBadgeHtml(count);
   if (els.creditBadge) {
@@ -2926,6 +2974,10 @@ function showFinalVideo(pack) {
 }
 
 async function downloadFinalMp4() {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   const pack = currentPack();
   if (!pack?.finalBlob && !pack?.finalUrl) return;
   let blob = pack.finalBlob;
@@ -2954,6 +3006,10 @@ function preloadFfmpeg() {
 }
 
 async function requestFinalMp4() {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   const pack = currentPack();
   if (!pack?.scenes.length) {
     toast('Importe um pack e grave as falas primeiro.');
