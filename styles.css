@@ -343,8 +343,10 @@ body.needs-auth .dashboard {
 .search-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   justify-self: end;
+  justify-content: flex-end;
 }
 
 .search-box {
@@ -1951,13 +1953,19 @@ body.needs-auth .dashboard {
 }
 
 .user-logout-btn {
+  flex-shrink: 0;
+  width: auto;
+  height: auto;
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 16px;
   border-radius: 999px;
+  border: 1px solid rgba(245, 46, 131, 0.28);
+  background: rgba(245, 46, 131, 0.08);
   color: #f9a8d4;
   white-space: nowrap;
   font-size: 13px;
   font-weight: 700;
+  cursor: pointer;
 }
 
 .user-logout-btn:hover {
