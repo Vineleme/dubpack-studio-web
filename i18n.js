@@ -146,7 +146,7 @@ const I18N = {
     'credits.extra': 'Créditos extras',
     'credits.extra.hint': 'Importar, gravar e ouvir takes é grátis. Créditos entram só na exportação do vídeo final.',
     'plan.free': 'Plano gratuito',
-    'plan.owner': 'Dono · acesso total',
+    'plan.owner': 'O meu plano',
     'plan.pro.days': '{days} dias restantes'
   },
   en: {
@@ -294,7 +294,7 @@ const I18N = {
     'credits.extra': 'Extra credits',
     'credits.extra.hint': 'Import, record, and preview takes are free. Credits apply only to final video export.',
     'plan.free': 'Free plan',
-    'plan.owner': 'Owner · full access',
+    'plan.owner': 'My plan',
     'plan.pro.days': '{days} days left'
   }
 };
