@@ -334,7 +334,6 @@ button, label, a { border: 0; text-decoration: none; }
 body.needs-auth .dashboard {
   pointer-events: none;
   user-select: none;
-  filter: saturate(0.92) brightness(0.82);
 }
 .topbar h1 {
   margin: 0 0 8px;
@@ -2415,13 +2414,13 @@ body.needs-auth .dashboard {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: transparent;
-  pointer-events: none;
+  background: rgba(9, 8, 23, 0.94);
+  pointer-events: auto;
 }
 .auth-gate.is-hidden { display: none; }
 
-body.auth-checking .auth-gate {
-  display: none;
+body.needs-auth #studioApp {
+  display: none !important;
 }
 
 .auth-remember {

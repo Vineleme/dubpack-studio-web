@@ -267,6 +267,7 @@ const els = {
   authRememberLabel: document.querySelector('#authRememberLabel'),
   authError: document.querySelector('#authError'),
   userChip: document.querySelector('#userChip'),
+  profileNavBtn: document.querySelector('#profileNavBtn'),
   tipTitle: document.querySelector('#tipTitle'),
   tipBody: document.querySelector('#tipBody'),
   tipDots: document.querySelector('#tipDots'),
@@ -323,7 +324,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '98';
+  const swVersion = '99';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -357,6 +358,16 @@ function bindUi() {
   els.authPasswordToggle?.addEventListener('click', togglePasswordVisibility);
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
+  document.querySelectorAll('label.text-link, .pack-empty label.primary').forEach((label) => {
+    label.addEventListener('click', (event) => {
+      if (isLoggedIn()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      requireAuth();
+    });
+  });
+  els.userChip?.addEventListener('click', () => openProfileTab());
+  els.profileNavBtn?.addEventListener('click', () => openProfileTab());
   els.prevBtn?.addEventListener('click', () => setTab('packs'));
   els.prevSceneBtn?.addEventListener('click', () => selectScene(state.activeIndex - 1));
   els.nextSceneBtn?.addEventListener('click', goNextScene);
@@ -404,6 +415,7 @@ function bindUi() {
   document.addEventListener('click', (event) => {
     const tabBtn = event.target.closest('[data-tab]');
     if (!tabBtn) return;
+    if (tabBtn.id === 'userChip' || tabBtn.id === 'profileNavBtn') return;
     if (tabBtn.tagName === 'A') event.preventDefault();
     const tab = tabBtn.dataset.tab;
     if (tab) setTab(tab);
@@ -413,18 +425,15 @@ function bindUi() {
 async function bootApp() {
   applyI18n();
   initAuthRememberUi();
-  showStudio();
-  document.body.classList.add('auth-checking');
+  hideStudio();
+  showAuthGate(true);
   window.DubpackCart?.initCart({
     toast,
     t,
     getUser: () => state.user
   });
   handleCheckoutReturn();
-  renderCreditShop();
   if (!firebaseAuth) {
-    document.body.classList.remove('auth-checking');
-    showAuthGate(true);
     toast('Firebase não carregou. Recarregue a página.');
     return;
   }
@@ -437,8 +446,10 @@ async function bootApp() {
       restored = true;
     }
   }
-  document.body.classList.remove('auth-checking');
-  if (!restored && !state.user) showAuthGate(true);
+  if (!restored && !state.user) {
+    hideStudio();
+    showAuthGate(true);
+  }
 }
 
 function initAuthRememberUi() {
@@ -542,6 +553,26 @@ function proStatusLabel() {
   return `DubPack PRO · ${t('plan.pro.days', { days })}`;
 }
 
+function isLoggedIn() {
+  return Boolean(state.user?.email || firebaseAuth?.currentUser?.email);
+}
+
+function requireAuth() {
+  hideStudio();
+  showAuthGate(true);
+  toast(t('auth.required'));
+}
+
+function hideStudio() {
+  els.studioApp?.classList.add('is-hidden');
+  document.body.classList.remove('in-studio');
+}
+
+function showStudio() {
+  els.studioApp?.classList.remove('is-hidden');
+  document.body.classList.add('in-studio');
+}
+
 function showAuthGate(on) {
   els.authGate?.classList.toggle('is-hidden', !on);
   document.body.classList.toggle('needs-auth', Boolean(on));
@@ -641,9 +672,12 @@ function suggestSignupName() {
     : 'Como você quer ser chamado?';
 }
 
-function showStudio() {
-  els.studioApp?.classList.remove('is-hidden');
-  document.body.classList.add('in-studio');
+function openProfileTab() {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
+  applyTab('profile');
 }
 
 function refreshAccountUi() {
@@ -913,7 +947,7 @@ async function logoutUser() {
   localStorage.removeItem(SESSION_USER_KEY);
   state.user = null;
   releasePackSession();
-  showStudio();
+  hideStudio();
   setAuthMode('login');
   showAuthGate(true);
   toast('Você saiu. Até a próxima dublagem.');
@@ -966,9 +1000,9 @@ function sessionStoreKey() {
 }
 
 async function importPack(event) {
-  if (!state.user) {
-    showAuthGate(true);
-    toast('Crie sua conta para importar um pack.');
+  if (!isLoggedIn()) {
+    event.target.value = '';
+    requireAuth();
     return;
   }
   const file = event.target.files?.[0];
@@ -1140,14 +1174,12 @@ function decorateScene(scene) {
 }
 
 function setTab(tab) {
-  if (!state.user) {
-    const fbUser = firebaseAuth?.currentUser;
-    if (fbUser) {
-      void finishLogin(accountFromFirebase(fbUser), { toast: false }).then(() => applyTab(tab));
-      return;
-    }
-    showStudio();
-    showAuthGate(true);
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
+  if (!state.user && firebaseAuth?.currentUser) {
+    void finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false }).then(() => applyTab(tab));
     return;
   }
   applyTab(tab);
@@ -1172,6 +1204,7 @@ function applyTab(tab) {
   if (tab === 'credits' || tab === 'profile') {
     updateCreditUi();
     renderCreditShop();
+    refreshAccountUi();
   }
   if (tab === 'packs') renderActivity();
   if (tab === 'profile' || tab === 'credits') {
