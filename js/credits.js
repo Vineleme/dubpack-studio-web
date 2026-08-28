@@ -1,5 +1,5 @@
 import { t } from './i18n-bridge.js';
-import { PRO_MONTHLY_PRICE, PRO_MONTHLY_PRICE_USD, PRO_MONTHLY_CREDITS, PRO_PERIOD_MS } from './constants.js';
+import { PRO_MONTHLY_PRICE, PRO_MONTHLY_PRICE_USD, PRO_MONTHLY_CREDITS, PRO_PERIOD_MS, CREDIT_KEY } from './constants.js';
 import { state, els } from './state.js';
 import { isLoggedIn, isOwner, refreshAccountUi } from './auth.js';
 import { selectScene } from './pack.js';

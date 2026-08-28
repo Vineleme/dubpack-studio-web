@@ -16,6 +16,7 @@ export const PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 export const SESSION_USER_KEY = 'dubpack-user';
 export const REMEMBER_ME_KEY = 'dubpack-remember-me';
 export const USERS_KEY = 'dubpack-users';
+export const CREDIT_KEY = 'dubpack-credits';
 export const OWNER_EMAILS = [
   'viniciusleme@gmail.com',
   'vinicius.leme@gmail.com',
