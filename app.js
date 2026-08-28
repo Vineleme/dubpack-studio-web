@@ -3,7 +3,7 @@ const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 const VIDEO_EXTS = ['mp4', 'mov', 'webm', 'ogv', 'm4v'];
 const MAX_LINE_SECONDS = 600;
 const GUIDE_VOLUME = 0.08;
-const BED_VOLUME = 0.04;
+const BED_VOLUME = 0.03;
 const BED_EXPORT = 0.4;
 const BED_DUCK = 0.09;
 const TAKE_PEAK_TARGET = 0.62;
@@ -226,7 +226,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=59').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=60').catch(() => undefined);
 }
 
 function bindUi() {
