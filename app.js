@@ -79,6 +79,7 @@ const state = {
   playbackStops: [],
   previewing: false,
   previewGen: 0,
+  sceneMediaActive: false,
   toastTimer: null,
   saveTimer: null,
   objectUrls: [],
@@ -1184,9 +1185,12 @@ async function startTakeFlow() {
     return;
   }
 
-  abortCapture();
+  clearCaptureTimers();
   stopActivePlayback();
-  const gen = state.captureGen;
+  state.sceneMediaActive = false;
+  if (els.sceneVideo) els.sceneVideo.pause();
+  if (state.liveStream) stopStream();
+  const gen = ++state.captureGen;
   await wait(isPhone() ? 80 : 0);
   let stream;
   try {
@@ -1342,25 +1346,31 @@ function recordActiveScene() {
   state.recorder.onstop = async () => {
     clearTimeout(state.videoTimer);
     state.videoTimer = null;
+    state.sceneMediaActive = false;
     els.sceneVideo?.pause();
-    await wait(180);
-    const elapsed = (Date.now() - startedAt) / 1000;
-    const livePeak = state.recordPeak;
-    stopStream();
-    stopMeter();
+
+    const endedStream = stream;
     const discarded = state.ignoreRecorderStop;
     state.ignoreRecorderStop = false;
     state.recorder = null;
-    if (discarded) return;
 
     const pack = currentPack();
-    if (!pack) return;
+    if (discarded || !pack) {
+      stopStreamIf(endedStream);
+      stopMeter();
+      return;
+    }
+
     const blob = new Blob(state.chunks, { type: state.chunks[0]?.type || mimeType || 'audio/webm' });
     if (blob.size < 400) {
+      stopStreamIf(endedStream);
+      stopMeter();
       toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo.');
       selectScene(state.activeIndex);
       return;
     }
+    const elapsed = (Date.now() - startedAt) / 1000;
+    const livePeak = state.recordPeak;
     let decodedPeak = 0;
     let decoded = false;
     try {
@@ -1386,6 +1396,8 @@ function recordActiveScene() {
       release: profile.release,
       voiced: profile.voiced
     };
+    stopStreamIf(endedStream);
+    stopMeter();
     selectScene(state.activeIndex);
     scheduleSave();
     if (voicePeak < 0.14) {
@@ -1431,6 +1443,7 @@ function recordActiveScene() {
       state.recorder.start(250);
     }
   }
+  startMeter(stream);
   state.recordStopTimer = setTimeout(() => {
     if (state.recorder?.state === 'recording') {
       try {
@@ -1508,6 +1521,7 @@ function playCurrentTake() {
   }
   void unlockAudio();
   stopActivePlayback();
+  if (take.url) audioBufferCache.delete(take.url);
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
   const layers = [
@@ -1517,7 +1531,9 @@ function playCurrentTake() {
   if (isIOS()) {
     playLayersHtml(layers, scene.duration);
   } else {
-    void playLayers(layers, scene.duration).catch(() => toast(iosAudioHint()));
+    void playLayers(layers, scene.duration).catch(() => {
+      playLayersHtml(layers, scene.duration);
+    });
   }
 }
 
@@ -1557,6 +1573,7 @@ function bindSceneVisual(scene) {
 }
 
 function playSceneMedia(scene, duration) {
+  state.sceneMediaActive = true;
   if (scene.imageUrl && els.sceneImage) {
     els.sceneImage.style.display = 'block';
     if (els.sceneVideo) els.sceneVideo.style.display = 'none';
@@ -1576,6 +1593,7 @@ function playSceneMedia(scene, duration) {
   video.play().catch(() => undefined);
   clearTimeout(state.videoTimer);
   state.videoTimer = setTimeout(() => {
+    state.sceneMediaActive = false;
     video.pause();
     showSceneStill(scene);
   }, duration * 1000);
@@ -1599,7 +1617,7 @@ function showSceneStill(scene) {
   if (video.readyState >= 2) apply();
   else video.addEventListener('loadeddata', apply, { once: true });
   video.addEventListener('seeked', () => {
-    if (!state.previewing && !state.recorder) video.pause();
+    if (!state.sceneMediaActive && !state.previewing && !state.recorder) video.pause();
   }, { once: true });
 }
 
@@ -1961,22 +1979,32 @@ function takePlaceholder(text) {
   return card;
 }
 
-function abortCapture({ keepPreview = false } = {}) {
-  state.captureGen += 1;
+function clearCaptureTimers() {
   clearInterval(state.countdownTimer);
   clearTimeout(state.countdownStartTimer);
   clearInterval(state.recordingTimer);
   clearTimeout(state.recordStopTimer);
   clearInterval(state.progressTimer);
-  clearTimeout(state.playbackTimer);
-  clearTimeout(state.videoTimer);
   state.countdownTimer = null;
   state.countdownStartTimer = null;
   state.recordingTimer = null;
   state.recordStopTimer = null;
   state.progressTimer = null;
+}
+
+function stopStreamIf(stream) {
+  if (!stream || state.liveStream !== stream) return;
+  stopStream();
+}
+
+function abortCapture({ keepPreview = false } = {}) {
+  state.captureGen += 1;
+  clearCaptureTimers();
+  clearTimeout(state.playbackTimer);
+  clearTimeout(state.videoTimer);
   state.playbackTimer = null;
   state.videoTimer = null;
+  state.sceneMediaActive = false;
   els.countdownBadge && (els.countdownBadge.style.display = 'none');
   if (els.recordingOverlay) els.recordingOverlay.style.display = 'none';
   els.recordBtn?.classList.remove('recording');
