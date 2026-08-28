@@ -18,6 +18,14 @@ import { setTab } from './ui.js';
 import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packIsComplete, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
 import { ensureOgvPlayer, getStageOgv, ogvPaintSource, stageOgvMatches, urlLooksLikeOgg, waitForOgvFrame } from './ogv.js';
 
+export function exportTargetIsMp4() {
+  return isIOS();
+}
+
+export function exportFormatLabel() {
+  return exportTargetIsMp4() ? 'MP4' : 'WebM';
+}
+
 export async function downloadFinalMp4() {
   if (!isLoggedIn()) {
     requireAuth();
@@ -62,12 +70,12 @@ export async function requestFinalMp4() {
   }
   const recorded = pack.scenes.filter((scene) => pack.takes[scene.id]).length;
   if (!packIsComplete(pack)) {
-    toast(`Grave todas as falas para gerar o MP4. Faltam ${pack.scenes.length - recorded}.`);
+    toast(`Grave todas as falas para gerar o vídeo. Faltam ${pack.scenes.length - recorded}.`);
     setTab('record');
     return;
   }
   if (state.exporting) {
-    toast('Já estou montando o MP4.');
+    toast('Já estou montando o vídeo.');
     return;
   }
 
@@ -94,10 +102,11 @@ export async function requestFinalMp4() {
   }
 
   const watermarked = shouldWatermarkExport();
+  const targetMp4 = exportTargetIsMp4();
   if (watermarked && !viaAd) {
     toast(getLang() === 'en'
-      ? `Free plan: your MP4 includes a ${EXPORT_WATERMARK_LABEL} watermark. PRO removes it.`
-      : `Plano grátis: o MP4 sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
+      ? `Free plan: your ${exportFormatLabel()} includes a ${EXPORT_WATERMARK_LABEL} watermark. PRO removes it.`
+      : `Plano grátis: o ${exportFormatLabel()} sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
   } else if (watermarked && viaAd) {
     toast(getLang() === 'en'
       ? `Today's ad export includes a ${EXPORT_WATERMARK_LABEL} watermark.`
@@ -128,11 +137,11 @@ export async function requestFinalMp4() {
   try {
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
-    if (isIOS() && !composed.type.includes('mp4')) {
+    if (targetMp4 && !composed.type.includes('mp4')) {
       setExportProgress(92, 'Convertendo para MP4');
       output = await convertToMp4(composed);
     }
-    if (isIOS() && !output.type.includes('mp4')) {
+    if (targetMp4 && !output.type.includes('mp4')) {
       throw new Error(getLang() === 'en'
         ? 'Could not generate MP4 on this device. Try again on Wi‑Fi.'
         : 'Não consegui gerar MP4 neste aparelho. Tente de novo com Wi‑Fi ligado.');
@@ -190,8 +199,8 @@ export function pickVideoMime() {
     'video/webm;codecs=vp9,opus',
     'video/webm'
   ];
-  // iPhone: tenta MP4. Chrome/PC: WebM nativo, sem conversão.
-  const types = isIOS() ? [...mp4Types, ...webmTypes] : [...webmTypes, ...mp4Types];
+  // iPhone/Safari: MP4. Desktop/Android: WebM direto, sem conversão.
+  const types = exportTargetIsMp4() ? [...mp4Types, ...webmTypes] : webmTypes;
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -357,7 +366,6 @@ async function runSeekDrivenFilm(film, durationSec, onTick) {
 export async function openOgvFilm(url, onProgress) {
   onProgress?.(12, 'Abrindo o vídeo Choicer');
   const Player = await ensureOgvPlayer();
-  onProgress?.(18, 'Preparando o filme da cena');
   let player;
   let paintCanvas;
   let painting = true;
@@ -366,9 +374,9 @@ export async function openOgvFilm(url, onProgress) {
   if (stageOgvMatches(url)) {
     player = getStageOgv();
     reused = Boolean(player);
-  }
-
-  if (!player) {
+    onProgress?.(18, reused ? 'Reutilizando o filme do palco' : 'Preparando o filme da cena');
+  } else {
+    onProgress?.(18, 'Preparando o filme da cena');
     player = new Player({ wasm: true, webGL: false });
     player.muted = true;
     player.setAttribute('playsinline', '');
@@ -376,7 +384,7 @@ export async function openOgvFilm(url, onProgress) {
     els.finalVideoWrap.appendChild(player);
     player.src = url;
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), 45000);
+      const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), isPhone() ? 60000 : 45000);
       const ok = () => {
         clearTimeout(timer);
         resolve();
@@ -406,13 +414,32 @@ export async function openOgvFilm(url, onProgress) {
   };
   paint();
 
-  onProgress?.(22, 'Decodificando o filme .ogv');
-  const primed = await waitForOgvFrame(player, paintCanvas, reused ? 15000 : 45000);
+  onProgress?.(20, 'Decodificando o filme');
+  const decodeTimeout = reused ? 25000 : (isPhone() ? 90000 : 60000);
+  let pulse = 20;
+  const pulseTimer = window.setInterval(() => {
+    pulse = Math.min(23.5, pulse + 0.35);
+    onProgress?.(Math.round(pulse), 'Decodificando o filme');
+  }, 700);
+  await player.play?.()?.catch?.(() => undefined);
+  let primed = await waitForOgvFrame(player, paintCanvas, decodeTimeout);
+  window.clearInterval(pulseTimer);
+
+  if (!primed && reused) {
+    onProgress?.(21, 'Reabrindo o filme');
+    try { player.pause(); } catch { /* ignore */ }
+    player.src = url;
+    await player.play?.()?.catch?.(() => undefined);
+    primed = await waitForOgvFrame(player, paintCanvas, 45000);
+  }
+
   if (!primed) {
     throw new Error(getLang() === 'en'
       ? 'Could not decode the .ogv film. Re-import the ZIP on Wi‑Fi.'
       : 'Não consegui decodificar o filme .ogv. Importe o ZIP de novo com Wi‑Fi.');
   }
+
+  onProgress?.(24, 'Filme pronto');
 
   return {
     duration: Number(player.duration) || 0,
@@ -719,18 +746,20 @@ export async function composeDubbedVideo(pack, onProgress) {
     }
 
     const takeBuffers = [];
-    for (let index = 0; index < takeWindows.length; index += 1) {
-      const win = takeWindows[index];
-      setExportProgress(20 + ((index + 1) / Math.max(1, takeWindows.length)) * 8, 'Preparando as vozes');
+    let decoded = 0;
+    const decodedTakes = await Promise.all(takeWindows.map(async (win) => {
       try {
-        takeBuffers.push({
-          ...win,
-          buffer: await decodeAudioFrom(audioCtx, win.take.blob, win.take.url)
-        });
+        const buffer = await decodeAudioFrom(audioCtx, win.take.blob, win.take.url);
+        decoded += 1;
+        setExportProgress(20 + (decoded / Math.max(1, takeWindows.length)) * 8, 'Preparando as vozes');
+        return { ...win, buffer };
       } catch {
-        // Sem take decodificado, a fala original do filme fica.
+        decoded += 1;
+        setExportProgress(20 + (decoded / Math.max(1, takeWindows.length)) * 8, 'Preparando as vozes');
+        return null;
       }
-    }
+    }));
+    takeBuffers.push(...decodedTakes.filter(Boolean));
 
     if (!playBacking) {
       try {
@@ -743,7 +772,7 @@ export async function composeDubbedVideo(pack, onProgress) {
     const watermarked = shouldWatermarkExport();
     setExportProgress(24, 'Preparando o filme da cena');
     await film.play()?.catch?.(() => undefined);
-    const frameReady = await waitForFilmReady(film, { needTime: false, timeoutMs: 30000 });
+    const frameReady = await waitForFilmReady(film, { needTime: false, timeoutMs: isPhone() ? 45000 : 30000 });
     if (!frameReady) {
       throw new Error(getLang() === 'en'
         ? 'Could not decode the scene video. Re-import the ZIP and try again on Wi‑Fi.'
@@ -867,6 +896,7 @@ export async function loadFfmpeg() {
 }
 
 export async function convertToMp4(blob) {
+  if (!exportTargetIsMp4()) return blob;
   const mobile = isPhone();
   const work = (async () => {
     setExportProgress(92, 'Carregando conversor MP4');

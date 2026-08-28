@@ -15,7 +15,7 @@ import {
   PRO_MAX_ZIP_BYTES
 } from './constants.js';
 import { state } from './state.js';
-import { isIOS, normalizeEmail } from './utils.js';
+import { normalizeEmail } from './utils.js';
 import { urlLooksLikeOgg } from './ogv.js';
 
 function readProState(email = state.user?.email) {
@@ -127,7 +127,6 @@ export function canUseAdExport(email = state.user?.email) {
 
 export async function needsAdvancedExport(pack) {
   if (!pack) return false;
-  if (isIOS()) return true;
   if (pack.filmUrl && await urlLooksLikeOgg(pack.filmUrl)) return true;
   for (const scene of pack.scenes || []) {
     if (scene.videoUrl && await urlLooksLikeOgg(scene.videoUrl)) return true;
