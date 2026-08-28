@@ -101,3 +101,27 @@ export function pauseStageOgv() {
 export function getStageOgv() {
   return stageOgvPlayer;
 }
+
+export function stageOgvMatches(url) {
+  return Boolean(stageOgvPlayer && stageOgvUrl && stageOgvUrl === url);
+}
+
+export async function waitForOgvFrame(player, fallbackCanvas, timeoutMs = 45000) {
+  if (!player) return false;
+  await player.play?.()?.catch?.(() => undefined);
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    const from = player._canvas || player.querySelector?.('canvas');
+    const w = player.videoWidth || from?.width || fallbackCanvas?.width || 0;
+    const h = player.videoHeight || from?.height || fallbackCanvas?.height || 0;
+    if (w > 1 && h > 1) return true;
+    await wait(60);
+  }
+  return false;
+}
+
+export function ogvPaintSource(player, fallbackCanvas) {
+  const from = player?._canvas || player?.querySelector?.('canvas');
+  if (from && from.width > 1 && from.height > 1) return from;
+  return fallbackCanvas || from || player;
+}

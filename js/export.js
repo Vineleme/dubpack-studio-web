@@ -9,7 +9,7 @@ import { stopProjectPreview } from './playback.js';
 import { abortCapture } from './recorder.js';
 import { setTab } from './ui.js';
 import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packIsComplete, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
-import { ensureOgvPlayer, urlLooksLikeOgg } from './ogv.js';
+import { ensureOgvPlayer, getStageOgv, ogvPaintSource, stageOgvMatches, urlLooksLikeOgg, waitForOgvFrame } from './ogv.js';
 
 export async function downloadFinalMp4() {
   if (!isLoggedIn()) {
@@ -222,20 +222,22 @@ export function loadExportVideo(src) {
   });
 }
 
-export async function waitForFilmReady(film, { needTime = false } = {}) {
-  const deadline = performance.now() + 15000;
+export async function waitForFilmReady(film, { needTime = false, timeoutMs = 20000 } = {}) {
+  await film.play?.()?.catch?.(() => undefined);
+  const deadline = performance.now() + timeoutMs;
   let lastTime = film.currentTime?.() || 0;
   let advanced = false;
   while (performance.now() < deadline) {
+    const dims = film.getDimensions?.();
     const source = film.getPaintSource?.();
-    const w = source?.videoWidth || source?.width || 0;
-    const h = source?.videoHeight || source?.height || 0;
+    const w = dims?.w || source?.videoWidth || source?.width || 0;
+    const h = dims?.h || source?.videoHeight || source?.height || 0;
     const t = film.currentTime?.() || 0;
     if (t > lastTime + 0.01) advanced = true;
     lastTime = Math.max(lastTime, t);
     const hasFrame = w > 1 && h > 1;
     if (hasFrame && (!needTime || advanced || t > 0.02 || film.isPlaying?.())) return true;
-    await wait(50);
+    await wait(60);
   }
   return false;
 }
@@ -322,57 +324,86 @@ export async function openOgvFilm(url, onProgress) {
   onProgress?.(12, 'Abrindo o vídeo Choicer');
   const Player = await ensureOgvPlayer();
   onProgress?.(18, 'Preparando o filme da cena');
-  const player = new Player({ wasm: true, webGL: false });
-  player.muted = true;
-  player.setAttribute('playsinline', '');
-  player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
-  els.finalVideoWrap.appendChild(player);
-  player.src = url;
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), 25000);
-    const ok = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    player.addEventListener('loadedmetadata', ok, { once: true });
-    player.addEventListener('canplay', ok, { once: true });
-    player.addEventListener('error', () => {
-      clearTimeout(timer);
-      reject(new Error('Não deu para ler o vídeo da cena do pack.'));
-    }, { once: true });
-  });
-  const paintCanvas = document.createElement('canvas');
+  let player;
+  let paintCanvas;
+  let painting = true;
+  let reused = false;
+
+  if (stageOgvMatches(url)) {
+    player = getStageOgv();
+    reused = Boolean(player);
+  }
+
+  if (!player) {
+    player = new Player({ wasm: true, webGL: false });
+    player.muted = true;
+    player.setAttribute('playsinline', '');
+    player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
+    els.finalVideoWrap.appendChild(player);
+    player.src = url;
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), 45000);
+      const ok = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      player.addEventListener('loadedmetadata', ok, { once: true });
+      player.addEventListener('canplay', ok, { once: true });
+      player.addEventListener('error', () => {
+        clearTimeout(timer);
+        reject(new Error('Não deu para ler o vídeo da cena do pack.'));
+      }, { once: true });
+    });
+  }
+
+  paintCanvas = document.createElement('canvas');
   paintCanvas.width = Math.max(640, player.videoWidth || 1280);
   paintCanvas.height = Math.max(360, player.videoHeight || 720);
-  paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4';
-  els.finalVideoWrap.appendChild(paintCanvas);
+  if (!reused) {
+    paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4';
+    els.finalVideoWrap.appendChild(paintCanvas);
+  }
   const ctx = paintCanvas.getContext('2d', { alpha: false, desynchronized: true });
-  let painting = true;
   const paint = () => {
     if (!painting) return;
     const from = player._canvas || player.querySelector('canvas');
-    if (from) ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height);
+    if (from && from.width > 1) ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height);
     requestAnimationFrame(paint);
   };
   paint();
+
+  onProgress?.(22, 'Decodificando o filme .ogv');
+  const primed = await waitForOgvFrame(player, paintCanvas, reused ? 15000 : 45000);
+  if (!primed) {
+    throw new Error(getLang() === 'en'
+      ? 'Could not decode the .ogv film. Re-import the ZIP on Wi‑Fi.'
+      : 'Não consegui decodificar o filme .ogv. Importe o ZIP de novo com Wi‑Fi.');
+  }
+
   return {
     duration: Number(player.duration) || 0,
     srcUrl: url,
     currentTime: () => Number(player.currentTime) || 0,
     isPlaying: () => !player.paused && !player.ended,
+    getDimensions: () => ({
+      w: player.videoWidth || paintCanvas.width,
+      h: player.videoHeight || paintCanvas.height
+    }),
     play: () => player.play(),
     pause: () => player.pause(),
     seekTo: async (time = 0) => {
       try { player.currentTime = time; } catch { /* ignore */ }
-      await wait(40);
+      await wait(80);
     },
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
-    getPaintSource: () => player._canvas || player.querySelector('canvas') || paintCanvas,
+    getPaintSource: () => ogvPaintSource(player, paintCanvas),
     getTrack: () => null,
     stop: () => {
       painting = false;
-      try { player.pause(); } catch { /* ignore */ }
-      player.remove();
+      if (!reused) {
+        try { player.pause(); } catch { /* ignore */ }
+        player.remove();
+      }
       paintCanvas.remove();
     }
   };
@@ -677,7 +708,8 @@ export async function composeDubbedVideo(pack, onProgress) {
 
     const watermarked = shouldWatermarkExport();
     setExportProgress(24, 'Preparando o filme da cena');
-    const frameReady = await waitForFilmReady(film, { needTime: false });
+    await film.play()?.catch?.(() => undefined);
+    const frameReady = await waitForFilmReady(film, { needTime: false, timeoutMs: 30000 });
     if (!frameReady) {
       throw new Error(getLang() === 'en'
         ? 'Could not decode the scene video. Re-import the ZIP and try again on Wi‑Fi.'
