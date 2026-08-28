@@ -231,7 +231,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=63').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=64').catch(() => undefined);
 }
 
 function bindUi() {
@@ -2637,7 +2637,8 @@ function pickVideoMime() {
     'video/webm;codecs=vp8,opus',
     'video/webm'
   ];
-  const types = [...mp4Types, ...webmTypes];
+  // iPhone: MP4 direto. Chrome/desktop: WebM na gravação → FFmpeg converte para MP4.
+  const types = isIOS() ? [...mp4Types, ...webmTypes] : [...webmTypes, ...mp4Types];
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -2718,11 +2719,15 @@ function loadExportVideo(src) {
   });
 }
 
-async function waitForVideoFrame(video) {
-  const deadline = performance.now() + 6000;
+async function waitForFilmReady(film) {
+  const deadline = performance.now() + 8000;
   while (performance.now() < deadline) {
-    if (!video.paused && video.readyState >= 2 && video.videoWidth > 1) return true;
-    await wait(40);
+    const source = film.getPaintSource?.();
+    const w = source?.videoWidth || source?.width || 0;
+    const h = source?.videoHeight || source?.height || 0;
+    const t = film.currentTime?.() || 0;
+    if (w > 1 && h > 1 && t >= 0) return true;
+    await wait(50);
   }
   return false;
 }
@@ -3125,8 +3130,8 @@ async function composeDubbedVideo(pack, onProgress) {
     } catch {
       recorder = new MediaRecorder(mixed);
     }
-    recorder.onerror = () => {
-      chunks.length = 0;
+    recorder.onerror = (event) => {
+      console.warn('MediaRecorder export error', event);
     };
     recorder.ondataavailable = (event) => {
       if (event.data?.size) chunks.push(event.data);
@@ -3136,11 +3141,12 @@ async function composeDubbedVideo(pack, onProgress) {
     });
 
     if (bed) bed.el.currentTime = 0;
-    recorder.start(isIOS() ? 100 : 250);
-    recordingStarted = true;
     await film.play()?.catch?.(() => undefined);
     if (bed) await bed.el.play().catch(() => undefined);
-    const t0 = audioCtx.currentTime;
+    await waitForFilmReady(film);
+    recorder.start(isIOS() ? 100 : 250);
+    recordingStarted = true;
+    const t0 = audioCtx.currentTime + 0.05;
     const bedGain = playBacking?.(t0) || bed?.gain;
     if (bedGain && takeBuffers.length) duckDuringTakes(bedGain, t0, takeBuffers);
     takeBuffers.forEach((win) => {
@@ -3162,7 +3168,7 @@ async function composeDubbedVideo(pack, onProgress) {
     if (recordingStarted && recorder) {
       if (recorder.state === 'recording') {
         recorder.requestData();
-        await wait(400);
+        await wait(isIOS() ? 400 : 900);
         recorder.stop();
       }
       await stopped;
