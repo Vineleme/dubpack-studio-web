@@ -222,9 +222,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
-      return script.includes('sw.js?v=84') ? Promise.resolve() : reg.unregister();
+      return script.includes('sw.js?v=85') ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register('./sw.js?v=84'))
+    .then(() => navigator.serviceWorker.register('./sw.js?v=85'))
     .catch(() => undefined);
 }
 
@@ -1467,28 +1467,7 @@ function recordActiveScene() {
   els.recordBtn.setAttribute('aria-label', 'Parar');
   els.micHint.textContent = 'Fale agora · o filme fica parado nesta fala';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
-  if (scene.videoUrl && els.sceneVideo) {
-    if (els.sceneImage) els.sceneImage.style.display = 'none';
-    const video = els.sceneVideo;
-    video.muted = true;
-    video.playsInline = true;
-    video.style.display = 'block';
-    if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
-    const start = Number(scene.videoOffset) || 0;
-    try {
-      video.currentTime = start;
-    } catch {
-      // ignore
-    }
-    video.play().catch(() => undefined);
-    clearTimeout(state.videoTimer);
-    state.videoTimer = setTimeout(() => {
-      video.pause();
-      showSceneStill(scene);
-    }, recMs);
-  } else {
-    els.sceneVideo?.pause();
-  }
+  els.sceneVideo?.pause();
   animateProgress(recMs / 1000);
 
   state.recordingTimer = setInterval(() => {
