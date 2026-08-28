@@ -79,7 +79,6 @@ const state = {
   playbackStops: [],
   previewing: false,
   previewGen: 0,
-  sceneMediaActive: false,
   toastTimer: null,
   saveTimer: null,
   objectUrls: [],
@@ -1017,10 +1016,10 @@ function setTab(tab) {
   if (tab === 'packs') renderActivity();
 }
 
-function selectScene(index, { keepCapture = false } = {}) {
+function selectScene(index) {
   const pack = currentPack();
   if (!pack?.scenes.length) return;
-  if (!keepCapture) abortCapture({ keepPreview: state.previewing });
+  abortCapture({ keepPreview: state.previewing });
   state.activeIndex = Math.max(0, Math.min(index, pack.scenes.length - 1));
   const scene = currentScene();
   const take = pack.takes[scene.id];
@@ -1147,7 +1146,12 @@ function playReference() {
   stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
-  playLayersHtml([{ url: scene.audioUrl, volume: 1 }], scene.duration);
+  const layers = [{ url: scene.audioUrl, volume: 1 }];
+  if (isIOS()) {
+    playLayersHtml(layers, scene.duration);
+  } else {
+    void playLayers(layers, scene.duration).catch(() => toast(iosAudioHint()));
+  }
 }
 
 function iosAudioHint() {
@@ -1180,14 +1184,10 @@ async function startTakeFlow() {
     return;
   }
 
-  clearCaptureTimers();
+  abortCapture();
   stopActivePlayback();
-  state.sceneMediaActive = false;
-  if (els.sceneVideo) els.sceneVideo.pause();
-  if (state.liveStream) stopStream();
-  stopMeter();
-  const gen = ++state.captureGen;
-  await wait(isPhone() ? 80 : 150);
+  const gen = state.captureGen;
+  await wait(isPhone() ? 80 : 0);
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -1333,45 +1333,35 @@ function recordActiveScene() {
     state.recorder = new MediaRecorder(stream);
   }
   const startedAt = Date.now();
-  const lineSeconds = Math.max(1.6, Number(scene.duration) || 2);
-  const recMs = Math.round(lineSeconds * 1000);
+  const recMs = Math.round(Math.max(1.6, Number(scene.duration) || 2) * 1000);
 
   state.recorder.ondataavailable = (event) => {
     if (event.data?.size) state.chunks.push(event.data);
   };
   state.recorder.onstop = async () => {
-    await wait(80);
-    clearTimeout(state.videoTimer);
-    state.videoTimer = null;
-    state.sceneMediaActive = false;
-    els.sceneVideo?.pause();
-
-    const endedStream = stream;
+    await wait(180);
+    const elapsed = (Date.now() - startedAt) / 1000;
+    const livePeak = state.recordPeak;
+    stopStream();
+    stopMeter();
     const discarded = state.ignoreRecorderStop;
     state.ignoreRecorderStop = false;
     state.recorder = null;
+    if (discarded) return;
 
     const pack = currentPack();
-    if (discarded || !pack) {
-      stopStreamIf(endedStream);
-      stopMeter();
-      return;
-    }
-
-    const blobType = state.chunks[0]?.type || mimeType || 'audio/webm';
-    const blob = new Blob(state.chunks, { type: blobType });
+    if (!pack) return;
+    const blob = new Blob(state.chunks, { type: state.chunks[0]?.type || mimeType || 'audio/webm' });
     if (blob.size < 400) {
-      stopStreamIf(endedStream);
-      stopMeter();
-      toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo.');
-      selectScene(state.activeIndex, { keepCapture: true });
+      toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo, sem o filme tocando.');
+      selectScene(state.activeIndex);
       return;
     }
-    const elapsed = (Date.now() - startedAt) / 1000;
-    const livePeak = state.recordPeak;
     let decodedPeak = 0;
+    let decoded = false;
     try {
       decodedPeak = await measureBlobPeak(blob);
+      decoded = true;
     } catch {
       decodedPeak = 0;
     }
@@ -1392,9 +1382,7 @@ function recordActiveScene() {
       release: profile.release,
       voiced: profile.voiced
     };
-    stopStreamIf(endedStream);
-    stopMeter();
-    selectScene(state.activeIndex, { keepCapture: true });
+    selectScene(state.activeIndex);
     scheduleSave();
     if (voicePeak < 0.14) {
       toast('Volume baixo. Fale mais perto do microfone e grave de novo.');
@@ -1416,9 +1404,10 @@ function recordActiveScene() {
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
   els.recordBtn.setAttribute('aria-label', 'Parar');
-  els.micHint.textContent = scene.videoUrl ? t('record.mic.live') : t('record.mic.live.still');
+  els.micHint.textContent = 'Fale agora · o filme fica parado nesta fala';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
-  animateProgress(lineSeconds);
+  els.sceneVideo?.pause();
+  animateProgress(recMs / 1000);
 
   state.recordingTimer = setInterval(() => {
     const remaining = Math.max(0, (recMs / 1000) - ((Date.now() - startedAt) / 1000));
@@ -1426,7 +1415,11 @@ function recordActiveScene() {
   }, 100);
 
   try {
-    state.recorder.start(isIOS() ? 100 : 250);
+    if (isIOS()) {
+      state.recorder.start(100);
+    } else {
+      state.recorder.start(250);
+    }
   } catch {
     try {
       state.recorder.start();
@@ -1434,8 +1427,6 @@ function recordActiveScene() {
       state.recorder.start(250);
     }
   }
-  startMeter(stream);
-  playSceneMedia(scene, lineSeconds);
   state.recordStopTimer = setTimeout(() => {
     if (state.recorder?.state === 'recording') {
       try {
@@ -1513,17 +1504,17 @@ function playCurrentTake() {
   }
   void unlockAudio();
   stopActivePlayback();
-  if (take.url) audioBufferCache.delete(take.url);
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
-  const takeUrl = take.blob
-    ? rememberUrl(URL.createObjectURL(take.blob))
-    : take.url;
   const layers = [
-    { url: takeUrl, volume: 1 },
+    { url: take.url, volume: 1 },
     { url: scene.audioUrl, volume: BED_VOLUME }
-  ].filter((layer) => layer.url);
-  playLayersHtml(layers, Math.max(scene.duration, Number(take.duration) || scene.duration));
+  ];
+  if (isIOS()) {
+    playLayersHtml(layers, scene.duration);
+  } else {
+    void playLayers(layers, scene.duration).catch(() => toast(iosAudioHint()));
+  }
 }
 
 function bindSceneVisual(scene) {
@@ -1531,20 +1522,6 @@ function bindSceneVisual(scene) {
   const image = els.sceneImage;
   const empty = els.emptyFrame;
   if (!video || !image || !empty) return;
-
-  if (scene.videoUrl) {
-    image.style.display = 'none';
-    empty.style.display = 'none';
-    empty.replaceChildren();
-    video.style.display = 'block';
-    video.muted = true;
-    video.playsInline = true;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('muted', '');
-    if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
-    showSceneStill(scene);
-    return;
-  }
 
   if (scene.imageUrl) {
     video.pause();
@@ -1556,6 +1533,18 @@ function bindSceneVisual(scene) {
     return;
   }
 
+  if (scene.videoUrl) {
+    image.style.display = 'none';
+    empty.style.display = 'none';
+    empty.replaceChildren();
+    video.style.display = 'block';
+    video.muted = true;
+    video.playsInline = true;
+    if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
+    showSceneStill(scene);
+    return;
+  }
+
   video.pause();
   if (video.src) video.removeAttribute('src');
   video.style.display = 'none';
@@ -1564,51 +1553,28 @@ function bindSceneVisual(scene) {
 }
 
 function playSceneMedia(scene, duration) {
-  state.sceneMediaActive = true;
-  const video = els.sceneVideo;
-  const image = els.sceneImage;
-  const empty = els.emptyFrame;
-  if (scene.videoUrl && video) {
-    if (image) image.style.display = 'none';
-    if (empty) empty.style.display = 'none';
-    video.muted = true;
-    video.playsInline = true;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('muted', '');
-    video.style.display = 'block';
-    if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
-    const start = Number(scene.videoOffset) || 0;
-    const kick = () => {
-      if (!state.sceneMediaActive || currentScene()?.id !== scene.id) return;
-      const playNow = () => {
-        if (!state.sceneMediaActive) return;
-        video.play().catch(() => undefined);
-      };
-      try {
-        if (Math.abs((video.currentTime || 0) - start) > 0.12) {
-          video.addEventListener('seeked', playNow, { once: true });
-          video.currentTime = start;
-        } else {
-          playNow();
-        }
-      } catch {
-        playNow();
-      }
-    };
-    if (video.readyState >= 2) kick();
-    else video.addEventListener('loadeddata', kick, { once: true });
-    clearTimeout(state.videoTimer);
-    state.videoTimer = setTimeout(() => {
-      state.sceneMediaActive = false;
-      video.pause();
-      showSceneStill(scene);
-    }, Math.max(0.4, Number(duration) || 1) * 1000);
+  if (scene.imageUrl && els.sceneImage) {
+    els.sceneImage.style.display = 'block';
+    if (els.sceneVideo) els.sceneVideo.style.display = 'none';
     return;
   }
-  if (scene.imageUrl && image) {
-    image.style.display = 'block';
-    if (video) video.style.display = 'none';
+  if (!scene.videoUrl || !els.sceneVideo) return;
+  const video = els.sceneVideo;
+  video.muted = true;
+  video.playsInline = true;
+  video.style.display = 'block';
+  const start = Number(scene.videoOffset) || 0;
+  try {
+    video.currentTime = start;
+  } catch {
+    // ignore
   }
+  video.play().catch(() => undefined);
+  clearTimeout(state.videoTimer);
+  state.videoTimer = setTimeout(() => {
+    video.pause();
+    showSceneStill(scene);
+  }, duration * 1000);
 }
 
 function showSceneStill(scene) {
@@ -1629,7 +1595,7 @@ function showSceneStill(scene) {
   if (video.readyState >= 2) apply();
   else video.addEventListener('loadeddata', apply, { once: true });
   video.addEventListener('seeked', () => {
-    if (!state.sceneMediaActive && !state.previewing && !state.recorder) video.pause();
+    if (!state.previewing && !state.recorder) video.pause();
   }, { once: true });
 }
 
@@ -1687,10 +1653,9 @@ async function playLayers(layers, duration) {
 
 function playLayersHtml(layers, duration) {
   state.activeAudios = layers.map((layer) => {
-    const audio = new Audio();
+    const audio = new Audio(layer.url);
     audio.preload = 'auto';
     audio.volume = Math.min(1, layer.volume);
-    audio.src = layer.url;
     const playPromise = audio.play();
     if (playPromise) {
       playPromise.catch(() => toast(iosAudioHint()));
@@ -1992,32 +1957,22 @@ function takePlaceholder(text) {
   return card;
 }
 
-function clearCaptureTimers() {
+function abortCapture({ keepPreview = false } = {}) {
+  state.captureGen += 1;
   clearInterval(state.countdownTimer);
   clearTimeout(state.countdownStartTimer);
   clearInterval(state.recordingTimer);
   clearTimeout(state.recordStopTimer);
   clearInterval(state.progressTimer);
+  clearTimeout(state.playbackTimer);
+  clearTimeout(state.videoTimer);
   state.countdownTimer = null;
   state.countdownStartTimer = null;
   state.recordingTimer = null;
   state.recordStopTimer = null;
   state.progressTimer = null;
-}
-
-function stopStreamIf(stream) {
-  if (!stream || state.liveStream !== stream) return;
-  stopStream();
-}
-
-function abortCapture({ keepPreview = false } = {}) {
-  state.captureGen += 1;
-  clearCaptureTimers();
-  clearTimeout(state.playbackTimer);
-  clearTimeout(state.videoTimer);
   state.playbackTimer = null;
   state.videoTimer = null;
-  state.sceneMediaActive = false;
   els.countdownBadge && (els.countdownBadge.style.display = 'none');
   if (els.recordingOverlay) els.recordingOverlay.style.display = 'none';
   els.recordBtn?.classList.remove('recording');
@@ -2096,14 +2051,9 @@ function startMeter(stream) {
   if (!stream) return;
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx) return;
-  try {
-    state.meterStream = stream.clone();
-  } catch {
-    state.meterStream = stream;
-  }
   state.audioContext = new AudioCtx();
   state.audioContext.resume?.();
-  const source = state.audioContext.createMediaStreamSource(state.meterStream);
+  const source = state.audioContext.createMediaStreamSource(stream);
   state.analyser = state.audioContext.createAnalyser();
   state.analyser.fftSize = 256;
   source.connect(state.analyser);
