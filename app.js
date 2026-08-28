@@ -1017,10 +1017,10 @@ function setTab(tab) {
   if (tab === 'packs') renderActivity();
 }
 
-function selectScene(index) {
+function selectScene(index, { keepCapture = false } = {}) {
   const pack = currentPack();
   if (!pack?.scenes.length) return;
-  abortCapture({ keepPreview: state.previewing });
+  if (!keepCapture) abortCapture({ keepPreview: state.previewing });
   state.activeIndex = Math.max(0, Math.min(index, pack.scenes.length - 1));
   const scene = currentScene();
   const take = pack.takes[scene.id];
@@ -1190,8 +1190,9 @@ async function startTakeFlow() {
   state.sceneMediaActive = false;
   if (els.sceneVideo) els.sceneVideo.pause();
   if (state.liveStream) stopStream();
+  stopMeter();
   const gen = ++state.captureGen;
-  await wait(isPhone() ? 80 : 0);
+  await wait(isPhone() ? 80 : 150);
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -1344,6 +1345,7 @@ function recordActiveScene() {
     if (event.data?.size) state.chunks.push(event.data);
   };
   state.recorder.onstop = async () => {
+    await wait(80);
     clearTimeout(state.videoTimer);
     state.videoTimer = null;
     state.sceneMediaActive = false;
@@ -1361,21 +1363,20 @@ function recordActiveScene() {
       return;
     }
 
-    const blob = new Blob(state.chunks, { type: state.chunks[0]?.type || mimeType || 'audio/webm' });
+    const blobType = state.chunks[0]?.type || mimeType || 'audio/webm';
+    const blob = new Blob(state.chunks, { type: blobType });
     if (blob.size < 400) {
       stopStreamIf(endedStream);
       stopMeter();
       toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo.');
-      selectScene(state.activeIndex);
+      selectScene(state.activeIndex, { keepCapture: true });
       return;
     }
     const elapsed = (Date.now() - startedAt) / 1000;
     const livePeak = state.recordPeak;
     let decodedPeak = 0;
-    let decoded = false;
     try {
       decodedPeak = await measureBlobPeak(blob);
-      decoded = true;
     } catch {
       decodedPeak = 0;
     }
@@ -1398,7 +1399,7 @@ function recordActiveScene() {
     };
     stopStreamIf(endedStream);
     stopMeter();
-    selectScene(state.activeIndex);
+    selectScene(state.activeIndex, { keepCapture: true });
     scheduleSave();
     if (voicePeak < 0.14) {
       toast('Volume baixo. Fale mais perto do microfone e grave de novo.');
@@ -1422,7 +1423,6 @@ function recordActiveScene() {
   els.recordBtn.setAttribute('aria-label', 'Parar');
   els.micHint.textContent = scene.videoUrl ? t('record.mic.live') : t('record.mic.live.still');
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
-  playSceneMedia(scene, lineSeconds);
   animateProgress(lineSeconds);
 
   state.recordingTimer = setInterval(() => {
@@ -1431,11 +1431,7 @@ function recordActiveScene() {
   }, 100);
 
   try {
-    if (isIOS()) {
-      state.recorder.start(100);
-    } else {
-      state.recorder.start(250);
-    }
+    state.recorder.start(isIOS() ? 100 : 250);
   } catch {
     try {
       state.recorder.start();
@@ -1444,6 +1440,7 @@ function recordActiveScene() {
     }
   }
   startMeter(stream);
+  playSceneMedia(scene, lineSeconds);
   state.recordStopTimer = setTimeout(() => {
     if (state.recorder?.state === 'recording') {
       try {
@@ -1524,17 +1521,14 @@ function playCurrentTake() {
   if (take.url) audioBufferCache.delete(take.url);
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
+  const takeUrl = take.blob
+    ? rememberUrl(URL.createObjectURL(take.blob))
+    : take.url;
   const layers = [
-    { url: take.url, volume: 1 },
+    { url: takeUrl, volume: 1 },
     { url: scene.audioUrl, volume: BED_VOLUME }
-  ];
-  if (isIOS()) {
-    playLayersHtml(layers, scene.duration);
-  } else {
-    void playLayers(layers, scene.duration).catch(() => {
-      playLayersHtml(layers, scene.duration);
-    });
-  }
+  ].filter((layer) => layer.url);
+  playLayersHtml(layers, Math.max(scene.duration, Number(take.duration) || scene.duration));
 }
 
 function bindSceneVisual(scene) {
@@ -1675,9 +1669,10 @@ async function playLayers(layers, duration) {
 
 function playLayersHtml(layers, duration) {
   state.activeAudios = layers.map((layer) => {
-    const audio = new Audio(layer.url);
+    const audio = new Audio();
     audio.preload = 'auto';
     audio.volume = Math.min(1, layer.volume);
+    audio.src = layer.url;
     const playPromise = audio.play();
     if (playPromise) {
       playPromise.catch(() => toast(iosAudioHint()));
@@ -2083,9 +2078,14 @@ function startMeter(stream) {
   if (!stream) return;
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx) return;
+  try {
+    state.meterStream = stream.clone();
+  } catch {
+    state.meterStream = stream;
+  }
   state.audioContext = new AudioCtx();
   state.audioContext.resume?.();
-  const source = state.audioContext.createMediaStreamSource(stream);
+  const source = state.audioContext.createMediaStreamSource(state.meterStream);
   state.analyser = state.audioContext.createAnalyser();
   state.analyser.fftSize = 256;
   source.connect(state.analyser);
