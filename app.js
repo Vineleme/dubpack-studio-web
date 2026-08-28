@@ -400,12 +400,8 @@ function ensureProMonthlyCredits() {
 }
 
 function subscribePro() {
-  if (isOwner()) {
-    toast('Conta de dono já tem acesso total.');
-    return;
-  }
-  if (isPro()) {
-    toast('Você já é DubPack PRO neste aparelho.');
+  if (isOwner() || isPro()) {
+    if (isPro() && !isOwner()) toast(t('toast.pro.already'));
     return;
   }
   const now = Date.now();
@@ -417,7 +413,7 @@ function subscribePro() {
   });
   ensureProMonthlyCredits();
   refreshAccountUi();
-  toast(`DubPack PRO ativo. +${PRO_MONTHLY_CREDITS} créditos neste mês.`);
+  toast(t('toast.pro.success', { credits: PRO_MONTHLY_CREDITS }));
 }
 
 function proStatusLabel() {
@@ -519,9 +515,7 @@ function refreshAccountUi() {
   if (els.userChipName) els.userChipName.textContent = user?.name || 'Conta';
   if (els.profileName) els.profileName.textContent = user?.name || 'Conta';
   if (els.profileMeta) {
-    els.profileMeta.textContent = owner
-      ? `${user.email} · dono do estúdio · créditos infinitos`
-      : `${user?.email || ''} · ${proStatusLabel()}`;
+    els.profileMeta.textContent = `${user?.email || ''} · ${proStatusLabel()}`;
   }
   if (els.proBtn) {
     els.proBtn.textContent = owner ? t('pro.btn.owner') : pro ? t('pro.btn.manage') : t('pro.btn');
@@ -628,7 +622,7 @@ async function finishLogin(account, options = {}) {
   showStudio();
   refreshAccountUi();
   if (showToast) {
-    toast(isOwner() ? 'Conta de dono ativa. Créditos infinitos.' : 'Conta pronta. Packs duram 2 dias.');
+    toast('Conta pronta. Packs duram 2 dias.');
   }
   releasePackSession();
   try {
@@ -2402,14 +2396,19 @@ function creditBadgeHtml(count) {
 
 function updateCreditUi() {
   const count = getCredits();
-  const label = creditLabel(count);
   const badgeHtml = creditBadgeHtml(count);
   if (els.creditBadge) {
-    els.creditBadge.innerHTML = isPro() && !isOwner() ? `PRO · ${badgeHtml}` : badgeHtml;
+    if (isOwner()) {
+      els.creditBadge.innerHTML = `<span class="credit-word">${t('plan.owner')}</span>`;
+    } else if (isPro()) {
+      els.creditBadge.innerHTML = `PRO · ${badgeHtml}`;
+    } else {
+      els.creditBadge.innerHTML = badgeHtml;
+    }
   }
-  if (els.creditsBalance) els.creditsBalance.innerHTML = badgeHtml;
+  if (els.creditsBalance) els.creditsBalance.innerHTML = isOwner() ? `<span class="credit-word">${t('plan.owner')}</span>` : badgeHtml;
   if (els.profileCreditsLine) {
-    els.profileCreditsLine.innerHTML = t('profile.body', { credits: badgeHtml });
+    els.profileCreditsLine.innerHTML = t('profile.body', { credits: isOwner() ? t('plan.owner') : badgeHtml });
   }
   if (els.proBtn) {
     els.proBtn.textContent = isOwner() ? t('pro.btn.owner') : isPro() ? t('pro.btn.manage') : t('pro.btn');
@@ -2419,13 +2418,6 @@ function updateCreditUi() {
 function renderCreditShop() {
   if (!els.creditShop) return;
   els.creditShop.replaceChildren();
-
-  if (isOwner()) {
-    const banner = document.createElement('div');
-    banner.className = 'shop-owner-banner';
-    banner.textContent = t('shop.owner.banner');
-    els.creditShop.append(banner);
-  }
 
   const tiersTitle = document.createElement('h3');
   tiersTitle.className = 'shop-section-title';
@@ -2505,7 +2497,7 @@ function renderCreditShop() {
 
 function buyCredits(pack) {
   setCredits(getCredits() + pack.credits);
-  toast(t('shop.buy.simulated', { label: pack.label }));
+  toast(t('shop.buy.success', { label: pack.label }));
 }
 
 function renderActivity() {
