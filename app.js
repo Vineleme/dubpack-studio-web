@@ -218,21 +218,14 @@ try {
 }
 bootApp();
 
-const SW_SCRIPT = './sw.js?v=81';
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
-      const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || '');
-      return script.includes('sw.js?v=81') ? Promise.resolve() : reg.unregister();
+      const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
+      return script.includes('sw.js?v=83') ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register(SW_SCRIPT))
-    .then((reg) => reg.update())
+    .then(() => navigator.serviceWorker.register('./sw.js?v=83'))
     .catch(() => undefined);
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (sessionStorage.getItem('dubpack-sw-81') === '1') return;
-    sessionStorage.setItem('dubpack-sw-81', '1');
-    location.reload();
-  });
 }
 
 function bindUi() {
@@ -1031,10 +1024,10 @@ function setTab(tab) {
   if (tab === 'packs') renderActivity();
 }
 
-function selectScene(index) {
+function selectScene(index, { keepCapture = false } = {}) {
   const pack = currentPack();
   if (!pack?.scenes.length) return;
-  abortCapture({ keepPreview: state.previewing });
+  if (!keepCapture) abortCapture({ keepPreview: state.previewing });
   state.activeIndex = Math.max(0, Math.min(index, pack.scenes.length - 1));
   const scene = currentScene();
   const take = pack.takes[scene.id];
@@ -1151,6 +1144,50 @@ function goNextScene() {
   selectScene(state.activeIndex + 1);
 }
 
+function playClickAudio(layers, duration) {
+  stopActivePlayback();
+  void ensurePlaybackAudio();
+  const items = layers.filter((layer) => layer.blob || layer.url);
+  state.activeAudios = items.map((layer) => {
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.volume = Math.min(1, Math.max(0, Number(layer.volume) || 1));
+    const blob = layer.blob || state.blobByUrl.get(layer.url);
+    audio.src = blob ? rememberUrl(URL.createObjectURL(blob), blob) : layer.url;
+    audio.play().catch(() => {
+      if (!blob) {
+        toast(iosAudioHint());
+        return;
+      }
+      void playBlobThroughContext(blob, audio.volume);
+    });
+    return audio;
+  });
+  state.activeAudio = state.activeAudios[0] || null;
+  clearTimeout(state.playbackTimer);
+  state.playbackTimer = setTimeout(stopActivePlayback, (Number(duration) || 2) * 1000);
+}
+
+async function playBlobThroughContext(blob, volume) {
+  try {
+    const ctx = await ensurePlaybackAudio();
+    if (!ctx) throw new Error('no-audio-context');
+    const decoded = await ctx.decodeAudioData((await blob.arrayBuffer()).slice(0));
+    const gain = ctx.createGain();
+    gain.gain.value = volume;
+    const source = ctx.createBufferSource();
+    source.buffer = decoded;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+    state.playbackStops.push(() => {
+      try { source.stop(0); } catch { /* ignore */ }
+    });
+  } catch {
+    toast(iosAudioHint());
+  }
+}
+
 function playReference() {
   const scene = currentScene();
   if (!scene?.audioUrl) {
@@ -1161,7 +1198,7 @@ function playReference() {
   stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
-  playLayersHtml([{ url: scene.audioUrl, volume: 1 }], scene.duration);
+  playClickAudio([{ url: scene.audioUrl, volume: 1 }], scene.duration);
 }
 
 function iosAudioHint() {
@@ -1180,7 +1217,7 @@ async function startTakeFlow() {
   if (state.previewing) stopProjectPreview();
   if (state.countdownTimer || state.countdownStartTimer) {
     abortCapture();
-    selectScene(state.activeIndex);
+    selectScene(state.activeIndex, { keepCapture: true });
     toast('Countdown cancelado.');
     return;
   }
@@ -1194,10 +1231,24 @@ async function startTakeFlow() {
     return;
   }
 
-  abortCapture();
   stopActivePlayback();
-  const gen = state.captureGen;
-  await wait(isPhone() ? 80 : 0);
+  if (els.sceneVideo) els.sceneVideo.pause();
+  clearInterval(state.countdownTimer);
+  clearTimeout(state.countdownStartTimer);
+  clearInterval(state.recordingTimer);
+  clearTimeout(state.recordStopTimer);
+  state.countdownTimer = null;
+  state.countdownStartTimer = null;
+  state.recordingTimer = null;
+  state.recordStopTimer = null;
+  if (state.recorder?.state === 'recording') {
+    state.ignoreRecorderStop = true;
+    try { state.recorder.stop(); } catch { /* ignore */ }
+  }
+  state.recorder = null;
+  stopStream();
+  stopMeter();
+  const gen = ++state.captureGen;
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -1363,8 +1414,8 @@ function recordActiveScene() {
     if (!pack) return;
     const blob = new Blob(state.chunks, { type: state.chunks[0]?.type || mimeType || 'audio/webm' });
     if (blob.size < 400) {
-      toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo, sem o filme tocando.');
-      selectScene(state.activeIndex);
+      toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo.');
+      selectScene(state.activeIndex, { keepCapture: true });
       return;
     }
     let decodedPeak = 0;
@@ -1392,7 +1443,7 @@ function recordActiveScene() {
       release: profile.release,
       voiced: profile.voiced
     };
-    selectScene(state.activeIndex);
+    selectScene(state.activeIndex, { keepCapture: true });
     scheduleSave();
     if (voicePeak < 0.14) {
       toast('Volume baixo. Fale mais perto do microfone e grave de novo.');
@@ -1416,7 +1467,28 @@ function recordActiveScene() {
   els.recordBtn.setAttribute('aria-label', 'Parar');
   els.micHint.textContent = 'Fale agora · o filme fica parado nesta fala';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
-  els.sceneVideo?.pause();
+  if (scene.videoUrl && els.sceneVideo) {
+    if (els.sceneImage) els.sceneImage.style.display = 'none';
+    const video = els.sceneVideo;
+    video.muted = true;
+    video.playsInline = true;
+    video.style.display = 'block';
+    if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
+    const start = Number(scene.videoOffset) || 0;
+    try {
+      video.currentTime = start;
+    } catch {
+      // ignore
+    }
+    video.play().catch(() => undefined);
+    clearTimeout(state.videoTimer);
+    state.videoTimer = setTimeout(() => {
+      video.pause();
+      showSceneStill(scene);
+    }, recMs);
+  } else {
+    els.sceneVideo?.pause();
+  }
   animateProgress(recMs / 1000);
 
   state.recordingTimer = setInterval(() => {
@@ -1508,11 +1580,10 @@ function playCurrentTake() {
   stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
-  const takeUrl = take.url;
-  playLayersHtml([
-    { url: takeUrl, blob: take.blob, volume: 1 },
+  playClickAudio([
+    { url: take.url, blob: take.blob, volume: 1 },
     { url: scene.audioUrl, volume: BED_VOLUME }
-  ].filter((layer) => layer.url || layer.blob), Math.max(scene.duration, Number(take.duration) || 1));
+  ], Math.max(scene.duration, Number(take.duration) || 1));
 }
 
 function bindSceneVisual(scene) {
