@@ -1,13 +1,40 @@
 const CART_KEY = 'dubpack-cart';
+const CART_CURRENCY_KEY = 'dubpack-cart-currency';
 
 const cartState = {
   items: [],
+  currency: 'brl',
   hooks: {
     toast: (message) => window.alert(message),
     t: (key, params) => key,
     getUser: () => null
   }
 };
+
+function loadCartCurrency() {
+  try {
+    const saved = String(localStorage.getItem(CART_CURRENCY_KEY) || '').toLowerCase();
+    if (saved === 'usd' || saved === 'brl') {
+      cartState.currency = saved;
+      return;
+    }
+  } catch {
+    // ignore
+  }
+  const lang = String(document.documentElement.lang || 'pt').toLowerCase();
+  cartState.currency = lang.startsWith('en') ? 'usd' : 'brl';
+}
+
+function setCartCurrency(currency) {
+  const next = currency === 'usd' ? 'usd' : 'brl';
+  cartState.currency = next;
+  try {
+    localStorage.setItem(CART_CURRENCY_KEY, next);
+  } catch {
+    // ignore
+  }
+  renderCart();
+}
 
 function paymentEndpoint(name) {
   const config = window.DUBPACK_PAYMENTS || {};
@@ -137,6 +164,12 @@ function paintCartPanel(root, items, totals) {
 
   if (totalBrl) totalBrl.textContent = formatBrlCart(totals.brl);
   if (totalUsd) totalUsd.textContent = formatUsd(totals.usd);
+
+  root.querySelectorAll('[data-cart-currency]').forEach((button) => {
+    const active = button.dataset.cartCurrency === cartState.currency;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
 }
 
 function renderCart() {
@@ -189,12 +222,13 @@ async function checkoutCart() {
     return;
   }
 
+  const currency = cartState.currency === 'usd' ? 'usd' : 'brl';
   const payload = {
     provider: 'stripe',
     email: user.email,
     name: user.name || '',
-    currency: 'usd',
-    amount: totals.usd,
+    currency,
+    amount: currency === 'usd' ? totals.usd : totals.brl,
     items: cartState.items,
     returnUrl: `${window.location.origin}${window.location.pathname}?checkout=success`,
     cancelUrl: `${window.location.origin}${window.location.pathname}?checkout=cancel`
@@ -219,11 +253,17 @@ async function checkoutCart() {
 
 function initCart(hooks = {}) {
   cartState.hooks = { ...cartState.hooks, ...hooks };
+  loadCartCurrency();
   loadCart();
   renderCart();
   if (cartState.bound) return;
   cartState.bound = true;
   document.body.addEventListener('click', (event) => {
+    const currencyBtn = event.target.closest('[data-cart-currency]');
+    if (currencyBtn) {
+      setCartCurrency(currencyBtn.dataset.cartCurrency);
+      return;
+    }
     if (event.target.closest('[data-cart-checkout="stripe"]')) checkoutCart();
     if (event.target.closest('[data-cart-clear]')) clearCart();
   });

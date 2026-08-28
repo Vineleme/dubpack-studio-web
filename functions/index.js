@@ -63,7 +63,7 @@ function summarizeItems(items, currency) {
       lines.push({
         name: 'DubPack PRO',
         quantity: 1,
-        unit_amount: currency === 'usd' ? Math.round(unit * 100) : unit,
+        unit_amount: Math.round(unit * 100),
         credits: PRO_CREDITS,
         recurring: true
       });
@@ -77,7 +77,7 @@ function summarizeItems(items, currency) {
     lines.push({
       name: pack.label,
       quantity: qty,
-      unit_amount: currency === 'usd' ? Math.round(unit * 100) : unit,
+      unit_amount: Math.round(unit * 100),
       credits: pack.credits * qty,
       recurring: false
     });
@@ -162,15 +162,17 @@ exports.createCheckout = onRequest({
   if (req.method === 'OPTIONS') return res.status(204).send('');
   if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
 
-  const { provider, email, items = [], returnUrl, cancelUrl } = req.body || {};
+  const { provider, email, items = [], returnUrl, cancelUrl, currency: rawCurrency } = req.body || {};
   if (provider !== 'stripe') return res.status(400).json({ error: 'stripe-only-endpoint' });
   if (!email || !Array.isArray(items) || !items.length) {
     return res.status(400).json({ error: 'invalid-payload' });
   }
 
+  const currency = String(rawCurrency || 'usd').toLowerCase() === 'brl' ? 'brl' : 'usd';
+
   try {
     const stripe = stripeClient();
-    const summary = summarizeItems(items, 'usd');
+    const summary = summarizeItems(items, currency);
     const session = await stripe.checkout.sessions.create({
       mode: summary.hasPro ? 'subscription' : 'payment',
       customer_email: normalizeEmail(email),
@@ -178,7 +180,7 @@ exports.createCheckout = onRequest({
       cancel_url: cancelUrl || returnUrl,
       line_items: summary.lines.map((line) => ({
         price_data: {
-          currency: 'usd',
+          currency,
           product_data: { name: line.name },
           unit_amount: line.unit_amount,
           ...(line.recurring ? { recurring: { interval: 'month' } } : {})

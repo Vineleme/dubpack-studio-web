@@ -39,7 +39,10 @@ try {
     window.firebase.initializeApp(FIREBASE_CONFIG);
     firebaseAuth = window.firebase.auth();
   }
-  if (firebaseAuth) firebaseAuth.languageCode = 'pt';
+  if (firebaseAuth) {
+    firebaseAuth.languageCode = 'pt';
+    void firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+  }
 } catch (error) {
   console.error(error);
   firebaseAuth = null;
@@ -54,13 +57,34 @@ async function ensureAuthPersistence() {
   }
 }
 
+async function waitForFirebaseUser(timeoutMs = 10000) {
+  if (!firebaseAuth) return null;
+  if (firebaseAuth.currentUser) return firebaseAuth.currentUser;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (user) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(user);
+    };
+    const unsubscribe = firebaseAuth.onAuthStateChanged((user) => finish(user));
+    const timer = setTimeout(() => finish(firebaseAuth.currentUser || null), timeoutMs);
+  });
+}
+
 async function restoreAuthSession() {
   if (!firebaseAuth) return false;
   await ensureAuthPersistence();
   if (typeof firebaseAuth.authStateReady === 'function') {
-    await firebaseAuth.authStateReady();
+    try {
+      await firebaseAuth.authStateReady();
+    } catch (error) {
+      console.error(error);
+    }
   }
-  const fbUser = firebaseAuth.currentUser;
+  const fbUser = await waitForFirebaseUser();
   if (!fbUser) return false;
   await finishLogin(accountFromFirebase(fbUser), { toast: false });
   return true;
@@ -319,12 +343,12 @@ function bindUi() {
     if (!state.exporting) abortCapture();
   });
 
-  document.querySelectorAll('[data-tab]').forEach((button) => {
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      setTab(button.dataset.tab);
-    });
+document.querySelectorAll('[data-tab]').forEach((button) => {
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    setTab(button.dataset.tab);
   });
+});
 }
 
 async function bootApp() {
@@ -345,7 +369,6 @@ async function bootApp() {
   const restored = await restoreAuthSession();
   if (!restored) {
     state.user = null;
-    localStorage.removeItem(SESSION_USER_KEY);
     showAuthGate(true);
   }
 }
@@ -913,7 +936,7 @@ async function buildPack(name, zipBytes) {
     .filter(([entryName]) => !isJunkPath(entryName))
     .map(([entryName, data]) => ({
       name: entryName,
-      data,
+    data,
       ext: entryName.split('.').pop()?.toLowerCase() ?? ''
     }));
 
@@ -1435,7 +1458,7 @@ function recordActiveScene() {
       ? new MediaRecorder(stream, isPhone() ? { mimeType } : { mimeType, audioBitsPerSecond: 128000 })
       : new MediaRecorder(stream);
   } catch {
-    state.recorder = new MediaRecorder(stream);
+  state.recorder = new MediaRecorder(stream);
   }
   const startedAt = Date.now();
   const recMs = Math.round(Math.max(1.6, Number(scene.duration) || 2) * 1000);
@@ -1527,7 +1550,7 @@ function recordActiveScene() {
     }
   } catch {
     try {
-      state.recorder.start();
+  state.recorder.start();
     } catch {
       state.recorder.start(250);
     }
@@ -1735,7 +1758,7 @@ async function playLayers(layers, duration) {
         gain.disconnect();
       });
     }
-    clearTimeout(state.playbackTimer);
+  clearTimeout(state.playbackTimer);
     state.playbackTimer = setTimeout(stopActivePlayback, (duration * 1000) + 140);
     return;
   } catch {
@@ -1772,7 +1795,7 @@ function stopActivePlayback() {
     audio.currentTime = 0;
   });
   state.activeAudios = [];
-  state.activeAudio = null;
+    state.activeAudio = null;
 }
 
 function animateProgress(duration) {
