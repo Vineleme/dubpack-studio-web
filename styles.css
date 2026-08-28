@@ -2421,6 +2421,46 @@ body.needs-auth .dashboard {
   background: #0b0a1b;
   color: #fff;
 }
+.auth-password-field {
+  position: relative;
+  display: block;
+}
+.auth-password-field input {
+  width: 100%;
+  padding-right: 46px;
+}
+.auth-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #b7b5ce;
+  cursor: pointer;
+}
+.auth-password-toggle:hover,
+.auth-password-toggle.is-visible {
+  color: #fff;
+  background: rgba(245, 46, 131, 0.12);
+}
+.auth-eye {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.auth-eye-closed { display: none; }
+.auth-password-toggle.is-visible .auth-eye-open { display: none; }
+.auth-password-toggle.is-visible .auth-eye-closed { display: block; }
 .auth-card input.is-invalid {
   border-color: #ff4d7a;
 }

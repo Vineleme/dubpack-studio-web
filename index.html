@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=88" />
+    <link rel="stylesheet" href="./styles.css?v=89" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
@@ -31,7 +31,13 @@
           <input id="authEmail" type="text" inputmode="email" autocomplete="email" data-i18n-placeholder="auth.email.placeholder" placeholder="voce@icloud.com" required />
         </label>
         <label id="authPasswordWrap"><span id="authPasswordLabel" data-i18n="auth.password">Senha</span>
-          <input id="authPassword" type="password" autocomplete="current-password" data-i18n-placeholder="auth.password.placeholder" placeholder="Sua senha" />
+          <span class="auth-password-field">
+            <input id="authPassword" type="password" autocomplete="current-password" data-i18n-placeholder="auth.password.placeholder" placeholder="Sua senha" />
+            <button id="authPasswordToggle" class="auth-password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="auth-eye auth-eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="auth-eye auth-eye-closed" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-6.5 0-10-7-10-7a20.3 20.3 0 0 1 5.06-5.94"/><path d="M1 1l22 22"/><path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"/><path d="M10.73 5.08A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a20.3 20.3 0 0 1-3.17 4.19"/></svg>
+            </button>
+          </span>
         </label>
         <p id="authError" class="auth-error is-hidden" role="alert" data-i18n="auth.error">Senha errada.</p>
         <button id="authForgotBtn" class="auth-forgot" type="button" data-i18n="auth.forgot">Esqueci a senha</button>
@@ -331,10 +337,10 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=88"></script>
-    <script src="./payments.config.js?v=88"></script>
-    <script src="./i18n.js?v=88"></script>
-    <script src="./payments.js?v=88"></script>
-    <script src="./app.js?v=88"></script>
+    <script src="./vendor/fflate.min.js?v=89"></script>
+    <script src="./payments.config.js?v=89"></script>
+    <script src="./i18n.js?v=89"></script>
+    <script src="./payments.js?v=89"></script>
+    <script src="./app.js?v=89"></script>
   </body>
 </html>

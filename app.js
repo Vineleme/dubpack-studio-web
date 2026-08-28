@@ -184,6 +184,7 @@ const els = {
   authForgotBtn: document.querySelector('#authForgotBtn'),
   authPasswordWrap: document.querySelector('#authPasswordWrap'),
   authPasswordLabel: document.querySelector('#authPasswordLabel'),
+  authPasswordToggle: document.querySelector('#authPasswordToggle'),
   authError: document.querySelector('#authError'),
   tipTitle: document.querySelector('#tipTitle'),
   tipBody: document.querySelector('#tipBody'),
@@ -244,9 +245,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
-      return script.includes('sw.js?v=88') ? Promise.resolve() : reg.unregister();
+      return script.includes('sw.js?v=89') ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register('./sw.js?v=88'))
+    .then(() => navigator.serviceWorker.register('./sw.js?v=89'))
     .catch(() => undefined);
 }
 
@@ -271,6 +272,7 @@ function bindUi() {
     suggestSignupName();
   });
   els.authPassword?.addEventListener('input', clearAuthError);
+  els.authPasswordToggle?.addEventListener('click', togglePasswordVisibility);
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
   els.prevBtn?.addEventListener('click', () => setTab('packs'));
@@ -483,6 +485,30 @@ function refreshAuthI18n() {
   }
   if (els.authPasswordLabel) els.authPasswordLabel.textContent = t('auth.password');
   if (els.authPassword) els.authPassword.placeholder = t('auth.password.placeholder');
+  if (els.authPasswordToggle && els.authPassword?.type === 'password') {
+    els.authPasswordToggle.setAttribute('aria-label', t('auth.password.show'));
+  }
+}
+
+function togglePasswordVisibility() {
+  const input = els.authPassword;
+  const button = els.authPasswordToggle;
+  if (!input || !button) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  button.setAttribute('aria-pressed', show ? 'true' : 'false');
+  button.setAttribute('aria-label', t(show ? 'auth.password.hide' : 'auth.password.show'));
+  button.classList.toggle('is-visible', show);
+}
+
+function setPasswordVisible(show) {
+  const input = els.authPassword;
+  const button = els.authPasswordToggle;
+  if (!input || !button) return;
+  input.type = show ? 'text' : 'password';
+  button.setAttribute('aria-pressed', show ? 'true' : 'false');
+  button.setAttribute('aria-label', t(show ? 'auth.password.hide' : 'auth.password.show'));
+  button.classList.toggle('is-visible', show);
 }
 
 function setAuthMode(mode) {
@@ -499,6 +525,7 @@ function setAuthMode(mode) {
     els.authPassword.autocomplete = 'current-password';
     if (reset) els.authPassword.value = '';
   }
+  setPasswordVisible(false);
   refreshAuthI18n();
   if (els.authForgotBtn) els.authForgotBtn.classList.toggle('is-hidden', reset);
   if (!login && !reset) suggestSignupName();
