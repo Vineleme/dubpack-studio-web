@@ -265,6 +265,8 @@ const els = {
   authPasswordLabel: document.querySelector('#authPasswordLabel'),
   authPasswordToggle: document.querySelector('#authPasswordToggle'),
   authRememberLabel: document.querySelector('#authRememberLabel'),
+  authError: document.querySelector('#authError'),
+  userChip: document.querySelector('#userChip'),
   tipTitle: document.querySelector('#tipTitle'),
   tipBody: document.querySelector('#tipBody'),
   tipDots: document.querySelector('#tipDots'),
@@ -321,7 +323,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '97';
+  const swVersion = '98';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -399,12 +401,13 @@ function bindUi() {
     if (!state.exporting) abortCapture();
   });
 
-document.querySelectorAll('[data-tab]').forEach((button) => {
-  button.addEventListener('click', (event) => {
-    event.preventDefault();
-    setTab(button.dataset.tab);
+  document.addEventListener('click', (event) => {
+    const tabBtn = event.target.closest('[data-tab]');
+    if (!tabBtn) return;
+    if (tabBtn.tagName === 'A') event.preventDefault();
+    const tab = tabBtn.dataset.tab;
+    if (tab) setTab(tab);
   });
-});
 }
 
 async function bootApp() {
@@ -1138,10 +1141,19 @@ function decorateScene(scene) {
 
 function setTab(tab) {
   if (!state.user) {
+    const fbUser = firebaseAuth?.currentUser;
+    if (fbUser) {
+      void finishLogin(accountFromFirebase(fbUser), { toast: false }).then(() => applyTab(tab));
+      return;
+    }
     showStudio();
     showAuthGate(true);
     return;
   }
+  applyTab(tab);
+}
+
+function applyTab(tab) {
   if ((tab === 'record' || tab === 'dub') && !currentPack()) {
     toast('Importe um pack para gravar.');
     tab = 'packs';
@@ -1162,6 +1174,10 @@ function setTab(tab) {
     renderCreditShop();
   }
   if (tab === 'packs') renderActivity();
+  if (tab === 'profile' || tab === 'credits') {
+    document.querySelector('.content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 }
 
 function selectScene(index, { keepCapture = false } = {}) {
