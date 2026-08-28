@@ -1146,12 +1146,7 @@ function playReference() {
   stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
-  const layers = [{ url: scene.audioUrl, volume: 1 }];
-  if (isIOS()) {
-    playLayersHtml(layers, scene.duration);
-  } else {
-    void playLayers(layers, scene.duration).catch(() => toast(iosAudioHint()));
-  }
+  playLayersHtml([{ url: scene.audioUrl, volume: 1 }], scene.duration);
 }
 
 function iosAudioHint() {
@@ -1467,15 +1462,7 @@ async function playProjectPreview() {
     const layers = take && !(isIOS() && takeLooksLikeWebm(take))
       ? [{ url: take.url, volume: 1 }, { url: scene.audioUrl, volume: BED_VOLUME }]
       : [{ url: scene.audioUrl, volume: 1 }];
-    if (isIOS()) {
-      playLayersHtml(layers, scene.duration);
-    } else {
-      try {
-        await playLayers(layers, scene.duration);
-      } catch {
-        toast(iosAudioHint());
-      }
-    }
+    playLayersHtml(layers, scene.duration);
     await wait((scene.duration * 1000) + 180);
   }
 
@@ -1506,15 +1493,11 @@ function playCurrentTake() {
   stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
-  const layers = [
-    { url: take.url, volume: 1 },
+  const takeUrl = take.url || (take.blob ? rememberUrl(URL.createObjectURL(take.blob)) : '');
+  playLayersHtml([
+    { url: takeUrl, volume: 1 },
     { url: scene.audioUrl, volume: BED_VOLUME }
-  ];
-  if (isIOS()) {
-    playLayersHtml(layers, scene.duration);
-  } else {
-    void playLayers(layers, scene.duration).catch(() => toast(iosAudioHint()));
-  }
+  ].filter((layer) => layer.url), Math.max(scene.duration, Number(take.duration) || 1));
 }
 
 function bindSceneVisual(scene) {
@@ -1652,19 +1635,18 @@ async function playLayers(layers, duration) {
 }
 
 function playLayersHtml(layers, duration) {
-  state.activeAudios = layers.map((layer) => {
-    const audio = new Audio(layer.url);
+  const items = layers.filter((layer) => layer.url);
+  state.activeAudios = items.map((layer) => {
+    const audio = new Audio();
     audio.preload = 'auto';
-    audio.volume = Math.min(1, layer.volume);
-    const playPromise = audio.play();
-    if (playPromise) {
-      playPromise.catch(() => toast(iosAudioHint()));
-    }
+    audio.volume = Math.min(1, Math.max(0, layer.volume));
+    audio.src = layer.url;
+    audio.play().catch(() => toast(iosAudioHint()));
     return audio;
   });
   state.activeAudio = state.activeAudios[0] || null;
   clearTimeout(state.playbackTimer);
-  state.playbackTimer = setTimeout(stopActivePlayback, duration * 1000);
+  state.playbackTimer = setTimeout(stopActivePlayback, (Number(duration) || 2) * 1000);
 }
 
 function stopActivePlayback() {

@@ -1,4 +1,4 @@
-const CACHE = 'dubpack-studio-web-v79';
+const CACHE = 'dubpack-studio-web-v80';
 const PRECACHE = [
   './',
   './index.html',
@@ -44,6 +44,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+  if (url.protocol === 'blob:' || url.protocol === 'data:') return;
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
