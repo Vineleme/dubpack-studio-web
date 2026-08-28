@@ -272,6 +272,8 @@ const els = {
   tipBody: document.querySelector('#tipBody'),
   tipDots: document.querySelector('#tipDots'),
   profileLoginBtn: document.querySelector('#profileLoginBtn'),
+  logoutBtn: document.querySelector('#logoutBtn'),
+  userLogoutBtn: document.querySelector('#userLogoutBtn'),
   studioApp: document.querySelector('#studioApp'),
   takeRail: document.querySelector('#takeRail'),
   wavePlayhead: document.querySelector('#wavePlayhead'),
@@ -324,7 +326,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '101';
+  const swVersion = '102';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -404,6 +406,7 @@ function bindUi() {
   els.proBtn?.addEventListener('click', () => setTab('credits'));
   els.bellBtn?.addEventListener('click', () => setTab('credits'));
   els.logoutBtn?.addEventListener('click', logoutUser);
+  els.userLogoutBtn?.addEventListener('click', logoutUser);
   els.profileLoginBtn?.addEventListener('click', () => requireAuth());
   els.profileAvatarInput?.addEventListener('change', handleAvatarUpload);
   els.packRailNext?.addEventListener('click', () => {
@@ -690,8 +693,10 @@ function openProfileTab() {
 }
 
 function refreshAccountUi() {
-  const user = state.user;
-  const loggedIn = Boolean(user?.email);
+  const loggedIn = isLoggedIn();
+  const user = state.user || (loggedIn && firebaseAuth?.currentUser
+    ? accountFromFirebase(firebaseAuth.currentUser)
+    : null);
   const first = String(user?.name || 'dublador').split(' ')[0];
   const owner = isOwner(user);
   const pro = isPro(user);
@@ -701,18 +706,19 @@ function refreshAccountUi() {
       : t('welcome');
   }
   if (els.userChipName) {
-    els.userChipName.textContent = loggedIn ? user.name : t('auth.chip.login');
+    els.userChipName.textContent = loggedIn ? user?.name : t('auth.chip.login');
   }
   if (els.creditBadge) els.creditBadge.hidden = !loggedIn;
   if (els.profileName) {
-    els.profileName.textContent = loggedIn ? user.name : t('auth.chip.login');
+    els.profileName.textContent = loggedIn ? user?.name : t('auth.chip.login');
   }
   if (els.profileMeta) {
     els.profileMeta.textContent = loggedIn
-      ? `${user.email} · ${proStatusLabel()}`
+      ? `${user?.email || ''} · ${proStatusLabel()}`
       : t('profile.guest');
   }
   if (els.logoutBtn) els.logoutBtn.classList.toggle('is-hidden', !loggedIn);
+  if (els.userLogoutBtn) els.userLogoutBtn.classList.toggle('is-hidden', !loggedIn);
   if (els.profileLoginBtn) els.profileLoginBtn.classList.toggle('is-hidden', loggedIn);
   if (els.proBtn) {
     els.proBtn.textContent = owner ? t('pro.btn.owner') : pro ? t('pro.btn.manage') : t('pro.btn');
@@ -971,6 +977,7 @@ async function logoutUser() {
   releasePackSession();
   setAuthMode('login');
   showAuthGate(false);
+  applyTab('packs');
   refreshAccountUi();
   toast('Você saiu. Até a próxima dublagem.');
 }

@@ -1789,6 +1789,7 @@ body.needs-auth .dashboard {
   }
   .search-box { width: 100%; }
   .user-chip { display: none; }
+  .user-logout-btn { display: none; }
   .pack-grid { grid-template-columns: unset; }
   .dubbing-header,
   .dubbing-grid {
@@ -1947,6 +1948,20 @@ body.needs-auth .dashboard {
   border: 1px solid rgba(245, 46, 131, 0.22);
   color: #fff;
   cursor: pointer;
+}
+
+.user-logout-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: #f9a8d4;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.user-logout-btn:hover {
+  background: rgba(245, 46, 131, 0.12);
 }
 
 .user-chip-meta {
