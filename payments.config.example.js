@@ -10,10 +10,8 @@ window.DUBPACK_PAYMENTS = {
   apiBase: '',
   functions: {
     createCheckout: '',
-    createMercadoCheckout: '',
     verifyCheckout: '',
     syncAccount: ''
   },
-  stripePublishableKey: 'pk_test_REPLACE_ME',
-  mercadoPagoPublicKey: ''
+  stripePublishableKey: 'pk_test_REPLACE_ME'
 };

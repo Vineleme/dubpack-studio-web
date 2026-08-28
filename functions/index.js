@@ -2,14 +2,12 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
-const { MercadoPagoConfig, Preference } = require('mercadopago');
 
 admin.initializeApp();
 const db = admin.firestore();
 
 const stripeSecret = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
-const mercadoToken = defineSecret('MERCADOPAGO_ACCESS_TOKEN');
 
 const PRO_USD = 1.99;
 const PRO_BRL = 9.9;
@@ -144,6 +142,10 @@ async function grantPurchase(email, { credits = 0, pro = false, source, paymentI
   return result;
 }
 
+function stripeClient() {
+  return new Stripe(String(stripeSecret.value() || '').trim());
+}
+
 function handleHttpError(res, error) {
   console.error(error);
   const message = String(error?.message || '');
@@ -167,7 +169,7 @@ exports.createCheckout = onRequest({
   }
 
   try {
-    const stripe = new Stripe(stripeSecret.value());
+    const stripe = stripeClient();
     const summary = summarizeItems(items, 'usd');
     const session = await stripe.checkout.sessions.create({
       mode: summary.hasPro ? 'subscription' : 'payment',
@@ -195,52 +197,6 @@ exports.createCheckout = onRequest({
   }
 });
 
-exports.createMercadoCheckout = onRequest({
-  cors: false,
-  secrets: [mercadoToken]
-}, async (req, res) => {
-  withCors(req, res);
-  if (req.method === 'OPTIONS') return res.status(204).send('');
-  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
-
-  const { provider, email, items = [], returnUrl, cancelUrl } = req.body || {};
-  if (provider !== 'mercadopago') return res.status(400).json({ error: 'mercadopago-only-endpoint' });
-  if (!email || !Array.isArray(items) || !items.length) {
-    return res.status(400).json({ error: 'invalid-payload' });
-  }
-
-  try {
-    const client = new MercadoPagoConfig({ accessToken: mercadoToken.value() });
-    const preference = new Preference(client);
-    const summary = summarizeItems(items, 'brl');
-    const result = await preference.create({
-      body: {
-        payer: { email: normalizeEmail(email) },
-        back_urls: {
-          success: returnUrl,
-          failure: cancelUrl || returnUrl,
-          pending: returnUrl
-        },
-        auto_return: 'approved',
-        items: summary.lines.map((line) => ({
-          title: line.name,
-          quantity: line.quantity,
-          unit_price: line.unit_amount,
-          currency_id: 'BRL'
-        })),
-        metadata: {
-          email: normalizeEmail(email),
-          kind: summary.hasPro ? 'pro' : 'pack',
-          credits: String(summary.credits)
-        }
-      }
-    });
-    return res.json({ url: result.init_point });
-  } catch (error) {
-    return handleHttpError(res, error);
-  }
-});
-
 exports.verifyCheckout = onRequest({
   cors: false,
   secrets: [stripeSecret]
@@ -253,7 +209,7 @@ exports.verifyCheckout = onRequest({
   if (!sessionId || !email) return res.status(400).json({ error: 'invalid-payload' });
 
   try {
-    const stripe = new Stripe(stripeSecret.value());
+    const stripe = stripeClient();
     const session = await stripe.checkout.sessions.retrieve(String(sessionId));
     if (session.payment_status !== 'paid' && session.status !== 'complete') {
       return res.status(409).json({ error: 'not-paid' });
@@ -312,7 +268,7 @@ exports.stripeWebhook = onRequest({
 }, async (req, res) => {
   if (req.method !== 'POST') return res.status(405).send('method-not-allowed');
 
-  const stripe = new Stripe(stripeSecret.value());
+  const stripe = stripeClient();
   const signature = req.get('stripe-signature');
   let event;
 

@@ -163,7 +163,7 @@ function scrollToCart() {
   target?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-async function checkoutCart(provider) {
+async function checkoutCart() {
   loadCart();
   if (!cartState.items.length) {
     cartState.hooks.toast(cartState.hooks.t('cart.empty.checkout'));
@@ -175,10 +175,7 @@ async function checkoutCart(provider) {
     return;
   }
 
-  const config = window.DUBPACK_PAYMENTS || {};
-  const checkoutUrl = provider === 'mercadopago'
-    ? paymentEndpoint('createMercadoCheckout')
-    : paymentEndpoint('createCheckout');
+  const checkoutUrl = paymentEndpoint('createCheckout');
   if (!checkoutUrl) {
     cartState.hooks.toast(cartState.hooks.t('cart.checkout.pending'));
     return;
@@ -193,11 +190,11 @@ async function checkoutCart(provider) {
   }
 
   const payload = {
-    provider,
+    provider: 'stripe',
     email: user.email,
     name: user.name || '',
-    currency: provider === 'stripe' ? 'usd' : 'brl',
-    amount: provider === 'stripe' ? totals.usd : totals.brl,
+    currency: 'usd',
+    amount: totals.usd,
     items: cartState.items,
     returnUrl: `${window.location.origin}${window.location.pathname}?checkout=success`,
     cancelUrl: `${window.location.origin}${window.location.pathname}?checkout=cancel`
@@ -227,8 +224,7 @@ function initCart(hooks = {}) {
   if (cartState.bound) return;
   cartState.bound = true;
   document.body.addEventListener('click', (event) => {
-    if (event.target.closest('[data-cart-checkout="mercadopago"]')) checkoutCart('mercadopago');
-    if (event.target.closest('[data-cart-checkout="stripe"]')) checkoutCart('stripe');
+    if (event.target.closest('[data-cart-checkout="stripe"]')) checkoutCart();
     if (event.target.closest('[data-cart-clear]')) clearCart();
   });
 }

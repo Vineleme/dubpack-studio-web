@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=92" />
+    <link rel="stylesheet" href="./styles.css?v=94" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
@@ -91,8 +91,7 @@
               <span data-i18n="cart.total.usd">Total (USD)</span>
               <strong data-cart-total-usd>$0.00</strong>
             </div>
-            <button type="button" class="primary wide" data-cart-checkout="mercadopago" data-i18n="cart.checkout.mp">Pagar com Mercado Pago</button>
-            <button type="button" class="secondary wide" data-cart-checkout="stripe" data-i18n="cart.checkout.stripe">Pay with Stripe</button>
+            <button type="button" class="stripe-checkout-btn wide" data-cart-checkout="stripe" data-i18n="cart.checkout.stripe">Finalizar pagamento</button>
             <button type="button" class="side-cart-clear" data-cart-clear data-i18n="cart.clear">Limpar carrinho</button>
           </div>
         </section>
@@ -289,8 +288,7 @@
                 <span data-i18n="cart.total.usd">Total (USD)</span>
                 <strong data-cart-total-usd>$0.00</strong>
               </div>
-              <button type="button" class="primary wide" data-cart-checkout="mercadopago" data-i18n="cart.checkout.mp">Pagar com Mercado Pago</button>
-              <button type="button" class="secondary wide" data-cart-checkout="stripe" data-i18n="cart.checkout.stripe">Pay with Stripe</button>
+              <button type="button" class="stripe-checkout-btn wide" data-cart-checkout="stripe" data-i18n="cart.checkout.stripe">Finalizar pagamento</button>
               <button type="button" class="side-cart-clear" data-cart-clear data-i18n="cart.clear">Limpar carrinho</button>
             </div>
           </section>
@@ -337,10 +335,10 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=92"></script>
-    <script src="./payments.config.js?v=92"></script>
-    <script src="./i18n.js?v=92"></script>
-    <script src="./payments.js?v=92"></script>
-    <script src="./app.js?v=92"></script>
+    <script src="./vendor/fflate.min.js?v=94"></script>
+    <script src="./payments.config.js?v=94"></script>
+    <script src="./i18n.js?v=94"></script>
+    <script src="./payments.js?v=94"></script>
+    <script src="./app.js?v=94"></script>
   </body>
 </html>

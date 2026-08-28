@@ -205,6 +205,32 @@ button, label, a { border: 0; text-decoration: none; }
   font-size: 14px;
 }
 
+.stripe-checkout-btn {
+  border: 0;
+  border-radius: 10px;
+  background: #635bff;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 8px 24px rgba(99, 91, 255, 0.28);
+}
+
+.stripe-checkout-btn:hover {
+  background: #5851ea;
+}
+
+.stripe-checkout-btn:active {
+  transform: translateY(1px);
+}
+
+.stripe-checkout-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .side-cart-clear {
   border: 0;
   background: transparent;
