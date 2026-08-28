@@ -3,6 +3,13 @@ import { BED_EXPORT, BED_DUCK, EXPORT_WATERMARK_LABEL } from './constants.js';
 import { state, els } from './state.js';
 import { isLoggedIn, requireAuth } from './auth.js';
 import { canExportVideo, consumeExportCredit, isPro, shouldWatermarkExport } from './credits.js';
+import { requestRewardedExport } from './ads.js';
+import {
+  exportAllowance,
+  getExportCreditCost,
+  markAdExportUsed,
+  recordDailyExport
+} from './plan.js';
 import { currentPack, decorateScene, showFinalVideo } from './pack.js';
 import { scheduleSave } from './persist.js';
 import { stopProjectPreview } from './playback.js';
@@ -59,20 +66,46 @@ export async function requestFinalMp4() {
     setTab('record');
     return;
   }
-  if (!canExportVideo()) {
-    toast(isPro()
-      ? 'Créditos do mês acabaram. Compre extras ou aguarde a renovação PRO.'
-      : 'Sem créditos. Assine o PRO ou compre um pacote para gerar o MP4.');
-    setTab('credits');
-    return;
-  }
   if (state.exporting) {
     toast('Já estou montando o MP4.');
     return;
   }
+
+  const creditCost = await getExportCreditCost(pack);
+  let viaAd = false;
+  let allowance = exportAllowance(creditCost);
+  if (!allowance.ok && allowance.reason === 'ad-offer') {
+    const watched = await requestRewardedExport();
+    if (!watched) return;
+    markAdExportUsed();
+    viaAd = true;
+    allowance = exportAllowance(creditCost, { viaAd: true });
+  }
+  if (!allowance.ok) {
+    toast(allowance.message || (isPro()
+      ? 'Créditos do mês acabaram. Compre extras ou aguarde a renovação PRO.'
+      : 'Sem créditos. Assine o PRO, compre um pacote ou assista um anúncio amanhã.'));
+    if (!isPro() || allowance.reason === 'pro') setTab('credits');
+    return;
+  }
+  if (!canExportVideo(pack, creditCost, { viaAd })) {
+    toast(allowance.message || 'Não foi possível iniciar a exportação agora.');
+    return;
+  }
+
   const watermarked = shouldWatermarkExport();
-  if (watermarked) {
-    toast(`Plano gratuito com 1 crédito: o MP4 sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
+  if (watermarked && !viaAd) {
+    toast(getLang() === 'en'
+      ? `Free plan: your MP4 includes a ${EXPORT_WATERMARK_LABEL} watermark. PRO removes it.`
+      : `Plano grátis: o MP4 sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
+  } else if (watermarked && viaAd) {
+    toast(getLang() === 'en'
+      ? `Today's ad export includes a ${EXPORT_WATERMARK_LABEL} watermark.`
+      : `Export do anúncio de hoje sai com marca d'água ${EXPORT_WATERMARK_LABEL}.`);
+  } else if (creditCost > 1) {
+    toast(getLang() === 'en'
+      ? `Advanced export uses ${creditCost} credits on this project.`
+      : `Export avançado neste projeto usa ${creditCost} créditos.`);
   }
   stopProjectPreview();
   abortCapture();
@@ -110,7 +143,8 @@ export async function requestFinalMp4() {
     pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
     pack.watermarked = watermarked;
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
-    consumeExportCredit();
+    if (!viaAd) consumeExportCredit(creditCost);
+    recordDailyExport();
     showFinalVideo(pack);
     scheduleSave();
     const isMp4 = pack.finalExt === 'mp4';

@@ -3,6 +3,7 @@ import { AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS, EXPORT_WATERMARK_LABEL } from './co
 import { state, els } from './state.js';
 import { isLoggedIn, requireAuth } from './auth.js';
 import { renderActivity } from './credits.js';
+import { validatePackImport } from './plan.js';
 import { preloadFfmpeg } from './export.js';
 import { scheduleSave } from './persist.js';
 import { bindSceneVisual, stopActivePlayback, stopProjectPreview, warmSceneAudio } from './playback.js';
@@ -60,7 +61,10 @@ export async function importPack(event) {
     }
     toast('Lendo arquivos do pack…');
     const packName = file.name.replace(/\.zip$/i, '');
+    const replacing = state.packs.some((item) => item.name.toLowerCase() === packName.toLowerCase());
     const pack = await buildPack(packName, zipBytes);
+    const limitMessage = validatePackImport(pack, zipBytes, { replacing });
+    if (limitMessage) throw new Error(limitMessage);
     upsertPack(pack);
     state.activePackId = pack.id;
     state.activeIndex = 0;
