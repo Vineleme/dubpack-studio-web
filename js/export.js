@@ -77,10 +77,20 @@ export async function requestFinalMp4() {
   abortCapture();
   state.exporting = true;
   setTab('dub');
+  setExportPreview(true);
   setExportProgress(2, 'Começando');
   if (els.generateMp4Btn) els.generateMp4Btn.disabled = true;
   els.exportVideoBtn.disabled = true;
   if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = true;
+  // Unlock media playback while still inside the click gesture (critical on iOS).
+  try {
+    if (els.exportFilm) {
+      els.exportFilm.muted = true;
+      els.exportFilm.playsInline = true;
+      const unlock = els.exportFilm.play();
+      if (unlock) unlock.then(() => els.exportFilm.pause()).catch(() => undefined);
+    }
+  } catch { /* ignore */ }
   try {
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
@@ -193,10 +203,14 @@ export function filmCandidates(pack) {
 
 export function loadExportVideo(src) {
   const video = els.exportFilm || document.createElement('video');
-  video.crossOrigin = 'anonymous';
+  // blob: URLs break when crossOrigin is forced; only set it for http(s).
+  if (/^https?:/i.test(String(src || ''))) video.crossOrigin = 'anonymous';
+  else video.removeAttribute('crossorigin');
   video.muted = true;
   video.defaultMuted = true;
   video.playsInline = true;
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
   video.preload = 'auto';
   video.loop = false;
   video.controls = false;
@@ -204,7 +218,7 @@ export function loadExportVideo(src) {
   video.src = src;
   video.load();
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timeout')), 8000);
+    const timer = setTimeout(() => reject(new Error('timeout')), 20000);
     const done = () => {
       clearTimeout(timer);
       resolve(video);
@@ -218,44 +232,100 @@ export function loadExportVideo(src) {
   });
 }
 
-export async function waitForFilmReady(film) {
-  const deadline = performance.now() + 10000;
+export async function waitForFilmReady(film, { needTime = false } = {}) {
+  const deadline = performance.now() + 15000;
+  let lastTime = film.currentTime?.() || 0;
+  let advanced = false;
   while (performance.now() < deadline) {
     const source = film.getPaintSource?.();
     const w = source?.videoWidth || source?.width || 0;
     const h = source?.videoHeight || source?.height || 0;
     const t = film.currentTime?.() || 0;
-    if (w > 1 && h > 1 && t > 0.04) return true;
-    await wait(60);
+    if (t > lastTime + 0.01) advanced = true;
+    lastTime = Math.max(lastTime, t);
+    const hasFrame = w > 1 && h > 1;
+    if (hasFrame && (!needTime || advanced || t > 0.02 || film.isPlaying?.())) return true;
+    await wait(50);
   }
   return false;
 }
 
-async function primeFilmForCapture(film) {
-  await film.play()?.catch?.(() => undefined);
-  const ready = await waitForFilmReady(film);
-  if (!ready) return false;
-  await film.pause?.()?.catch?.(() => undefined);
-  await film.seekTo?.(0);
-  return true;
-}
-
 async function acquireExportVideoTrack(film, watermarked) {
-  if (watermarked) {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const pipeline = await buildWatermarkedVideoTrack(film);
-      if (pipeline.track) return { track: pipeline.track, pipeline };
-      pipeline.stop?.();
-      await wait(80);
-    }
-    return { track: null, pipeline: null };
-  }
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const track = film.getTrack();
-    if (track) return { track, pipeline: null };
-    await wait(75);
+  // Canvas path works on Safari/iOS where video.captureStream is missing.
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const pipeline = watermarked
+      ? await buildWatermarkedVideoTrack(film)
+      : await buildCanvasVideoTrack(film);
+    if (pipeline.track) return { track: pipeline.track, pipeline };
+    pipeline.stop?.();
+    await wait(80);
   }
   return { track: null, pipeline: null };
+}
+
+export async function buildCanvasVideoTrack(film) {
+  let width = 1280;
+  let height = 720;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const source = film.getPaintSource?.();
+    const w = source?.videoWidth || source?.width || 0;
+    const h = source?.videoHeight || source?.height || 0;
+    if (w > 1 && h > 1) {
+      width = w;
+      height = h;
+      break;
+    }
+    await wait(40);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  let painting = true;
+  const paint = () => {
+    if (!painting) return;
+    const source = film.getPaintSource?.();
+    if (source) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, height);
+      try { coverDraw(ctx, source, width, height); } catch { /* frame not ready */ }
+    }
+    requestAnimationFrame(paint);
+  };
+  paint();
+  const stream = canvas.captureStream(30);
+  return {
+    track: stream.getVideoTracks()[0] || null,
+    stop: () => {
+      painting = false;
+      stream.getTracks().forEach((track) => track.stop());
+    }
+  };
+}
+
+async function driveFilmPlayback(film, durationSec) {
+  await film.seekTo?.(0);
+  await film.play()?.catch?.(() => undefined);
+  await wait(120);
+  const start = film.currentTime?.() || 0;
+  await wait(350);
+  const moved = (film.currentTime?.() || 0) > start + 0.02;
+  if (moved || film.isPlaying?.()) {
+    return { mode: 'realtime' };
+  }
+  // Safari/iOS often loses the user-gesture after awaits — drive frames by seek.
+  return { mode: 'seek' };
+}
+
+async function runSeekDrivenFilm(film, durationSec, onTick) {
+  const fps = isPhone() ? 12 : 18;
+  const step = 1 / fps;
+  const total = Math.max(0.5, Number(durationSec) || 1);
+  for (let t = 0; t <= total + 0.001; t += step) {
+    await film.seekTo?.(Math.min(t, total));
+    onTick?.(Math.min(t, total));
+    await wait(Math.max(20, Math.round(1000 / fps) - 8));
+  }
 }
 
 export async function ensureOgvPlayer() {
@@ -306,31 +376,22 @@ export async function openOgvFilm(url, onProgress) {
     requestAnimationFrame(paint);
   };
   paint();
-  let captureStream = null;
-  let captureTrack = null;
   return {
     duration: Number(player.duration) || 0,
     srcUrl: url,
     currentTime: () => Number(player.currentTime) || 0,
+    isPlaying: () => !player.paused && !player.ended,
     play: () => player.play(),
     pause: () => player.pause(),
     seekTo: async (time = 0) => {
       try { player.currentTime = time; } catch { /* ignore */ }
-      await wait(60);
+      await wait(40);
     },
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
     getPaintSource: () => player._canvas || player.querySelector('canvas') || paintCanvas,
-    getTrack: () => {
-      if (captureTrack) return captureTrack;
-      captureStream = paintCanvas.captureStream(30);
-      captureTrack = captureStream.getVideoTracks()[0] || null;
-      return captureTrack;
-    },
+    getTrack: () => null,
     stop: () => {
       painting = false;
-      captureStream?.getTracks().forEach((track) => track.stop());
-      captureStream = null;
-      captureTrack = null;
       try { player.pause(); } catch { /* ignore */ }
       player.remove();
       paintCanvas.remove();
@@ -341,62 +402,45 @@ export async function openOgvFilm(url, onProgress) {
 export async function openNativeFilm(url) {
   const video = await loadExportVideo(url);
   video.muted = true;
+  video.defaultMuted = true;
+  video.volume = 0;
   try { video.currentTime = 0; } catch { /* ignore */ }
-  let captureStream = null;
-  let captureTrack = null;
-  let canvasPipeline = null;
-  const ensureTrack = () => {
-    if (captureTrack) return captureTrack;
-    const capture = video.captureStream?.bind(video) || video.mozCaptureStream?.bind(video);
-    if (capture) {
-      captureStream = capture();
-      captureTrack = captureStream.getVideoTracks()[0] || null;
-      if (captureTrack) return captureTrack;
-    }
-    const width = Math.max(640, video.videoWidth || 1280);
-    const height = Math.max(360, video.videoHeight || 720);
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
-    captureStream = canvas.captureStream(30);
-    let painting = true;
-    const paint = () => {
-      if (!painting) return;
-      if (video.videoWidth) ctx.drawImage(video, 0, 0, width, height);
-      if (!video.ended) requestAnimationFrame(paint);
-    };
-    paint();
-    canvasPipeline = {
-      stop: () => {
-        painting = false;
-        captureStream?.getTracks().forEach((track) => track.stop());
-      }
-    };
-    captureTrack = captureStream.getVideoTracks()[0] || null;
-    return captureTrack;
-  };
+  // Kick decode ASAP while still close to the click gesture.
+  video.play()?.catch?.(() => undefined);
   return {
     duration: Number(video.duration) || 0,
     srcUrl: url,
     currentTime: () => Number(video.currentTime) || 0,
-    play: () => video.play(),
+    isPlaying: () => !video.paused && !video.ended,
+    play: () => {
+      video.muted = true;
+      video.defaultMuted = true;
+      return video.play();
+    },
     pause: () => video.pause(),
     seekTo: async (time = 0) => {
-      try { video.currentTime = time; } catch { /* ignore */ }
-      await wait(60);
+      const target = Math.max(0, Number(time) || 0);
+      try {
+        if (typeof video.fastSeek === 'function') video.fastSeek(target);
+        else video.currentTime = target;
+      } catch {
+        try { video.currentTime = target; } catch { /* ignore */ }
+      }
+      await new Promise((resolve) => {
+        const done = () => resolve();
+        video.addEventListener('seeked', done, { once: true });
+        setTimeout(done, 180);
+      });
     },
     ended: new Promise((resolve) => {
       video.onended = resolve;
     }),
     getPaintSource: () => video,
-    getTrack: () => ensureTrack(),
+    getTrack: () => null,
     stop: () => {
-      canvasPipeline?.stop();
-      captureStream?.getTracks().forEach((track) => track.stop());
-      captureStream = null;
-      captureTrack = null;
-      video.pause();
+      try { video.pause(); } catch { /* ignore */ }
+      video.removeAttribute('src');
+      video.load();
     }
   };
 }
@@ -467,7 +511,7 @@ export function duckDuringTakes(gainNode, t0, windows) {
 
 export function attachMediaBed(audioCtx, dest, srcUrl) {
   const audio = document.createElement('audio');
-  audio.crossOrigin = 'anonymous';
+  if (/^https?:/i.test(String(srcUrl || ''))) audio.crossOrigin = 'anonymous';
   audio.preload = 'auto';
   audio.src = srcUrl;
   document.body.appendChild(audio);
@@ -588,10 +632,14 @@ export async function composeDubbedVideo(pack, onProgress) {
   let stopped = Promise.resolve();
   const chunks = [];
   setExportPreview(true);
+  // Give the dub tab a paint so #exportFilm is visible before play().
+  await wait(40);
 
   try {
     onProgress?.(4, 'Carregando o vídeo da cena');
     film = await openFilmPlayback(candidates, setExportProgress);
+    // Warm playback immediately (still close to the click gesture).
+    await film.play()?.catch?.(() => undefined);
 
     const lastLineEnd = pack.scenes.reduce((max, raw) => {
       const scene = decorateScene(raw);
@@ -649,13 +697,13 @@ export async function composeDubbedVideo(pack, onProgress) {
 
     const watermarked = shouldWatermarkExport();
     setExportProgress(24, 'Preparando o filme da cena');
-    if (bed) bed.el.currentTime = 0;
-    const primed = await primeFilmForCapture(film);
-    if (!primed) {
+    const frameReady = await waitForFilmReady(film, { needTime: false });
+    if (!frameReady) {
       throw new Error(getLang() === 'en'
-        ? 'The scene video did not start. Reload the page and try again.'
-        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
+        ? 'Could not decode the scene video. Re-import the ZIP and try again on Wi‑Fi.'
+        : 'Não consegui ler o vídeo da cena. Importe o ZIP de novo e tente com Wi‑Fi.');
     }
+
     const captured = await acquireExportVideoTrack(film, watermarked);
     videoPipeline = captured.pipeline;
     const videoTrack = captured.track;
@@ -683,16 +731,11 @@ export async function composeDubbedVideo(pack, onProgress) {
       recorder.onstop = resolve;
     });
 
+    const duration = film.duration > 0 ? film.duration : Math.max(lastLineEnd, 8);
     if (bed) bed.el.currentTime = 0;
-    await film.seekTo?.(0);
-    await film.play()?.catch?.(() => undefined);
+    const drive = await driveFilmPlayback(film, duration);
     if (bed) await bed.el.play().catch(() => undefined);
-    const ready = await waitForFilmReady(film);
-    if (!ready) {
-      throw new Error(getLang() === 'en'
-        ? 'The scene video did not start. Reload the page and try again.'
-        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
-    }
+
     recorder.start(isIOS() ? 100 : 250);
     recordingStarted = true;
     const t0 = audioCtx.currentTime + 0.05;
@@ -702,15 +745,28 @@ export async function composeDubbedVideo(pack, onProgress) {
       stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, gainForTake(win.buffer)).stop);
     });
 
-    const duration = film.duration > 0 ? film.duration : Math.max(lastLineEnd, 8);
-    let finished = false;
-    film.ended.then(() => { finished = true; });
-    const startedAt = performance.now();
-    while (!finished && performance.now() - startedAt < duration * 1000 + 1000) {
-      const t = film.currentTime?.() || 0;
-      setExportProgress(30 + Math.min(60, (t / duration) * 60), 'Gerando o vídeo');
-      if (t >= duration - 0.12) break;
-      await wait(200);
+    if (drive.mode === 'seek') {
+      setExportProgress(30, 'Gerando o vídeo');
+      await runSeekDrivenFilm(film, duration, (t) => {
+        setExportProgress(30 + Math.min(60, (t / duration) * 60), 'Gerando o vídeo');
+      });
+    } else {
+      let finished = false;
+      film.ended.then(() => { finished = true; });
+      const startedAt = performance.now();
+      while (!finished && performance.now() - startedAt < duration * 1000 + 1500) {
+        const t = film.currentTime?.() || 0;
+        setExportProgress(30 + Math.min(60, (t / duration) * 60), 'Gerando o vídeo');
+        if (t >= duration - 0.12) break;
+        // If playback stalled mid-way, finish by seek.
+        if (performance.now() - startedAt > 1800 && t < 0.05) {
+          await runSeekDrivenFilm(film, duration, (seekT) => {
+            setExportProgress(30 + Math.min(60, (seekT / duration) * 60), 'Gerando o vídeo');
+          });
+          break;
+        }
+        await wait(200);
+      }
     }
     setExportProgress(90, 'Finalizando');
   } finally {

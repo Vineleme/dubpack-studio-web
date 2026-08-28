@@ -1824,13 +1824,18 @@ body.needs-auth .dashboard {
 #exportFilm {
   position: absolute;
   inset: 0;
-  display: none;
+  opacity: 0;
+  pointer-events: none;
   object-fit: contain;
   background: #000;
   z-index: 2;
+  /* Keep in layout (not display:none) so Safari can decode frames during export. */
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .final-video-wrap.is-exporting #exportFilm {
-  display: block;
+  opacity: 1;
 }
 .final-video-wrap ogvjs {
   position: absolute;
