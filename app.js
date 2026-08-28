@@ -231,7 +231,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=65').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=66').catch(() => undefined);
 }
 
 function bindUi() {
@@ -465,7 +465,13 @@ function changeLang(lang) {
 }
 
 function updateChromeNote() {
-  els.dubChromeNote?.classList.toggle('is-hidden', isIOS());
+  if (!els.dubChromeNote) return;
+  els.dubChromeNote.classList.toggle('is-hidden', isIOS());
+  if (!isIOS()) {
+    els.dubChromeNote.textContent = getLang() === 'en'
+      ? 'On Chrome and desktop, the export is WebM. It plays here in the browser and in VLC.'
+      : 'No Chrome e no PC, o export sai em WebM. Toca aqui no navegador e no VLC.';
+  }
 }
 
 function refreshAuthI18n() {
@@ -1138,7 +1144,7 @@ function updateFinishCta(pack) {
     els.generateMp4Btn.disabled = false;
     els.generateMp4Btn.textContent = label;
   }
-  if (done && !isIOS()) void preloadFfmpeg();
+  if (done && isIOS()) void preloadFfmpeg();
 }
 
 function goNextScene() {
@@ -2488,18 +2494,14 @@ function showFinalVideo(pack) {
   if (els.finalVideoEmpty) els.finalVideoEmpty.style.display = has ? 'none' : 'grid';
   if (els.downloadMp4Btn) {
     els.downloadMp4Btn.classList.toggle('is-hidden', !has);
-    els.downloadMp4Btn.textContent = isMp4 ? t('dub.download') : (getLang() === 'en' ? 'Download WebM' : 'Baixar WebM');
+    els.downloadMp4Btn.textContent = isMp4 ? t('dub.download.mp4') : t('dub.download.webm');
   }
   if (els.exportStatus && has) {
-    if (isMp4) {
-      els.exportStatus.textContent = pack.watermarked
+    els.exportStatus.textContent = pack.watermarked
+      ? (isMp4
         ? t('export.ready.watermark', { brand: EXPORT_WATERMARK_LABEL })
-        : t('export.ready');
-    } else {
-      els.exportStatus.textContent = getLang() === 'en'
-        ? 'Video ready as WebM (Chrome could not convert to MP4 this time).'
-        : 'Vídeo pronto em WebM (Chrome não converteu para MP4 desta vez).';
-    }
+        : t('export.ready.watermark.webm', { brand: EXPORT_WATERMARK_LABEL }))
+      : (isMp4 ? t('export.ready') : t('export.ready.webm'));
   } else if (els.exportStatus && !has) {
     els.exportStatus.textContent = t('dub.status.none');
   }
@@ -2518,33 +2520,10 @@ async function downloadFinalMp4() {
       return;
     }
   }
-  if (!blob.type.includes('mp4')) {
-    if (isIOS()) {
-      toast(t('export.reexport'));
-      return;
-    }
-    try {
-      state.exporting = true;
-      setExportProgress(92, 'Convertendo para MP4');
-      blob = await convertToMp4(blob);
-      if (pack.finalUrl) URL.revokeObjectURL(pack.finalUrl);
-      pack.finalBlob = blob;
-      pack.finalExt = 'mp4';
-      pack.finalUrl = rememberUrl(URL.createObjectURL(blob));
-      scheduleSave();
-      showFinalVideo(pack);
-    } catch {
-      toast(t('export.reexport'));
-      return;
-    } finally {
-      state.exporting = false;
-      hideExportProgress();
-    }
-  }
+  const ext = blob.type.includes('mp4') || pack.finalExt === 'mp4' ? 'mp4' : 'webm';
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  const ext = pack.finalExt === 'mp4' || blob.type.includes('mp4') ? 'mp4' : 'webm';
   link.download = `${safeFile(pack.name)}-dub.${ext}`;
   document.body.appendChild(link);
   link.click();
@@ -2595,18 +2574,11 @@ async function requestFinalMp4() {
   try {
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
-    let usedWebmFallback = false;
-    if (!composed.type.includes('mp4')) {
+    if (isIOS() && !composed.type.includes('mp4')) {
       setExportProgress(92, 'Convertendo para MP4');
-      try {
-        output = await convertToMp4(composed);
-      } catch (convertError) {
-        if (isIOS()) throw convertError;
-        output = composed;
-        usedWebmFallback = true;
-      }
+      output = await convertToMp4(composed);
     }
-    if (!output.type.includes('mp4') && isIOS()) {
+    if (isIOS() && !output.type.includes('mp4')) {
       throw new Error(getLang() === 'en'
         ? 'Could not generate MP4 on this device. Try again on Wi‑Fi.'
         : 'Não consegui gerar MP4 neste aparelho. Tente de novo com Wi‑Fi ligado.');
@@ -2620,17 +2592,18 @@ async function requestFinalMp4() {
     consumeExportCredit();
     showFinalVideo(pack);
     scheduleSave();
-    if (usedWebmFallback) {
-      toast(getLang() === 'en'
-        ? 'MP4 conversion failed on Chrome. Your dub is ready as WebM — use Download. Opens in VLC.'
-        : 'A conversão para MP4 falhou no Chrome. Sua dublagem ficou em WebM — use Baixar. Abre no VLC.');
-    } else {
-      toast(watermarked
+    const isMp4 = pack.finalExt === 'mp4';
+    toast(watermarked
+      ? (isMp4
         ? (getLang() === 'en'
           ? `Dub ready in MP4 with ${EXPORT_WATERMARK_LABEL} watermark.`
           : `Dublagem pronta em MP4 com marca d'água ${EXPORT_WATERMARK_LABEL}.`)
-        : (getLang() === 'en' ? 'Dub ready in MP4. Watch or download.' : 'Dublagem pronta em MP4. Assista ou baixe.'));
-    }
+        : (getLang() === 'en'
+          ? `Dub ready in WebM with ${EXPORT_WATERMARK_LABEL} watermark.`
+          : `Dublagem pronta em WebM com marca d'água ${EXPORT_WATERMARK_LABEL}.`))
+      : (isMp4
+        ? (getLang() === 'en' ? 'Dub ready in MP4. Watch or download.' : 'Dublagem pronta em MP4. Assista ou baixe.')
+        : (getLang() === 'en' ? 'Dub ready in WebM. Watch or download.' : 'Dublagem pronta em WebM. Assista ou baixe.')));
     els.exportVideoBtn?.classList.remove('pulse-next');
     els.exportVideoBtnSide?.classList.remove('pulse-next');
     if (els.finalVideo) {
@@ -2662,7 +2635,7 @@ function pickVideoMime() {
     'video/webm;codecs=vp9,opus',
     'video/webm'
   ];
-  // iPhone: MP4 direto. Chrome/desktop: WebM na gravação → FFmpeg converte para MP4.
+  // iPhone: tenta MP4. Chrome/PC: WebM nativo, sem conversão.
   const types = isIOS() ? [...mp4Types, ...webmTypes] : [...webmTypes, ...mp4Types];
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
