@@ -1,0 +1,14 @@
+---
+description: Always commit and push after making changes
+alwaysApply: true
+---
+
+# Auto publish
+
+After completing any code change requested by Vinicius:
+
+1. Commit the changes with a concise message focused on why.
+2. Push to `origin` immediately.
+3. Do not ask whether to commit or push — just publish.
+
+Only skip commit/push when the user explicitly says not to, or when there are no changes to publish.
