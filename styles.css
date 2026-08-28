@@ -2326,6 +2326,26 @@ body:not(.in-studio) .site-footer { display: none; }
   text-align: center;
 }
 
+.community-tip {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(245, 46, 131, 0.08);
+  border: 1px solid rgba(245, 46, 131, 0.22);
+}
+
+.community-tip strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.community-tip p {
+  margin: 0;
+  color: #b7b5ce;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .community-card .hint-copy {
   margin: 0;
   color: #b7b5ce;
