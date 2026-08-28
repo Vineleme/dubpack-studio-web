@@ -8,6 +8,7 @@ const BED_EXPORT = 0.4;
 const BED_DUCK = 0.09;
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
+const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
 const SESSION_USER_KEY = 'dubpack-user';
 const USERS_KEY = 'dubpack-users';
 const OWNER_EMAILS = [
@@ -223,7 +224,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=53').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=54').catch(() => undefined);
 }
 
 function bindUi() {
@@ -2127,7 +2128,9 @@ function showFinalVideo(pack) {
     }
   }
   if (els.exportStatus && has) {
-    els.exportStatus.textContent = 'Vídeo pronto. 1 crédito já foi usado. Assista acima ou baixe o arquivo.';
+    els.exportStatus.textContent = pack.watermarked
+      ? `Vídeo pronto com marca d'água ${EXPORT_WATERMARK_LABEL}. 1 crédito já foi usado.`
+      : 'Vídeo pronto. 1 crédito já foi usado. Assista acima ou baixe o arquivo.';
   }
   updateFinishCta(pack);
 }
@@ -2153,6 +2156,10 @@ async function requestFinalMp4() {
     toast('Já estou montando o MP4.');
     return;
   }
+  const watermarked = shouldWatermarkExport();
+  if (watermarked) {
+    toast(`Com 1 crédito, o vídeo sai com marca d'água ${EXPORT_WATERMARK_LABEL}.`);
+  }
   stopProjectPreview();
   abortCapture();
   state.exporting = true;
@@ -2177,13 +2184,18 @@ async function requestFinalMp4() {
     if (pack.finalUrl) URL.revokeObjectURL(pack.finalUrl);
     pack.finalBlob = output;
     pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
+    pack.watermarked = watermarked;
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
     if (!isOwner()) setCredits(getCredits() - 1);
     showFinalVideo(pack);
     scheduleSave();
     toast(pack.finalExt === 'mp4'
-      ? 'Dublagem pronta em MP4. Assista ou baixe.'
-      : 'Dublagem pronta em WebM. A conversão MP4 não rodou neste navegador.');
+      ? watermarked
+        ? `Dublagem pronta em MP4 com marca d'água ${EXPORT_WATERMARK_LABEL}.`
+        : 'Dublagem pronta em MP4. Assista ou baixe.'
+      : watermarked
+        ? `Dublagem pronta em WebM com marca d'água ${EXPORT_WATERMARK_LABEL}.`
+        : 'Dublagem pronta em WebM. A conversão MP4 não rodou neste navegador.');
     els.exportVideoBtn?.classList.remove('pulse-next');
     els.exportVideoBtnSide?.classList.remove('pulse-next');
     if (els.finalVideo) {
@@ -2346,6 +2358,7 @@ async function openOgvFilm(url, onProgress) {
     play: () => player.play(),
     pause: () => player.pause(),
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
+    getPaintSource: () => player._canvas || player.querySelector('canvas') || paintCanvas,
     getTrack: () => paintCanvas.captureStream(30).getVideoTracks()[0],
     stop: () => {
       painting = false;
@@ -2369,6 +2382,7 @@ async function openNativeFilm(url) {
     ended: new Promise((resolve) => {
       video.onended = resolve;
     }),
+    getPaintSource: () => video,
     getTrack: () => {
       const capture = video.captureStream?.bind(video) || video.mozCaptureStream?.bind(video);
       if (capture) return capture().getVideoTracks()[0];
@@ -2482,12 +2496,101 @@ function resolveFilmUrl(pack) {
 }
 
 function coverDraw(ctx, media, width, height) {
-  const mw = media.videoWidth || media.naturalWidth || width;
-  const mh = media.videoHeight || media.naturalHeight || height;
+  const mw = media.videoWidth || media.naturalWidth || media.width || width;
+  const mh = media.videoHeight || media.naturalHeight || media.height || height;
   const scale = Math.max(width / mw, height / mh);
   const dw = mw * scale;
   const dh = mh * scale;
   ctx.drawImage(media, (width - dw) / 2, (height - dh) / 2, dw, dh);
+}
+
+function shouldWatermarkExport() {
+  return !isOwner() && getCredits() === 1;
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function drawExportWatermark(ctx, width, height) {
+  const label = EXPORT_WATERMARK_LABEL;
+  const pad = Math.max(14, Math.round(width * 0.022));
+  const fontSize = Math.max(18, Math.round(width * 0.032));
+  ctx.save();
+  ctx.font = `800 ${fontSize}px Inter, system-ui, sans-serif`;
+  ctx.textBaseline = 'bottom';
+  const textW = ctx.measureText(label).width;
+  const boxW = textW + pad * 2.2;
+  const boxH = fontSize + pad * 1.35;
+  const x = width - boxW - pad;
+  const y = height - pad;
+  ctx.fillStyle = 'rgba(9, 8, 23, 0.62)';
+  roundRectPath(ctx, x, y - boxH, boxW, boxH, 10);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(245, 46, 131, 0.9)';
+  ctx.fillRect(x, y - boxH, 4, boxH);
+  ctx.shadowColor = 'rgba(245, 46, 131, 0.45)';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+  ctx.fillText(label, x + pad + 2, y - pad * 0.55);
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.11;
+  ctx.font = `900 ${Math.max(28, Math.round(width * 0.075))}px Inter, system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate(-0.32);
+  ctx.fillStyle = '#f52e83';
+  ctx.fillText(label, 0, 0);
+  ctx.restore();
+}
+
+async function buildWatermarkedVideoTrack(film) {
+  let width = 1280;
+  let height = 720;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const source = film.getPaintSource?.();
+    const w = source?.videoWidth || source?.width || 0;
+    const h = source?.videoHeight || source?.height || 0;
+    if (w > 1 && h > 1) {
+      width = w;
+      height = h;
+      break;
+    }
+    await wait(40);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  let painting = true;
+  const paint = () => {
+    if (!painting) return;
+    const source = film.getPaintSource?.();
+    if (source) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, height);
+      coverDraw(ctx, source, width, height);
+      drawExportWatermark(ctx, width, height);
+    }
+    requestAnimationFrame(paint);
+  };
+  paint();
+  const stream = canvas.captureStream(30);
+  return {
+    track: stream.getVideoTracks()[0],
+    stop: () => {
+      painting = false;
+      stream.getTracks().forEach((track) => track.stop());
+    }
+  };
 }
 
 async function composeDubbedVideo(pack, onProgress) {
@@ -2506,6 +2609,7 @@ async function composeDubbedVideo(pack, onProgress) {
   const stops = [];
   let film;
   let bed;
+  let videoPipeline = null;
   let recordingStarted = false;
   let recorder;
   let stopped = Promise.resolve();
@@ -2570,8 +2674,12 @@ async function composeDubbedVideo(pack, onProgress) {
       }
     }
 
-    const videoTrack = film.getTrack();
+    const watermarked = shouldWatermarkExport();
+    const videoTrack = watermarked
+      ? (videoPipeline = await buildWatermarkedVideoTrack(film)).track
+      : film.getTrack();
     if (!videoTrack) throw new Error('Não deu para capturar o filme da cena.');
+    if (watermarked) onProgress?.(24, 'Gravando a marca d\'água no vídeo');
 
     const mixed = new MediaStream([
       videoTrack,
@@ -2625,6 +2733,7 @@ async function composeDubbedVideo(pack, onProgress) {
       await stopped;
     }
     stops.forEach((stop) => stop?.());
+    videoPipeline?.stop();
     bed?.stop();
     film?.stop();
     dest.stream.getTracks().forEach((track) => track.stop());
@@ -2777,6 +2886,7 @@ async function persistSession() {
       zipBytes: pack.zipBytes,
       finalBlob: pack.finalBlob || null,
       finalExt: pack.finalExt || '',
+      watermarked: Boolean(pack.watermarked),
       takes: Object.fromEntries(await Promise.all(Object.entries(pack.takes).map(async ([id, take]) => {
         const blob = take.blob || await fetch(take.url).then((response) => response.blob());
         return [id, {
@@ -2838,6 +2948,7 @@ async function restoreSession() {
       if (saved.finalBlob) {
         pack.finalBlob = saved.finalBlob;
         pack.finalExt = saved.finalExt || 'mp4';
+        pack.watermarked = Boolean(saved.watermarked);
         pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
       }
       state.packs.push(pack);
