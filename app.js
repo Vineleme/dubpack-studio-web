@@ -1147,12 +1147,7 @@ function playReference() {
   stopActivePlayback();
   playSceneMedia(scene, scene.duration);
   animateProgress(scene.duration);
-  const layers = [{ url: scene.audioUrl, volume: 1 }];
-  if (isIOS()) {
-    playLayersHtml(layers, scene.duration);
-  } else {
-    void playLayers(layers, scene.duration).catch(() => toast(iosAudioHint()));
-  }
+  playLayersHtml([{ url: scene.audioUrl, volume: 1 }], scene.duration);
 }
 
 function iosAudioHint() {
@@ -1537,16 +1532,6 @@ function bindSceneVisual(scene) {
   const empty = els.emptyFrame;
   if (!video || !image || !empty) return;
 
-  if (scene.imageUrl) {
-    video.pause();
-    video.style.display = 'none';
-    empty.style.display = 'none';
-    empty.replaceChildren();
-    image.style.display = 'block';
-    if (image.src !== scene.imageUrl) image.src = scene.imageUrl;
-    return;
-  }
-
   if (scene.videoUrl) {
     image.style.display = 'none';
     empty.style.display = 'none';
@@ -1554,8 +1539,20 @@ function bindSceneVisual(scene) {
     video.style.display = 'block';
     video.muted = true;
     video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('muted', '');
     if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
     showSceneStill(scene);
+    return;
+  }
+
+  if (scene.imageUrl) {
+    video.pause();
+    video.style.display = 'none';
+    empty.style.display = 'none';
+    empty.replaceChildren();
+    image.style.display = 'block';
+    if (image.src !== scene.imageUrl) image.src = scene.imageUrl;
     return;
   }
 
@@ -1568,29 +1565,50 @@ function bindSceneVisual(scene) {
 
 function playSceneMedia(scene, duration) {
   state.sceneMediaActive = true;
-  if (scene.imageUrl && els.sceneImage) {
-    els.sceneImage.style.display = 'block';
-    if (els.sceneVideo) els.sceneVideo.style.display = 'none';
+  const video = els.sceneVideo;
+  const image = els.sceneImage;
+  const empty = els.emptyFrame;
+  if (scene.videoUrl && video) {
+    if (image) image.style.display = 'none';
+    if (empty) empty.style.display = 'none';
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('muted', '');
+    video.style.display = 'block';
+    if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
+    const start = Number(scene.videoOffset) || 0;
+    const kick = () => {
+      if (!state.sceneMediaActive || currentScene()?.id !== scene.id) return;
+      const playNow = () => {
+        if (!state.sceneMediaActive) return;
+        video.play().catch(() => undefined);
+      };
+      try {
+        if (Math.abs((video.currentTime || 0) - start) > 0.12) {
+          video.addEventListener('seeked', playNow, { once: true });
+          video.currentTime = start;
+        } else {
+          playNow();
+        }
+      } catch {
+        playNow();
+      }
+    };
+    if (video.readyState >= 2) kick();
+    else video.addEventListener('loadeddata', kick, { once: true });
+    clearTimeout(state.videoTimer);
+    state.videoTimer = setTimeout(() => {
+      state.sceneMediaActive = false;
+      video.pause();
+      showSceneStill(scene);
+    }, Math.max(0.4, Number(duration) || 1) * 1000);
     return;
   }
-  if (!scene.videoUrl || !els.sceneVideo) return;
-  const video = els.sceneVideo;
-  video.muted = true;
-  video.playsInline = true;
-  video.style.display = 'block';
-  const start = Number(scene.videoOffset) || 0;
-  try {
-    video.currentTime = start;
-  } catch {
-    // ignore
+  if (scene.imageUrl && image) {
+    image.style.display = 'block';
+    if (video) video.style.display = 'none';
   }
-  video.play().catch(() => undefined);
-  clearTimeout(state.videoTimer);
-  state.videoTimer = setTimeout(() => {
-    state.sceneMediaActive = false;
-    video.pause();
-    showSceneStill(scene);
-  }, duration * 1000);
 }
 
 function showSceneStill(scene) {
