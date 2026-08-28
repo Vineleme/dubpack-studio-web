@@ -160,7 +160,6 @@ const els = {
   profileName: document.querySelector('#profileName'),
   profileMeta: document.querySelector('#profileMeta'),
   profileCreditsLine: document.querySelector('#profileCreditsLine'),
-  dubChromeNote: document.querySelector('#dubChromeNote'),
   authGate: document.querySelector('#authGate'),
   authForm: document.querySelector('#authForm'),
   authEmail: document.querySelector('#authEmail'),
@@ -231,7 +230,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=66').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=67').catch(() => undefined);
 }
 
 function bindUi() {
@@ -311,7 +310,6 @@ function bindUi() {
 
 async function bootApp() {
   applyI18n();
-  updateChromeNote();
   showStudio();
   renderCreditShop();
   if (!firebaseAuth) {
@@ -456,21 +454,10 @@ function changeLang(lang) {
   refreshAuthI18n();
   if (state.user) refreshAccountUi();
   renderCreditShop();
-  updateChromeNote();
   const pack = currentPack();
   if (pack) {
     updateFinishCta(pack);
     showFinalVideo(pack);
-  }
-}
-
-function updateChromeNote() {
-  if (!els.dubChromeNote) return;
-  els.dubChromeNote.classList.toggle('is-hidden', isIOS());
-  if (!isIOS()) {
-    els.dubChromeNote.textContent = getLang() === 'en'
-      ? 'On Chrome and desktop, the export is WebM. It plays here in the browser and in VLC.'
-      : 'No Chrome e no PC, o export sai em WebM. Toca aqui no navegador e no VLC.';
   }
 }
 
@@ -663,7 +650,6 @@ async function finishLogin(account, options = {}) {
   pruneExpiredPacks();
   renderCreditShop();
   updateCreditUi();
-  updateChromeNote();
   renderActivity();
   showFinalVideo(currentPack());
 }
@@ -1039,7 +1025,6 @@ function setTab(tab) {
   if (tab === 'record' && !state.previewing) selectScene(state.activeIndex);
   if (tab === 'dub') {
     showFinalVideo(currentPack());
-    updateChromeNote();
   }
   if (tab === 'credits' || tab === 'profile') {
     updateCreditUi();
