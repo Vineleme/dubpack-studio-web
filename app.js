@@ -245,9 +245,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
-      return script.includes('sw.js?v=90') ? Promise.resolve() : reg.unregister();
+      return script.includes('sw.js?v=91') ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register('./sw.js?v=90'))
+    .then(() => navigator.serviceWorker.register('./sw.js?v=91'))
     .catch(() => undefined);
 }
 
