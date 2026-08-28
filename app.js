@@ -32,6 +32,9 @@ const FIREBASE_CONFIG = {
 };
 
 let firebaseAuth = null;
+let firebaseAuthReady = Promise.resolve();
+let authListenerBound = false;
+
 try {
   if (window.firebase?.apps?.length) {
     firebaseAuth = window.firebase.auth();
@@ -41,7 +44,7 @@ try {
   }
   if (firebaseAuth) {
     firebaseAuth.languageCode = 'pt';
-    void firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+    firebaseAuthReady = ensureAuthPersistence();
   }
 } catch (error) {
   console.error(error);
@@ -57,26 +60,40 @@ async function ensureAuthPersistence() {
   }
 }
 
-async function waitForFirebaseUser(timeoutMs = 10000) {
-  if (!firebaseAuth) return null;
-  if (firebaseAuth.currentUser) return firebaseAuth.currentUser;
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (user) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      unsubscribe();
-      resolve(user);
-    };
-    const unsubscribe = firebaseAuth.onAuthStateChanged((user) => finish(user));
-    const timer = setTimeout(() => finish(firebaseAuth.currentUser || null), timeoutMs);
+function readSessionUser() {
+  try {
+    const raw = localStorage.getItem(SESSION_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function bindFirebaseAuthListener() {
+  if (!firebaseAuth || authListenerBound) return;
+  authListenerBound = true;
+  firebaseAuth.onAuthStateChanged(async (fbUser) => {
+    if (fbUser) {
+      const account = accountFromFirebase(fbUser);
+      if (state.user?.uid === account.uid) {
+        showAuthGate(false);
+        return;
+      }
+      await finishLogin(account, { toast: false });
+      return;
+    }
+    if (state.user) {
+      state.user = null;
+      localStorage.removeItem(SESSION_USER_KEY);
+      showAuthGate(true);
+    }
   });
 }
 
 async function restoreAuthSession() {
   if (!firebaseAuth) return false;
-  await ensureAuthPersistence();
+  await firebaseAuthReady;
+  bindFirebaseAuthListener();
   if (typeof firebaseAuth.authStateReady === 'function') {
     try {
       await firebaseAuth.authStateReady();
@@ -84,8 +101,18 @@ async function restoreAuthSession() {
       console.error(error);
     }
   }
-  const fbUser = await waitForFirebaseUser();
+
+  let fbUser = firebaseAuth.currentUser;
+  if (!fbUser) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    fbUser = firebaseAuth.currentUser;
+  }
   if (!fbUser) return false;
+
+  if (state.user?.uid === fbUser.uid) {
+    showAuthGate(false);
+    return true;
+  }
   await finishLogin(accountFromFirebase(fbUser), { toast: false });
   return true;
 }
@@ -266,12 +293,13 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
+  const swVersion = '96';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
-      return script.includes('sw.js?v=91') ? Promise.resolve() : reg.unregister();
+      return script.includes(`sw.js?v=${swVersion}`) ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register('./sw.js?v=91'))
+    .then(() => navigator.serviceWorker.register(`./sw.js?v=${swVersion}`))
     .catch(() => undefined);
 }
 
@@ -354,6 +382,7 @@ document.querySelectorAll('[data-tab]').forEach((button) => {
 async function bootApp() {
   applyI18n();
   showStudio();
+  showAuthGate(true);
   window.DubpackCart?.initCart({
     toast,
     t,
@@ -362,15 +391,19 @@ async function bootApp() {
   handleCheckoutReturn();
   renderCreditShop();
   if (!firebaseAuth) {
-    showAuthGate(true);
     toast('Firebase não carregou. Recarregue a página.');
     return;
   }
+  await firebaseAuthReady;
   const restored = await restoreAuthSession();
-  if (!restored) {
-    state.user = null;
-    showAuthGate(true);
+  if (!restored && readSessionUser()?.email) {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    if (firebaseAuth.currentUser) {
+      await finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false });
+      return;
+    }
   }
+  if (!restored && !state.user) showAuthGate(true);
 }
 
 function normalizeEmail(value) {
