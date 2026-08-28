@@ -331,9 +331,11 @@ async function runSeekDrivenFilm(film, durationSec, onTick) {
 export async function ensureOgvPlayer() {
   if (window.OGVPlayer || window.ogv?.OGVPlayer) return window.OGVPlayer || window.ogv.OGVPlayer;
   window.OGVLoader = window.OGVLoader || {};
-  window.OGVLoader.base = 'https://unpkg.com/ogv@1.8.9/dist/';
-  await loadScript('https://unpkg.com/ogv@1.8.9/dist/ogv-support.js');
-  await loadScript('https://unpkg.com/ogv@1.8.9/dist/ogv.js');
+  // Host decoder files ourselves — CSP blocks unpkg, and browsers cannot play .ogv natively.
+  const base = new URL('./vendor/ogv/', window.location.href).href;
+  window.OGVLoader.base = base;
+  await loadScript(`${base}ogv-support.js`);
+  await loadScript(`${base}ogv.js`);
   const Player = window.OGVPlayer || window.ogv?.OGVPlayer;
   if (!Player) throw new Error('Não carregou o player de .ogv.');
   return Player;
@@ -449,15 +451,16 @@ export async function openFilmPlayback(candidates, onProgress) {
   let lastError = null;
   for (const url of candidates) {
     try {
+      // Choicer packs ship Theora .ogv — Chrome/Safari cannot play it natively.
       if (await urlLooksLikeOgg(url)) return await openOgvFilm(url, onProgress);
-      return await openNativeFilm(url);
+      try {
+        return await openNativeFilm(url);
+      } catch (nativeError) {
+        lastError = nativeError;
+        return await openOgvFilm(url, onProgress);
+      }
     } catch (error) {
       lastError = error;
-      try {
-        return await openOgvFilm(url, onProgress);
-      } catch (ogvError) {
-        lastError = ogvError;
-      }
     }
   }
   throw lastError || new Error('Não achei o vídeo da cena no ZIP.');
