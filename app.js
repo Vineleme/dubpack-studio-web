@@ -326,7 +326,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '103';
+  const swVersion = '104';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -1045,6 +1045,7 @@ async function importPack(event) {
     if (zipBytes.length < 4 || zipBytes[0] !== 0x50 || zipBytes[1] !== 0x4b) {
       throw new Error('Isso não é um ZIP. Importe o pack em .zip.');
     }
+    toast('Lendo arquivos do pack…');
     const packName = file.name.replace(/\.zip$/i, '');
     const pack = await buildPack(packName, zipBytes);
     upsertPack(pack);
@@ -1064,9 +1065,18 @@ async function importPack(event) {
 }
 
 async function buildPack(name, zipBytes) {
+  await wait(0);
   let files;
   try {
-    files = fflate.unzipSync(zipBytes);
+    files = await new Promise((resolve, reject) => {
+      window.setTimeout(() => {
+        try {
+          resolve(fflate.unzipSync(zipBytes));
+        } catch (error) {
+          reject(error);
+        }
+      }, 0);
+    });
   } catch {
     throw new Error('ZIP inválido ou corrompido.');
   }
@@ -1113,6 +1123,9 @@ async function buildPack(name, zipBytes) {
     throw new Error('Não achei os arquivos de áudio descritos no pack.');
   }
 
+  const sharedUrl = sharedVideo ? objectUrl(sharedVideo) : '';
+  const firstVideo = videos[0] ? objectUrl(videos[0]) : '';
+
   const scenes = await Promise.all(sourceAudio.map(async ({ entry, line }, index) => {
     const baseName = entry.name.split('/').pop()?.replace(/\.[^.]+$/, '') ?? `Fala ${index + 1}`;
     const audioUrl = objectUrl(entry);
@@ -1132,8 +1145,6 @@ async function buildPack(name, zipBytes) {
     const subtitle = choicer?.caption || line?.text || line?.line || line?.subtitle || line?.dialogue || sidecar || spokenLineFromName(baseName, character);
     const imageUrl = findSceneArt(choicer, index, images, objectUrl, entry);
     const matchedVideo = visualUrlFor(entry, index, videos, objectUrl);
-    const sharedUrl = sharedVideo ? objectUrl(sharedVideo) : '';
-    const firstVideo = videos[0] ? objectUrl(videos[0]) : '';
     return {
       id: `${index}-${baseName}`,
       title: baseName,
@@ -1494,6 +1505,7 @@ async function startTakeFlow() {
   }
 
   state.liveStream = stream;
+  startMeter(stream);
   stream.getAudioTracks().forEach((track) => {
     track.enabled = true;
   });
@@ -1755,7 +1767,8 @@ async function playProjectPreview() {
       ? [{ url: take.url, volume: 1 }, { url: scene.audioUrl, volume: BED_VOLUME }]
       : [{ url: scene.audioUrl, volume: 1 }];
     playLayersHtml(layers, scene.duration);
-    await wait((scene.duration * 1000) + 180);
+    const ok = await interruptibleWait((scene.duration * 1000) + 180, gen);
+    if (!ok) return;
   }
 
   if (state.previewGen === gen) stopProjectPreview();
@@ -2047,7 +2060,12 @@ function showStudioTip(index, pause) {
   state.tipIndex = index;
   const tip = tips[index];
   if (!tip) return;
-  if (els.tipTitle) els.tipTitle.innerHTML = `<strong>${tip.title}</strong>`;
+  if (els.tipTitle) {
+    els.tipTitle.replaceChildren();
+    const strong = document.createElement('strong');
+    strong.textContent = tip.title;
+    els.tipTitle.append(strong);
+  }
   if (els.tipBody) els.tipBody.textContent = tip.body;
   els.tipDots?.querySelectorAll('button').forEach((dot, i) => {
     dot.classList.toggle('is-on', i === index);
@@ -4151,6 +4169,18 @@ function getMediaDuration(url) {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function interruptibleWait(ms, gen) {
+  const step = 120;
+  let left = ms;
+  while (left > 0) {
+    if (!state.previewing || state.previewGen !== gen) return false;
+    const chunk = Math.min(step, left);
+    await wait(chunk);
+    left -= chunk;
+  }
+  return state.previewing && state.previewGen === gen;
 }
 
 function safeFile(value) {

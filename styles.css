@@ -1389,7 +1389,9 @@ body.needs-auth .dashboard {
 }
 
 .take-rail {
-  display: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .rail-dot {
