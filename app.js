@@ -10,6 +10,7 @@ const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
 const PRO_MONTHLY_PRICE = 9.9;
+const PRO_MONTHLY_PRICE_USD = 1.99;
 const PRO_MONTHLY_CREDITS = 200;
 const PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_USER_KEY = 'dubpack-user';
@@ -222,9 +223,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
-      return script.includes('sw.js?v=86') ? Promise.resolve() : reg.unregister();
+      return script.includes('sw.js?v=87') ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register('./sw.js?v=86'))
+    .then(() => navigator.serviceWorker.register('./sw.js?v=87'))
     .catch(() => undefined);
 }
 
@@ -306,6 +307,12 @@ function bindUi() {
 async function bootApp() {
   applyI18n();
   showStudio();
+  window.DubpackCart?.initCart({
+    toast,
+    t,
+    getUser: () => state.user
+  });
+  handleCheckoutReturn();
   renderCreditShop();
   if (!firebaseAuth) {
     showAuthGate(true);
@@ -411,16 +418,7 @@ function subscribePro() {
     if (isPro() && !isOwner()) toast(t('toast.pro.already'));
     return;
   }
-  const now = Date.now();
-  writeProState({
-    active: true,
-    subscribedAt: now,
-    periodEnd: now + PRO_PERIOD_MS,
-    lastCreditMonth: ''
-  });
-  ensureProMonthlyCredits();
-  refreshAccountUi();
-  toast(t('toast.pro.success', { credits: PRO_MONTHLY_CREDITS }));
+  addProToCart();
 }
 
 function proStatusLabel() {
@@ -446,6 +444,7 @@ function changeLang(lang) {
   if (state.user) refreshAccountUi();
   renderCreditShop();
   refreshStudioTips();
+  window.DubpackCart?.renderCart();
   const pack = currentPack();
   if (pack) {
     updateFinishCta(pack);
@@ -640,6 +639,8 @@ async function finishLogin(account, options = {}) {
   pruneExpiredPacks();
   renderCreditShop();
   updateCreditUi();
+  window.DubpackCart?.loadCart();
+  window.DubpackCart?.renderCart();
   renderActivity();
   showFinalVideo(currentPack());
 }
@@ -2346,9 +2347,9 @@ function toast(message) {
 
 const CREDIT_KEY = 'dubpack-credits';
 const CREDIT_PACKS = [
-  { id: 'c100', credits: 100, price: 9.9, labelKey: 'pack.c100.label', hintKey: 'pack.c100.hint' },
-  { id: 'c200', credits: 200, price: 12.9, labelKey: 'pack.c200.label', hintKey: 'pack.c200.hint' },
-  { id: 'c300', credits: 300, price: 15.9, labelKey: 'pack.c300.label', hintKey: 'pack.c300.hint', featured: true }
+  { id: 'c100', credits: 100, price: 9.9, priceUsd: 1.99, labelKey: 'pack.c100.label', hintKey: 'pack.c100.hint' },
+  { id: 'c200', credits: 200, price: 12.9, priceUsd: 2.49, labelKey: 'pack.c200.label', hintKey: 'pack.c200.hint' },
+  { id: 'c300', credits: 300, price: 15.9, priceUsd: 2.99, labelKey: 'pack.c300.label', hintKey: 'pack.c300.hint', featured: true }
 ];
 
 function formatBrl(value, { monthly = false } = {}) {
@@ -2536,19 +2537,57 @@ function renderCreditShop() {
     const title = document.createElement('strong');
     title.textContent = label;
     const price = document.createElement('b');
-    price.textContent = formatBrl(pack.price);
+    price.textContent = `${formatBrl(pack.price)} · $${pack.priceUsd.toFixed(2)}`;
     const hint = document.createElement('span');
     hint.textContent = t(pack.hintKey);
-    button.append(title, price, hint);
-    button.addEventListener('click', () => buyCredits({ ...pack, label }));
+    const action = document.createElement('em');
+    action.className = 'credit-card-action';
+    action.textContent = t('cart.add');
+    button.append(title, price, hint, action);
+    button.addEventListener('click', () => addPackToCart({ ...pack, label }));
     packGrid.append(button);
   });
   els.creditShop.append(packGrid);
 }
 
-function buyCredits(pack) {
-  setCredits(getCredits() + pack.credits);
-  toast(t('shop.buy.success', { label: pack.label }));
+function addPackToCart(pack) {
+  if (isOwner()) {
+    toast(t('cart.owner'));
+    return;
+  }
+  window.DubpackCart?.addCartItem({
+    id: pack.id,
+    type: 'pack',
+    label: pack.label,
+    credits: pack.credits,
+    priceBrl: pack.price,
+    priceUsd: pack.priceUsd
+  });
+  setTab('credits');
+}
+
+function addProToCart() {
+  if (isOwner() || isPro()) return;
+  window.DubpackCart?.addCartItem({
+    id: 'pro-monthly',
+    type: 'pro',
+    label: t('pro.card.title'),
+    credits: PRO_MONTHLY_CREDITS,
+    priceBrl: PRO_MONTHLY_PRICE,
+    priceUsd: PRO_MONTHLY_PRICE_USD
+  });
+  setTab('credits');
+}
+
+function handleCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get('checkout');
+  if (!status) return;
+  if (status === 'success') toast(t('cart.checkout.success'));
+  else if (status === 'cancel') toast(t('cart.checkout.cancel'));
+  params.delete('checkout');
+  const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`;
+  window.history.replaceState({}, '', next);
 }
 
 function renderActivity() {

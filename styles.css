@@ -86,6 +86,145 @@ button, label, a { border: 0; text-decoration: none; }
   border: 1px solid rgba(255, 210, 30, 0.18);
 }
 
+.side-cart {
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(10, 8, 28, 0.72);
+  border: 1px solid rgba(245, 46, 131, 0.16);
+}
+
+.side-cart.has-items {
+  border-color: rgba(91, 255, 58, 0.28);
+  box-shadow: 0 0 0 1px rgba(91, 255, 58, 0.08);
+}
+
+.side-cart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.side-cart-head strong {
+  min-width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(91, 255, 58, 0.16);
+  color: #5bff3a;
+  font-size: 12px;
+}
+
+.side-cart-empty {
+  margin: 0;
+  color: #8f8ca8;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.side-cart-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.side-cart-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.side-cart-item-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.side-cart-item-meta strong {
+  font-size: 13px;
+  color: #fff;
+}
+
+.side-cart-item-meta span,
+.side-cart-item b {
+  font-size: 12px;
+  color: #b7b5ce;
+  font-weight: 600;
+}
+
+.side-cart-item b {
+  grid-column: 1 / -1;
+  color: #ffd21e;
+}
+
+.side-cart-remove {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(245, 46, 131, 0.14);
+  color: #fff;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.side-cart-footer {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.side-cart-footer.is-hidden {
+  display: none;
+}
+
+.side-cart-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #b7b5ce;
+}
+
+.side-cart-total strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.side-cart-clear {
+  border: 0;
+  background: transparent;
+  color: #8f8ca8;
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+  justify-self: start;
+  padding: 0;
+}
+
+.credit-card-action {
+  display: block;
+  margin-top: 8px;
+  font-style: normal;
+  font-size: 12px;
+  color: #5bff3a;
+  font-weight: 700;
+}
+
 .pro-card {
   margin-top: auto;
   padding: 20px;

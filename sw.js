@@ -1,10 +1,12 @@
-const CACHE = 'dubpack-studio-web-v86';
+const CACHE = 'dubpack-studio-web-v87';
 const PRECACHE = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './i18n.js',
+  './payments.js',
+  './payments.config.js',
   './manifest.webmanifest',
   './assets/dubpack-logo.jpg',
   './assets/dubpack-logo-brand.jpg',
