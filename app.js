@@ -231,7 +231,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=64').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=65').catch(() => undefined);
 }
 
 function bindUi() {
@@ -2477,6 +2477,7 @@ function renderActivity() {
 
 function showFinalVideo(pack) {
   const has = Boolean(pack?.finalUrl);
+  const isMp4 = pack?.finalExt === 'mp4' || pack?.finalBlob?.type?.includes('mp4');
   if (els.finalVideo) {
     els.finalVideo.loop = false;
     els.finalVideo.muted = false;
@@ -2487,12 +2488,18 @@ function showFinalVideo(pack) {
   if (els.finalVideoEmpty) els.finalVideoEmpty.style.display = has ? 'none' : 'grid';
   if (els.downloadMp4Btn) {
     els.downloadMp4Btn.classList.toggle('is-hidden', !has);
-    els.downloadMp4Btn.textContent = t('dub.download');
+    els.downloadMp4Btn.textContent = isMp4 ? t('dub.download') : (getLang() === 'en' ? 'Download WebM' : 'Baixar WebM');
   }
   if (els.exportStatus && has) {
-    els.exportStatus.textContent = pack.watermarked
-      ? t('export.ready.watermark', { brand: EXPORT_WATERMARK_LABEL })
-      : t('export.ready');
+    if (isMp4) {
+      els.exportStatus.textContent = pack.watermarked
+        ? t('export.ready.watermark', { brand: EXPORT_WATERMARK_LABEL })
+        : t('export.ready');
+    } else {
+      els.exportStatus.textContent = getLang() === 'en'
+        ? 'Video ready as WebM (Chrome could not convert to MP4 this time).'
+        : 'Vídeo pronto em WebM (Chrome não converteu para MP4 desta vez).';
+    }
   } else if (els.exportStatus && !has) {
     els.exportStatus.textContent = t('dub.status.none');
   }
@@ -2537,7 +2544,8 @@ async function downloadFinalMp4() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${safeFile(pack.name)}-dub.mp4`;
+  const ext = pack.finalExt === 'mp4' || blob.type.includes('mp4') ? 'mp4' : 'webm';
+  link.download = `${safeFile(pack.name)}-dub.${ext}`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -2587,25 +2595,42 @@ async function requestFinalMp4() {
   try {
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
+    let usedWebmFallback = false;
     if (!composed.type.includes('mp4')) {
       setExportProgress(92, 'Convertendo para MP4');
-      output = await convertToMp4(composed);
+      try {
+        output = await convertToMp4(composed);
+      } catch (convertError) {
+        if (isIOS()) throw convertError;
+        output = composed;
+        usedWebmFallback = true;
+      }
     }
-    if (!output.type.includes('mp4')) {
-      throw new Error('Não consegui gerar MP4 neste aparelho. Tente de novo com Wi‑Fi ligado.');
+    if (!output.type.includes('mp4') && isIOS()) {
+      throw new Error(getLang() === 'en'
+        ? 'Could not generate MP4 on this device. Try again on Wi‑Fi.'
+        : 'Não consegui gerar MP4 neste aparelho. Tente de novo com Wi‑Fi ligado.');
     }
     setExportProgress(100, 'Pronto');
     if (pack.finalUrl) URL.revokeObjectURL(pack.finalUrl);
     pack.finalBlob = output;
-    pack.finalExt = 'mp4';
+    pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
     pack.watermarked = watermarked;
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
     consumeExportCredit();
     showFinalVideo(pack);
     scheduleSave();
-    toast(watermarked
-      ? `Dublagem pronta em MP4 com marca d'água ${EXPORT_WATERMARK_LABEL}.`
-      : 'Dublagem pronta em MP4. Assista ou baixe.');
+    if (usedWebmFallback) {
+      toast(getLang() === 'en'
+        ? 'MP4 conversion failed on Chrome. Your dub is ready as WebM — use Download. Opens in VLC.'
+        : 'A conversão para MP4 falhou no Chrome. Sua dublagem ficou em WebM — use Baixar. Abre no VLC.');
+    } else {
+      toast(watermarked
+        ? (getLang() === 'en'
+          ? `Dub ready in MP4 with ${EXPORT_WATERMARK_LABEL} watermark.`
+          : `Dublagem pronta em MP4 com marca d'água ${EXPORT_WATERMARK_LABEL}.`)
+        : (getLang() === 'en' ? 'Dub ready in MP4. Watch or download.' : 'Dublagem pronta em MP4. Assista ou baixe.'));
+    }
     els.exportVideoBtn?.classList.remove('pulse-next');
     els.exportVideoBtnSide?.classList.remove('pulse-next');
     if (els.finalVideo) {
@@ -2633,8 +2658,8 @@ function pickVideoMime() {
     'video/mp4'
   ];
   const webmTypes = [
-    'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp9,opus',
     'video/webm'
   ];
   // iPhone: MP4 direto. Chrome/desktop: WebM na gravação → FFmpeg converte para MP4.
@@ -2720,14 +2745,14 @@ function loadExportVideo(src) {
 }
 
 async function waitForFilmReady(film) {
-  const deadline = performance.now() + 8000;
+  const deadline = performance.now() + 10000;
   while (performance.now() < deadline) {
     const source = film.getPaintSource?.();
     const w = source?.videoWidth || source?.width || 0;
     const h = source?.videoHeight || source?.height || 0;
     const t = film.currentTime?.() || 0;
-    if (w > 1 && h > 1 && t >= 0) return true;
-    await wait(50);
+    if (w > 1 && h > 1 && t > 0.04) return true;
+    await wait(60);
   }
   return false;
 }
@@ -3143,7 +3168,12 @@ async function composeDubbedVideo(pack, onProgress) {
     if (bed) bed.el.currentTime = 0;
     await film.play()?.catch?.(() => undefined);
     if (bed) await bed.el.play().catch(() => undefined);
-    await waitForFilmReady(film);
+    const ready = await waitForFilmReady(film);
+    if (!ready) {
+      throw new Error(getLang() === 'en'
+        ? 'The scene video did not start. Reload the page and try again.'
+        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
+    }
     recorder.start(isIOS() ? 100 : 250);
     recordingStarted = true;
     const t0 = audioCtx.currentTime + 0.05;
@@ -3183,7 +3213,11 @@ async function composeDubbedVideo(pack, onProgress) {
   }
 
   const blob = new Blob(chunks, { type: recorder?.mimeType || mimeType || 'video/webm' });
-  if (blob.size < 8000) throw new Error('Não consegui montar o vídeo. Toque em gerar de novo.');
+  if (blob.size < 8000) {
+    throw new Error(getLang() === 'en'
+      ? 'Could not record the video. On Chrome, keep this tab open and try again.'
+      : 'Não consegui gravar o vídeo. No Chrome, deixe esta aba aberta e toque em gerar de novo.');
+  }
   return blob;
 }
 
@@ -3398,6 +3432,11 @@ async function restoreSession() {
         if (savedType.includes('mp4') || savedExt.includes('mp4')) {
           pack.finalBlob = saved.finalBlob;
           pack.finalExt = 'mp4';
+          pack.watermarked = Boolean(saved.watermarked);
+          pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
+        } else if (savedType.includes('webm') || savedExt.includes('webm')) {
+          pack.finalBlob = saved.finalBlob;
+          pack.finalExt = 'webm';
           pack.watermarked = Boolean(saved.watermarked);
           pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
         }
