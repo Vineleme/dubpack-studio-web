@@ -1,9 +1,21 @@
-const CACHE = 'dubpack-studio-web-v104';
+const CACHE = 'dubpack-studio-web-v105';
 const PRECACHE = [
   './',
   './index.html',
   './styles.css',
-  './app.js',
+  './js/boot.js',
+  './js/constants.js',
+  './js/state.js',
+  './js/i18n-bridge.js',
+  './js/utils.js',
+  './js/auth.js',
+  './js/credits.js',
+  './js/pack.js',
+  './js/playback.js',
+  './js/recorder.js',
+  './js/export.js',
+  './js/persist.js',
+  './js/ui.js',
   './i18n.js',
   './payments.js',
   './payments.config.js',

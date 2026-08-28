@@ -1,6 +1,6 @@
 # DubPack Studio Web
 
-Versao web/PWA do DubPack Studio, inspirada no Dub Mode do Choicer Voicer.
+Versão web/PWA do DubPack Studio (importa packs ZIP, grava no tempo da fala, exporta vídeo, créditos via Stripe).
 
 ## Rodar local
 
@@ -8,30 +8,33 @@ Versao web/PWA do DubPack Studio, inspirada no Dub Mode do Choicer Voicer.
 npx serve .
 ```
 
-Se `npx` não estiver no PATH:
+Ou:
 
 ```bash
 node dev-server.js
 ```
 
-Depois abra o endereço local mostrado no terminal.
+## Estrutura (v105+)
 
-## O que este MVP faz
+- `index.html` + `styles.css` + `sw.js`
+- `js/` — módulos ES (`boot.js`, `auth.js`, `pack.js`, `recorder.js`, `playback.js`, `export.js`, `credits.js`, `ui.js`, …)
+- `i18n.js` / `payments.js` — scripts clássicos (globals)
+- `functions/` — Firebase Functions (Stripe checkout + webhook)
 
-- Importa um ou mais packs `.zip`.
-- Lista audios como falas (e usa `dub_video` / JSON de linhas se existirem).
-- Mostra imagem ou video quando existir no pack.
-- Toca referencia, grava com countdown de 3s e permite cancelar/parar no microfone.
-- Para a gravacao pelo tempo da fala.
-- Mede desempenho real (cobertura e duracao vs referencia).
-- Reproduz previa sequencial e guarda takes neste navegador (IndexedDB).
-- Baixa o take atual ou um ZIP com todos os audios.
-- Gera o vídeo final da dublagem e consome 1 crédito quando ele aparece.
-- Pacotes de crédito: 1/R$3, 2/R$5, 5/R$11, 10/R$20.
-- Pode ser publicado no GitHub Pages como site/PWA.
+## Stripe / créditos
 
-## O que fica para a proxima etapa
+1. Funções já deployadas: `createCheckout`, `verifyCheckout`, `syncAccount`, `stripeWebhook`
+2. Após o pagamento, o front chama `verifyCheckout` (com retry) e, se preciso, `syncAccount`
+3. Configure o webhook real:
 
-- Pix/cartão reais no lugar da compra simulada.
-- Conversão MP4 nativa em todos os navegadores (hoje o player já toca o vídeo final).
-- Login e feed da comunidade.
+```bash
+node tools/setup-stripe-webhook.cjs
+firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+firebase deploy --only functions:stripeWebhook
+```
+
+Nunca coloque o `whsec_...` no repositório.
+
+## Diagnóstico
+
+No Cursor, abra o canvas `dubpack-diagnostico.canvas.tsx` (ou peça “abre o diagnóstico”) para ver o que está verde / pendente antes de divulgar.
