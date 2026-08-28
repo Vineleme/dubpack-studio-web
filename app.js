@@ -1333,12 +1333,16 @@ function recordActiveScene() {
     state.recorder = new MediaRecorder(stream);
   }
   const startedAt = Date.now();
-  const recMs = Math.round(Math.max(1.6, Number(scene.duration) || 2) * 1000);
+  const lineSeconds = Math.max(1.6, Number(scene.duration) || 2);
+  const recMs = Math.round(lineSeconds * 1000);
 
   state.recorder.ondataavailable = (event) => {
     if (event.data?.size) state.chunks.push(event.data);
   };
   state.recorder.onstop = async () => {
+    clearTimeout(state.videoTimer);
+    state.videoTimer = null;
+    els.sceneVideo?.pause();
     await wait(180);
     const elapsed = (Date.now() - startedAt) / 1000;
     const livePeak = state.recordPeak;
@@ -1353,7 +1357,7 @@ function recordActiveScene() {
     if (!pack) return;
     const blob = new Blob(state.chunks, { type: state.chunks[0]?.type || mimeType || 'audio/webm' });
     if (blob.size < 400) {
-      toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo, sem o filme tocando.');
+      toast('Essa fala não gravou o áudio. Toque no microfone e fale de novo.');
       selectScene(state.activeIndex);
       return;
     }
@@ -1404,10 +1408,10 @@ function recordActiveScene() {
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
   els.recordBtn.setAttribute('aria-label', 'Parar');
-  els.micHint.textContent = 'Fale agora · o filme fica parado nesta fala';
+  els.micHint.textContent = scene.videoUrl ? t('record.mic.live') : t('record.mic.live.still');
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
-  els.sceneVideo?.pause();
-  animateProgress(recMs / 1000);
+  playSceneMedia(scene, lineSeconds);
+  animateProgress(lineSeconds);
 
   state.recordingTimer = setInterval(() => {
     const remaining = Math.max(0, (recMs / 1000) - ((Date.now() - startedAt) / 1000));
