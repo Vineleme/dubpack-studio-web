@@ -159,6 +159,8 @@ const els = {
   profileAvatarInput: document.querySelector('#profileAvatarInput'),
   profileName: document.querySelector('#profileName'),
   profileMeta: document.querySelector('#profileMeta'),
+  profileCreditsLine: document.querySelector('#profileCreditsLine'),
+  dubChromeNote: document.querySelector('#dubChromeNote'),
   authGate: document.querySelector('#authGate'),
   authForm: document.querySelector('#authForm'),
   authEmail: document.querySelector('#authEmail'),
@@ -229,7 +231,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=62').catch(() => undefined);
+  navigator.serviceWorker.register('./sw.js?v=63').catch(() => undefined);
 }
 
 function bindUi() {
@@ -270,6 +272,10 @@ function bindUi() {
   els.exportVideoBtn?.addEventListener('click', requestFinalMp4);
   els.exportVideoBtnSide?.addEventListener('click', requestFinalMp4);
   els.generateMp4Btn?.addEventListener('click', requestFinalMp4);
+  els.downloadMp4Btn?.addEventListener('click', () => void downloadFinalMp4());
+  document.querySelectorAll('[data-lang]').forEach((button) => {
+    button.addEventListener('click', () => changeLang(button.dataset.lang));
+  });
   els.helpBtn?.addEventListener('click', () => els.helpModal?.classList.remove('is-hidden'));
   els.helpCloseBtn?.addEventListener('click', () => els.helpModal?.classList.add('is-hidden'));
   els.helpModal?.addEventListener('click', (event) => {
@@ -304,6 +310,8 @@ function bindUi() {
 }
 
 async function bootApp() {
+  applyI18n();
+  updateChromeNote();
   showStudio();
   renderCreditShop();
   if (!firebaseAuth) {
@@ -427,19 +435,56 @@ function subscribePro() {
 }
 
 function proStatusLabel() {
-  if (isOwner()) return 'Dono · acesso total';
-  if (!isPro()) return 'Plano gratuito';
+  if (isOwner()) return t('plan.owner');
+  if (!isPro()) return t('plan.free');
   const pro = readProState();
   const days = pro?.periodEnd
     ? Math.max(0, Math.ceil((Number(pro.periodEnd) - Date.now()) / (24 * 60 * 60 * 1000)))
     : 0;
-  return `DubPack PRO · ${days} ${days === 1 ? 'dia' : 'dias'} restantes`;
+  return `DubPack PRO · ${t('plan.pro.days', { days })}`;
 }
 
 function showAuthGate(on) {
   els.authGate?.classList.toggle('is-hidden', !on);
   document.body.classList.toggle('needs-auth', Boolean(on));
   if (on) setAuthMode(state.authMode === 'signup' || state.authMode === 'reset' ? state.authMode : 'login');
+}
+
+function changeLang(lang) {
+  setLang(lang);
+  applyI18n();
+  refreshAuthI18n();
+  if (state.user) refreshAccountUi();
+  renderCreditShop();
+  updateChromeNote();
+  const pack = currentPack();
+  if (pack) {
+    updateFinishCta(pack);
+    showFinalVideo(pack);
+  }
+}
+
+function updateChromeNote() {
+  els.dubChromeNote?.classList.toggle('is-hidden', isIOS());
+}
+
+function refreshAuthI18n() {
+  const reset = state.authMode === 'reset';
+  const login = state.authMode === 'login';
+  if (els.authTitle) {
+    els.authTitle.textContent = t(reset ? 'auth.title.reset' : login ? 'auth.title.login' : 'auth.title.signup');
+  }
+  if (els.authLead) {
+    els.authLead.textContent = t(reset ? 'auth.lead.reset' : login ? 'auth.lead.login' : 'auth.lead.signup');
+  }
+  if (els.authSubmitBtn) {
+    els.authSubmitBtn.textContent = t(reset ? 'auth.submit.reset' : login ? 'auth.submit.login' : 'auth.submit.signup');
+  }
+  if (els.authSwitchBtn) {
+    els.authSwitchBtn.textContent = t(login ? 'auth.switch.signup' : 'auth.switch.login');
+  }
+  if (els.authPasswordLabel) els.authPasswordLabel.textContent = t('auth.password');
+  if (els.authPassword) els.authPassword.placeholder = t('auth.password.placeholder');
 }
 
 function setAuthMode(mode) {
@@ -452,26 +497,11 @@ function setAuthMode(mode) {
     if (login || reset) els.authName.value = '';
   }
   if (els.authPasswordWrap) els.authPasswordWrap.classList.toggle('is-hidden', reset);
-  if (els.authPasswordLabel) els.authPasswordLabel.textContent = 'Senha';
   if (els.authPassword) {
-    els.authPassword.placeholder = 'Sua senha';
     els.authPassword.autocomplete = 'current-password';
     if (reset) els.authPassword.value = '';
   }
-  if (els.authTitle) {
-    els.authTitle.textContent = reset ? 'Esqueci a senha' : login ? 'Entrar' : 'Criar conta';
-  }
-  if (els.authLead) {
-    els.authLead.textContent = reset
-      ? 'Enviaremos um link no seu e-mail para criar uma senha nova.'
-      : login
-        ? 'Entre para começar a dublar agora.'
-        : 'Crie sua conta para começar a dublar agora.';
-  }
-  if (els.authSubmitBtn) els.authSubmitBtn.textContent = reset ? 'Enviar e-mail' : login ? 'Entrar' : 'Entrar no Studio';
-  if (els.authSwitchBtn) {
-    els.authSwitchBtn.textContent = reset ? 'Voltar' : login ? 'Criar conta nova' : 'Já tenho conta';
-  }
+  refreshAuthI18n();
   if (els.authForgotBtn) els.authForgotBtn.classList.toggle('is-hidden', reset);
   if (!login && !reset) suggestSignupName();
 }
@@ -499,7 +529,11 @@ function refreshAccountUi() {
   const first = String(user?.name || 'dublador').split(' ')[0];
   const owner = isOwner(user);
   const pro = isPro(user);
-  if (els.welcomeTitle) els.welcomeTitle.textContent = `Bem-vindo de volta, ${first}!`;
+  if (els.welcomeTitle) {
+    els.welcomeTitle.textContent = user
+      ? t('welcome.back', { name: first })
+      : t('welcome');
+  }
   if (els.userChipName) els.userChipName.textContent = user?.name || 'Conta';
   if (els.profileName) els.profileName.textContent = user?.name || 'Conta';
   if (els.profileMeta) {
@@ -508,7 +542,7 @@ function refreshAccountUi() {
       : `${user?.email || ''} · ${proStatusLabel()}`;
   }
   if (els.proBtn) {
-    els.proBtn.textContent = owner ? 'Créditos infinitos' : pro ? 'Gerenciar PRO' : 'Seja PRO';
+    els.proBtn.textContent = owner ? t('pro.btn.owner') : pro ? t('pro.btn.manage') : t('pro.btn');
   }
   ensureProMonthlyCredits();
   renderAvatars();
@@ -623,6 +657,7 @@ async function finishLogin(account, options = {}) {
   pruneExpiredPacks();
   renderCreditShop();
   updateCreditUi();
+  updateChromeNote();
   renderActivity();
   showFinalVideo(currentPack());
 }
@@ -996,7 +1031,10 @@ function setTab(tab) {
   document.querySelector('.dashboard')?.classList.toggle('final-mode', tab === 'dub');
   if (tab !== 'record') abortCapture();
   if (tab === 'record' && !state.previewing) selectScene(state.activeIndex);
-  if (tab === 'dub') showFinalVideo(currentPack());
+  if (tab === 'dub') {
+    showFinalVideo(currentPack());
+    updateChromeNote();
+  }
   if (tab === 'credits' || tab === 'profile') {
     updateCreditUi();
     renderCreditShop();
@@ -1083,7 +1121,7 @@ function packIsComplete(pack) {
 }
 
 function finishCtaLabel(pack) {
-  return pack?.finalUrl ? 'Gerar de novo' : 'Finalizar dublagem';
+  return pack?.finalUrl ? t('record.regenerate') : t('record.finish');
 }
 
 function updateFinishCta(pack) {
@@ -1100,6 +1138,7 @@ function updateFinishCta(pack) {
     els.generateMp4Btn.disabled = false;
     els.generateMp4Btn.textContent = label;
   }
+  if (done && !isIOS()) void preloadFfmpeg();
 }
 
 function goNextScene() {
@@ -2299,8 +2338,9 @@ function setCredits(value) {
 }
 
 function creditLabel(count) {
-  if (!Number.isFinite(count) || count === Number.POSITIVE_INFINITY) return '∞ créditos';
-  return `${count} ${count === 1 ? 'crédito' : 'créditos'}`;
+  if (!Number.isFinite(count) || count === Number.POSITIVE_INFINITY) return t('credit.infinite');
+  const word = count === 1 ? t('credit.one') : t('credit.many');
+  return `${count} ${word}`;
 }
 
 function updateCreditUi() {
@@ -2310,9 +2350,11 @@ function updateCreditUi() {
     els.creditBadge.textContent = isPro() && !isOwner() ? `PRO · ${label}` : label;
   }
   if (els.creditsBalance) els.creditsBalance.textContent = label;
-  if (els.profileCredits) els.profileCredits.textContent = label;
+  if (els.profileCreditsLine) {
+    els.profileCreditsLine.textContent = t('profile.body', { credits: label });
+  }
   if (els.proBtn) {
-    els.proBtn.textContent = isOwner() ? 'Créditos infinitos' : isPro() ? 'Gerenciar PRO' : 'Seja PRO';
+    els.proBtn.textContent = isOwner() ? t('pro.btn.owner') : isPro() ? t('pro.btn.manage') : t('pro.btn');
   }
 }
 
@@ -2322,7 +2364,9 @@ function renderCreditShop() {
   if (isOwner()) {
     const note = document.createElement('p');
     note.className = 'hint-copy';
-    note.textContent = 'Conta de dono: créditos infinitos e exportação sem marca d\'água.';
+    note.textContent = getLang() === 'en'
+      ? 'Owner account: unlimited credits and exports without watermark.'
+      : 'Conta de dono: créditos infinitos e exportação sem marca d\'água.';
     els.creditShop.append(note);
     return;
   }
@@ -2330,18 +2374,18 @@ function renderCreditShop() {
   const proCard = document.createElement('article');
   proCard.className = `pro-plan-card${isPro() ? ' is-active' : ''}`;
   const proTitle = document.createElement('strong');
-  proTitle.textContent = 'DubPack PRO';
+  proTitle.textContent = t('pro.card.title');
   const proPrice = document.createElement('b');
   proPrice.textContent = `R$ ${PRO_MONTHLY_PRICE.toFixed(2).replace('.', ',')}/mês`;
   const proHint = document.createElement('p');
   proHint.className = 'hint-copy';
   proHint.textContent = isPro()
-    ? `${proStatusLabel()}. ${PRO_MONTHLY_CREDITS} créditos por mês, sem marca d'água, packs por 2 dias.`
-    : `${PRO_MONTHLY_CREDITS} créditos por mês, exportação sem marca d'água e suporte ao Studio. Dublar continua grátis.`;
+    ? `${proStatusLabel()}. ${PRO_MONTHLY_CREDITS} ${t('credit.many')}, ${getLang() === 'en' ? 'no watermark' : 'sem marca d\'água'}.`
+    : `${PRO_MONTHLY_CREDITS} ${t('credit.many')}/${getLang() === 'en' ? 'month' : 'mês'}, ${getLang() === 'en' ? 'no watermark on MP4' : 'MP4 sem marca d\'água'}. ${getLang() === 'en' ? 'Dubbing stays free.' : 'Dublar continua grátis.'}`;
   const proBtn = document.createElement('button');
   proBtn.type = 'button';
   proBtn.className = 'primary wide';
-  proBtn.textContent = isPro() ? 'PRO ativo neste aparelho' : 'Assinar DubPack PRO';
+  proBtn.textContent = isPro() ? t('pro.active') : t('pro.subscribe');
   proBtn.disabled = isPro();
   proBtn.addEventListener('click', subscribePro);
   proCard.append(proTitle, proPrice, proHint, proBtn);
@@ -2349,10 +2393,10 @@ function renderCreditShop() {
 
   const packsTitle = document.createElement('h3');
   packsTitle.className = 'shop-section-title';
-  packsTitle.textContent = 'Créditos extras';
+  packsTitle.textContent = t('credits.extra');
   const packsHint = document.createElement('p');
   packsHint.className = 'hint-copy';
-  packsHint.textContent = 'Importar, gravar e ouvir takes é grátis. Créditos servem para gerar o MP4 final.';
+  packsHint.textContent = t('credits.extra.hint');
   els.creditShop.append(packsTitle, packsHint);
 
   const packGrid = document.createElement('div');
@@ -2443,17 +2487,66 @@ function showFinalVideo(pack) {
   if (els.finalVideoEmpty) els.finalVideoEmpty.style.display = has ? 'none' : 'grid';
   if (els.downloadMp4Btn) {
     els.downloadMp4Btn.classList.toggle('is-hidden', !has);
-    if (has) {
-      els.downloadMp4Btn.href = pack.finalUrl;
-      els.downloadMp4Btn.download = `${safeFile(pack.name)}-dublagem.${pack.finalExt || 'mp4'}`;
-    }
+    els.downloadMp4Btn.textContent = t('dub.download');
   }
   if (els.exportStatus && has) {
     els.exportStatus.textContent = pack.watermarked
-      ? `Vídeo pronto com marca d'água ${EXPORT_WATERMARK_LABEL}. 1 crédito já foi usado.`
-      : 'Vídeo pronto. 1 crédito já foi usado. Assista acima ou baixe o arquivo.';
+      ? t('export.ready.watermark', { brand: EXPORT_WATERMARK_LABEL })
+      : t('export.ready');
+  } else if (els.exportStatus && !has) {
+    els.exportStatus.textContent = t('dub.status.none');
   }
   updateFinishCta(pack);
+}
+
+async function downloadFinalMp4() {
+  const pack = currentPack();
+  if (!pack?.finalBlob && !pack?.finalUrl) return;
+  let blob = pack.finalBlob;
+  if (!blob && pack.finalUrl) {
+    try {
+      blob = await fetch(pack.finalUrl).then((response) => response.blob());
+    } catch {
+      toast(t('export.reexport'));
+      return;
+    }
+  }
+  if (!blob.type.includes('mp4')) {
+    if (isIOS()) {
+      toast(t('export.reexport'));
+      return;
+    }
+    try {
+      state.exporting = true;
+      setExportProgress(92, 'Convertendo para MP4');
+      blob = await convertToMp4(blob);
+      if (pack.finalUrl) URL.revokeObjectURL(pack.finalUrl);
+      pack.finalBlob = blob;
+      pack.finalExt = 'mp4';
+      pack.finalUrl = rememberUrl(URL.createObjectURL(blob));
+      scheduleSave();
+      showFinalVideo(pack);
+    } catch {
+      toast(t('export.reexport'));
+      return;
+    } finally {
+      state.exporting = false;
+      hideExportProgress();
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${safeFile(pack.name)}-dub.mp4`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function preloadFfmpeg() {
+  if (isIOS()) return Promise.resolve();
+  return loadFfmpeg().catch(() => undefined);
 }
 
 async function requestFinalMp4() {
@@ -2534,19 +2627,17 @@ async function requestFinalMp4() {
 }
 
 function pickVideoMime() {
-  const iosTypes = [
+  const mp4Types = [
     'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
     'video/mp4;codecs=h264,aac',
     'video/mp4'
   ];
-  const defaultTypes = [
+  const webmTypes = [
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
-    'video/webm',
-    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-    'video/mp4'
+    'video/webm'
   ];
-  const types = isIOS() ? [...iosTypes, ...defaultTypes] : defaultTypes;
+  const types = [...mp4Types, ...webmTypes];
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -3296,10 +3387,14 @@ async function restoreSession() {
         pack.takes[id] = { ...take, url };
       });
       if (saved.finalBlob) {
-        pack.finalBlob = saved.finalBlob;
-        pack.finalExt = saved.finalExt || 'mp4';
-        pack.watermarked = Boolean(saved.watermarked);
-        pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
+        const savedType = String(saved.finalBlob.type || '');
+        const savedExt = String(saved.finalExt || '');
+        if (savedType.includes('mp4') || savedExt.includes('mp4')) {
+          pack.finalBlob = saved.finalBlob;
+          pack.finalExt = 'mp4';
+          pack.watermarked = Boolean(saved.watermarked);
+          pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
+        }
       }
       state.packs.push(pack);
     } catch {

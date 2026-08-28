@@ -1884,10 +1884,61 @@ body.needs-auth .dashboard {
   color: #ffd21e;
   font-size: 22px;
 }
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(16, 13, 38, 0.88);
+  border: 1px solid rgba(245, 46, 131, 0.22);
+}
+.lang-btn {
+  min-width: 36px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #b7b5ce;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 10px;
+}
+.lang-btn.active {
+  background: rgba(245, 46, 131, 0.22);
+  color: #fff;
+}
+.funnel-card {
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: rgba(16, 13, 38, 0.72);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  margin-bottom: 8px;
+}
+.funnel-steps {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 14px;
+}
+.funnel-steps li {
+  display: grid;
+  gap: 4px;
+}
+.funnel-steps strong {
+  font-size: 14px;
+}
+.funnel-steps span {
+  color: #b7b5ce;
+  font-size: 13px;
+  line-height: 1.45;
+}
 .shop-section-title {
   margin: 8px 0 0;
   font-size: 18px;
 }
+
 .credit-card {
   padding: 18px;
   border-radius: 16px;

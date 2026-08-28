@@ -1,0 +1,258 @@
+const LANG_KEY = 'dubpack-lang';
+
+const I18N = {
+  pt: {
+    'lang.label': 'Idioma',
+    'lang.pt': 'PT',
+    'lang.en': 'EN',
+    'brand.tagline': 'Sua voz no filme da cena. Grave, finalize e compartilhe.',
+    'auth.title.login': 'Entrar',
+    'auth.title.signup': 'Criar conta',
+    'auth.title.reset': 'Esqueci a senha',
+    'auth.lead.login': 'Entre para começar a dublar agora.',
+    'auth.lead.signup': 'Crie sua conta para começar a dublar agora.',
+    'auth.lead.reset': 'Enviaremos um link no seu e-mail para criar uma senha nova.',
+    'auth.name': 'Nome',
+    'auth.name.placeholder': 'Como você quer ser chamado?',
+    'auth.email': 'E-mail',
+    'auth.email.placeholder': 'voce@icloud.com',
+    'auth.password': 'Senha',
+    'auth.password.placeholder': 'Sua senha',
+    'auth.forgot': 'Esqueci a senha',
+    'auth.submit.login': 'Entrar',
+    'auth.submit.signup': 'Entrar no Studio',
+    'auth.submit.reset': 'Enviar e-mail',
+    'auth.switch.signup': 'Criar conta nova',
+    'auth.switch.login': 'Já tenho conta',
+    'auth.error': 'Senha errada.',
+    'help.title': 'Como dublar',
+    'help.close': 'Entendi',
+    'help.1': 'Importe um pack .zip com os áudios das falas (e vídeo ou imagens, se houver).',
+    'help.2': 'Toque em Referência para ouvir o original. No iPhone, desligue o modo silencioso (chave lateral) se não ouvir.',
+    'help.3': 'Toque no microfone: countdown de 3 segundos, depois grave no tempo da fala. Fone ajuda, mas não é obrigatório.',
+    'help.4': 'Toque de novo no microfone para cancelar o countdown ou encerrar a gravação.',
+    'help.5': 'Avance de fala, ouça o take e toque em Finalizar dublagem quando terminar. Packs ficam 2 dias — ou apague quando quiser no ✕ do card.',
+    'help.footer': 'Takes ficam neste navegador. Recarregar a página restaura o último pack, se o armazenamento local permitir.',
+    'nav.packs': 'Meus Packs',
+    'nav.record': 'Gravar',
+    'nav.dub': 'Finalizar',
+    'nav.profile': 'Perfil',
+    'nav.credits': 'Planos',
+    'pro.card.title': 'DubPack PRO',
+    'pro.card.body': 'Dublar é grátis. PRO traz créditos mensais, MP4 sem marca d\'água e mais conveniência.',
+    'pro.btn': 'Seja PRO',
+    'pro.btn.manage': 'Gerenciar PRO',
+    'pro.btn.owner': 'Créditos infinitos',
+    'welcome': 'Bem-vindo ao Studio',
+    'welcome.back': 'Bem-vindo de volta, {name}',
+    'topbar.hint': 'Escolha um pack e comece a dublar.',
+    'packs.title': 'Meus Packs',
+    'packs.add': '+ Adicionar Pack',
+    'packs.empty.title': 'Nenhum pack ainda',
+    'packs.empty.body': 'Traga um ZIP com as falas em mp3, wav, ogg ou m4a. Se o pack tiver vídeo (incluindo dub_video no estilo Choicer) ou imagens, eles aparecem no palco.',
+    'packs.import': 'Importar ZIP',
+    'record.back': '← Voltar',
+    'record.title': 'Nova dublagem',
+    'record.meta': 'Siga os passos e grave no tempo certo.',
+    'record.finish': 'Finalizar dublagem',
+    'record.regenerate': 'Gerar de novo',
+    'record.reference': '▶ Referência',
+    'record.mic': 'Toque para começar',
+    'record.listen': '▶ Ouvir meu take',
+    'record.next': 'Próxima cena →',
+    'record.prev': '← Cena anterior',
+    'record.preview.hint': 'Grave este take para ouvir aqui',
+    'dub.title': 'Vídeo final',
+    'dub.body': 'O resultado é o vídeo completo da cena, com o ambiente original e as vozes que você dublou no lugar dos personagens.',
+    'dub.empty': 'Grave as falas e gere o MP4 para assistir sua dublagem completa.',
+    'dub.status.none': 'Nenhum vídeo gerado ainda.',
+    'dub.download': 'Baixar MP4',
+    'profile.title': 'Perfil',
+    'profile.avatar': 'Tocar para trocar a foto',
+    'profile.body': 'Dublar é grátis. Créditos servem só para gerar o MP4 final. Você tem {credits}. Packs expiram em 2 dias — ou apague quando quiser.',
+    'profile.plans': 'Ver planos e créditos',
+    'profile.logout': 'Sair da conta',
+    'credits.title': 'Planos e créditos',
+    'credits.intro': 'Grátis: importar pack, gravar, ouvir referência e takes. MP4 final: 1 crédito. Com apenas 1 crédito no plano gratuito, o vídeo sai com marca d\'água DubPack Studio.',
+    'credits.balance': 'Saldo atual:',
+    'credits.footer': 'Pagamento real (Pix/cartão/Stripe) entra na próxima etapa. Assinatura PRO e créditos extras são simulados neste aparelho para você testar o fluxo.',
+    'funnel.title': 'Como o Studio cresce com você',
+    'funnel.1.title': 'Grátis — experimente',
+    'funnel.1.body': 'Importe seu pack, ouça a referência, grave e revise takes sem pagar.',
+    'funnel.2.title': 'Duble — perceba valor',
+    'funnel.2.body': 'Finalize no seu ritmo. O núcleo do produto fica acessível para você descobrir o Studio.',
+    'funnel.3.title': 'PRO — volte sempre',
+    'funnel.3.body': 'Assinatura com créditos mensais, sem marca d\'água e mais conveniência para quem dubla com frequência.',
+    'funnel.4.title': 'Créditos extras — quando precisar',
+    'funnel.4.body': 'Compre pacotes avulsos para exportar mais MP4s ou recursos premium no futuro.',
+    'score.title': 'Seu desempenho',
+    'score.recorded': 'Falas gravadas',
+    'score.duration': 'Duração vs referência',
+    'score.ontime': 'Takes no tempo',
+    'score.pack': 'Pack atual',
+    'tips.title': 'Dicas do Studio',
+    'footer': 'DubPack Studio © 2026 · Feito para dubladores apaixonados',
+    'credit.one': 'crédito',
+    'credit.many': 'créditos',
+    'credit.infinite': '∞ créditos',
+    'export.chrome.note': 'No Chrome, o vídeo é convertido para MP4 automaticamente após a gravação.',
+    'export.reexport': 'Este arquivo está em formato antigo. Gere o MP4 de novo para baixar.',
+    'export.ready': 'Vídeo pronto em MP4. Assista acima ou baixe o arquivo.',
+    'export.ready.watermark': 'Vídeo pronto em MP4 com marca d\'água {brand}.',
+    'pro.subscribe': 'Assinar DubPack PRO',
+    'pro.active': 'PRO ativo neste aparelho',
+    'credits.extra': 'Créditos extras',
+    'credits.extra.hint': 'Importar, gravar e ouvir takes é grátis. Créditos servem para gerar o MP4 final.',
+    'plan.free': 'Plano gratuito',
+    'plan.owner': 'Dono · acesso total',
+    'plan.pro.days': '{days} dias restantes'
+  },
+  en: {
+    'lang.label': 'Language',
+    'lang.pt': 'PT',
+    'lang.en': 'EN',
+    'brand.tagline': 'Your voice in the scene. Record, finish, and share.',
+    'auth.title.login': 'Sign in',
+    'auth.title.signup': 'Create account',
+    'auth.title.reset': 'Forgot password',
+    'auth.lead.login': 'Sign in to start dubbing now.',
+    'auth.lead.signup': 'Create your account to start dubbing now.',
+    'auth.lead.reset': 'We will email you a link to set a new password.',
+    'auth.name': 'Name',
+    'auth.name.placeholder': 'What should we call you?',
+    'auth.email': 'Email',
+    'auth.email.placeholder': 'you@email.com',
+    'auth.password': 'Password',
+    'auth.password.placeholder': 'Your password',
+    'auth.forgot': 'Forgot password',
+    'auth.submit.login': 'Sign in',
+    'auth.submit.signup': 'Enter Studio',
+    'auth.submit.reset': 'Send email',
+    'auth.switch.signup': 'Create new account',
+    'auth.switch.login': 'I already have an account',
+    'auth.error': 'Wrong password.',
+    'help.title': 'How to dub',
+    'help.close': 'Got it',
+    'help.1': 'Import a .zip pack with line audio (and video or images, if included).',
+    'help.2': 'Tap Reference to hear the original. On iPhone, turn off silent mode (side switch) if you hear nothing.',
+    'help.3': 'Tap the mic: 3-second countdown, then record within the line timing. Headphones help but are optional.',
+    'help.4': 'Tap the mic again to cancel the countdown or stop recording.',
+    'help.5': 'Move to the next line, preview your take, and tap Finish dub when done. Packs last 2 days — or delete anytime with ✕ on the card.',
+    'help.footer': 'Takes stay in this browser. Reloading may restore your last pack if local storage allows.',
+    'nav.packs': 'My Packs',
+    'nav.record': 'Record',
+    'nav.dub': 'Finish',
+    'nav.profile': 'Profile',
+    'nav.credits': 'Plans',
+    'pro.card.title': 'DubPack PRO',
+    'pro.card.body': 'Dubbing is free. PRO adds monthly credits, MP4 without watermark, and more convenience.',
+    'pro.btn': 'Go PRO',
+    'pro.btn.manage': 'Manage PRO',
+    'pro.btn.owner': 'Unlimited credits',
+    'welcome': 'Welcome to the Studio',
+    'welcome.back': 'Welcome back, {name}',
+    'topbar.hint': 'Pick a pack and start dubbing.',
+    'packs.title': 'My Packs',
+    'packs.add': '+ Add Pack',
+    'packs.empty.title': 'No packs yet',
+    'packs.empty.body': 'Bring a ZIP with lines in mp3, wav, ogg, or m4a. If the pack has video (including Choicer-style dub_video) or images, they appear on stage.',
+    'packs.import': 'Import ZIP',
+    'record.back': '← Back',
+    'record.title': 'New dub',
+    'record.meta': 'Follow the steps and record on time.',
+    'record.finish': 'Finish dub',
+    'record.regenerate': 'Generate again',
+    'record.reference': '▶ Reference',
+    'record.mic': 'Tap to start',
+    'record.listen': '▶ Listen to my take',
+    'record.next': 'Next scene →',
+    'record.prev': '← Previous scene',
+    'record.preview.hint': 'Record this line to preview here',
+    'dub.title': 'Final video',
+    'dub.body': 'The result is the full scene video with the original bed and your dubbed voices in place.',
+    'dub.empty': 'Record all lines and generate the MP4 to watch your full dub.',
+    'dub.status.none': 'No video generated yet.',
+    'dub.download': 'Download MP4',
+    'profile.title': 'Profile',
+    'profile.avatar': 'Tap to change photo',
+    'profile.body': 'Dubbing is free. Credits are only for the final MP4. You have {credits}. Packs expire in 2 days — or delete anytime.',
+    'profile.plans': 'View plans and credits',
+    'profile.logout': 'Sign out',
+    'credits.title': 'Plans and credits',
+    'credits.intro': 'Free: import packs, record, hear reference and takes. Final MP4: 1 credit. With only 1 free credit, the video includes a DubPack Studio watermark.',
+    'credits.balance': 'Current balance:',
+    'credits.footer': 'Real payments (Pix/card/Stripe) come next. PRO subscription and extra credits are simulated on this device for testing.',
+    'funnel.title': 'How the Studio grows with you',
+    'funnel.1.title': 'Free — try it',
+    'funnel.1.body': 'Import your pack, hear reference, record, and preview takes at no cost.',
+    'funnel.2.title': 'Dub — feel the value',
+    'funnel.2.body': 'Finish at your pace. Core dubbing stays accessible so you discover why the Studio helps.',
+    'funnel.3.title': 'PRO — come back often',
+    'funnel.3.body': 'Subscription with monthly credits, no watermark, and convenience for frequent dubbers.',
+    'funnel.4.title': 'Extra credits — when you need more',
+    'funnel.4.body': 'Buy add-on packs for more MP4 exports or premium features later.',
+    'score.title': 'Your performance',
+    'score.recorded': 'Lines recorded',
+    'score.duration': 'Duration vs reference',
+    'score.ontime': 'Takes on time',
+    'score.pack': 'Current pack',
+    'tips.title': 'Studio tips',
+    'footer': 'DubPack Studio © 2026 · Made for passionate dubbers',
+    'credit.one': 'credit',
+    'credit.many': 'credits',
+    'credit.infinite': '∞ credits',
+    'export.chrome.note': 'On Chrome, video is automatically converted to MP4 after recording.',
+    'export.reexport': 'This file is in an old format. Generate the MP4 again to download.',
+    'export.ready': 'MP4 ready. Watch above or download the file.',
+    'export.ready.watermark': 'MP4 ready with {brand} watermark.',
+    'pro.subscribe': 'Subscribe to DubPack PRO',
+    'pro.active': 'PRO active on this device',
+    'credits.extra': 'Extra credits',
+    'credits.extra.hint': 'Import, record, and preview takes are free. Credits are for the final MP4.',
+    'plan.free': 'Free plan',
+    'plan.owner': 'Owner · full access',
+    'plan.pro.days': '{days} days left'
+  }
+};
+
+function getLang() {
+  const saved = localStorage.getItem(LANG_KEY);
+  return saved === 'en' ? 'en' : 'pt';
+}
+
+function setLang(lang) {
+  const next = lang === 'en' ? 'en' : 'pt';
+  localStorage.setItem(LANG_KEY, next);
+  return next;
+}
+
+function t(key, params = {}) {
+  const lang = getLang();
+  const dict = I18N[lang] || I18N.pt;
+  let text = dict[key] ?? I18N.pt[key] ?? key;
+  Object.entries(params).forEach(([name, value]) => {
+    text = text.replaceAll(`{${name}}`, String(value));
+  });
+  return text;
+}
+
+function applyI18n(root = document) {
+  const lang = getLang();
+  document.documentElement.lang = lang === 'en' ? 'en' : 'pt-BR';
+  root.querySelectorAll('[data-i18n]').forEach((node) => {
+    const key = node.dataset.i18n;
+    if (key) node.textContent = t(key);
+  });
+  root.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+    const key = node.dataset.i18nPlaceholder;
+    if (key) node.placeholder = t(key);
+  });
+  root.querySelectorAll('[data-i18n-html]').forEach((node) => {
+    const key = node.dataset.i18nHtml;
+    if (key) node.innerHTML = t(key);
+  });
+  root.querySelectorAll('[data-lang]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.lang === lang);
+    btn.setAttribute('aria-pressed', btn.dataset.lang === lang ? 'true' : 'false');
+  });
+}

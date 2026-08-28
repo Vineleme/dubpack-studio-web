@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=62" />
+    <link rel="stylesheet" href="./styles.css?v=63" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
@@ -20,37 +20,37 @@
       <form id="authForm" class="auth-card" novalidate>
         <div class="auth-brand">
           <strong>Dub<span>Pack</span> Studio</strong>
-          <em>Sua voz no filme da cena. Grave, finalize e compartilhe.</em>
+          <em data-i18n="brand.tagline">Sua voz no filme da cena. Grave, finalize e compartilhe.</em>
         </div>
-        <h1 id="authTitle">Entrar</h1>
-        <p id="authLead">Entre para começar a dublar agora.</p>
-        <label id="authNameWrap" class="is-hidden">Nome
-          <input id="authName" type="text" autocomplete="nickname" placeholder="Como você quer ser chamado?" />
+        <h1 id="authTitle" data-i18n="auth.title.login">Entrar</h1>
+        <p id="authLead" data-i18n="auth.lead.login">Entre para começar a dublar agora.</p>
+        <label id="authNameWrap" class="is-hidden"><span data-i18n="auth.name">Nome</span>
+          <input id="authName" type="text" autocomplete="nickname" data-i18n-placeholder="auth.name.placeholder" placeholder="Como você quer ser chamado?" />
         </label>
-        <label>E-mail
-          <input id="authEmail" type="text" inputmode="email" autocomplete="email" placeholder="voce@icloud.com" required />
+        <label><span data-i18n="auth.email">E-mail</span>
+          <input id="authEmail" type="text" inputmode="email" autocomplete="email" data-i18n-placeholder="auth.email.placeholder" placeholder="voce@icloud.com" required />
         </label>
-        <label id="authPasswordWrap"><span id="authPasswordLabel">Senha</span>
-          <input id="authPassword" type="password" autocomplete="current-password" placeholder="Sua senha" />
+        <label id="authPasswordWrap"><span id="authPasswordLabel" data-i18n="auth.password">Senha</span>
+          <input id="authPassword" type="password" autocomplete="current-password" data-i18n-placeholder="auth.password.placeholder" placeholder="Sua senha" />
         </label>
-        <p id="authError" class="auth-error is-hidden" role="alert">Senha errada.</p>
-        <button id="authForgotBtn" class="auth-forgot" type="button">Esqueci a senha</button>
-        <button id="authSubmitBtn" class="primary wide" type="button">Entrar</button>
-        <button id="authSwitchBtn" class="ghost wide" type="button">Criar conta nova</button>
+        <p id="authError" class="auth-error is-hidden" role="alert" data-i18n="auth.error">Senha errada.</p>
+        <button id="authForgotBtn" class="auth-forgot" type="button" data-i18n="auth.forgot">Esqueci a senha</button>
+        <button id="authSubmitBtn" class="primary wide" type="button" data-i18n="auth.submit.login">Entrar</button>
+        <button id="authSwitchBtn" class="ghost wide" type="button" data-i18n="auth.switch.signup">Criar conta nova</button>
       </form>
     </div>
     <div id="helpModal" class="help-modal is-hidden" role="dialog" aria-labelledby="helpTitle" aria-modal="true">
       <div class="help-card">
-        <h2 id="helpTitle">Como dublar</h2>
+        <h2 id="helpTitle" data-i18n="help.title">Como dublar</h2>
         <ol>
-          <li>Importe um pack <strong>.zip</strong> com os áudios das falas (e vídeo ou imagens, se houver).</li>
-          <li>Toque em <strong>Referência</strong> para ouvir o original. No iPhone, desligue o modo silencioso (chave lateral) se não ouvir.</li>
-          <li>Toque no microfone: countdown de 3 segundos, depois grave no tempo da fala. Fone ajuda, mas não é obrigatório.</li>
-          <li>Toque de novo no microfone para cancelar o countdown ou encerrar a gravação.</li>
-          <li>Avance de fala, ouça o take e toque em Finalizar dublagem quando terminar. Packs ficam 2 dias nesta conta — ou apague quando quiser no ✕ do card.</li>
+          <li data-i18n="help.1">Importe um pack .zip com os áudios das falas (e vídeo ou imagens, se houver).</li>
+          <li data-i18n="help.2">Toque em Referência para ouvir o original. No iPhone, desligue o modo silencioso (chave lateral) se não ouvir.</li>
+          <li data-i18n="help.3">Toque no microfone: countdown de 3 segundos, depois grave no tempo da fala. Fone ajuda, mas não é obrigatório.</li>
+          <li data-i18n="help.4">Toque de novo no microfone para cancelar o countdown ou encerrar a gravação.</li>
+          <li data-i18n="help.5">Avance de fala, ouça o take e toque em Finalizar dublagem quando terminar. Packs ficam 2 dias — ou apague quando quiser no ✕ do card.</li>
         </ol>
-        <p>Takes ficam neste navegador. Recarregar a página restaura o último pack, se o armazenamento local permitir.</p>
-        <button id="helpCloseBtn" class="primary" type="button">Entendi</button>
+        <p data-i18n="help.footer">Takes ficam neste navegador. Recarregar a página restaura o último pack, se o armazenamento local permitir.</p>
+        <button id="helpCloseBtn" class="primary" type="button" data-i18n="help.close">Entendi</button>
       </div>
     </div>
 
@@ -61,28 +61,32 @@
         </a>
 
         <nav class="side-nav" aria-label="Navegação principal">
-          <button class="active" type="button" data-tab="packs"><span class="nav-ico" aria-hidden="true">⌂</span><span class="nav-label">Meus Packs</span></button>
-          <button type="button" data-tab="record"><span class="nav-ico" aria-hidden="true">🎙</span><span class="nav-label">Gravar</span></button>
-          <button type="button" data-tab="dub"><span class="nav-ico" aria-hidden="true">▶</span><span class="nav-label">Finalizar</span></button>
-          <button type="button" data-tab="profile"><span class="nav-ico" aria-hidden="true">○</span><span class="nav-label">Perfil</span></button>
-          <button type="button" data-tab="credits"><span class="nav-ico" aria-hidden="true">✦</span><span class="nav-label">Créditos</span></button>
+          <button class="active" type="button" data-tab="packs"><span class="nav-ico" aria-hidden="true">⌂</span><span class="nav-label" data-i18n="nav.packs">Meus Packs</span></button>
+          <button type="button" data-tab="record"><span class="nav-ico" aria-hidden="true">🎙</span><span class="nav-label" data-i18n="nav.record">Gravar</span></button>
+          <button type="button" data-tab="dub"><span class="nav-ico" aria-hidden="true">▶</span><span class="nav-label" data-i18n="nav.dub">Finalizar</span></button>
+          <button type="button" data-tab="profile"><span class="nav-ico" aria-hidden="true">○</span><span class="nav-label" data-i18n="nav.profile">Perfil</span></button>
+          <button type="button" data-tab="credits"><span class="nav-ico" aria-hidden="true">✦</span><span class="nav-label" data-i18n="nav.credits">Planos</span></button>
           <a class="gamebanana-link" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">🎮 GameBanana</a>
         </nav>
 
         <section class="pro-card">
-          <span>DubPack PRO</span>
-          <p>Dublar é grátis. PRO traz créditos mensais, MP4 sem marca d'água e mais conveniência.</p>
-          <button id="proBtn" class="primary" type="button">Seja PRO</button>
+          <span data-i18n="pro.card.title">DubPack PRO</span>
+          <p data-i18n="pro.card.body">Dublar é grátis. PRO traz créditos mensais, MP4 sem marca d'água e mais conveniência.</p>
+          <button id="proBtn" class="primary" type="button" data-i18n="pro.btn">Seja PRO</button>
         </section>
       </aside>
 
       <section class="content">
         <header class="topbar">
           <div>
-            <h1 id="welcomeTitle">Bem-vindo ao Studio</h1>
-            <p id="topbarHint">Escolha um pack e comece a dublar.</p>
+            <h1 id="welcomeTitle" data-i18n="welcome">Bem-vindo ao Studio</h1>
+            <p id="topbarHint" data-i18n="topbar.hint">Escolha um pack e comece a dublar.</p>
           </div>
           <div class="search-row">
+            <div class="lang-switch" role="group" aria-label="Language">
+              <button type="button" class="lang-btn active" data-lang="pt" aria-pressed="true">PT</button>
+              <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+            </div>
             <button id="helpBtn" class="ghost" type="button" aria-label="Ajuda">?</button>
             <button id="bellBtn" class="ghost" type="button" aria-label="Créditos">⌾</button>
             <button id="userChip" class="user-chip" type="button" data-tab="profile">
@@ -100,18 +104,18 @@
 
         <section id="packsTab" class="tab-view active">
           <div class="section-head">
-            <h2>Meus Packs</h2>
+            <h2 data-i18n="packs.title">Meus Packs</h2>
             <label class="text-link">
-              + Adicionar Pack
+              <span data-i18n="packs.add">+ Adicionar Pack</span>
               <input id="packInput" type="file" accept=".zip,application/zip" hidden />
             </label>
           </div>
 
           <div id="packEmpty" class="pack-empty">
-            <h3>Nenhum pack ainda</h3>
-            <p>Traga um ZIP com as falas em mp3, wav, ogg ou m4a. Se o pack tiver vídeo (incluindo <code>dub_video</code> no estilo Choicer) ou imagens, eles aparecem no palco.</p>
+            <h3 data-i18n="packs.empty.title">Nenhum pack ainda</h3>
+            <p data-i18n="packs.empty.body">Traga um ZIP com as falas em mp3, wav, ogg ou m4a. Se o pack tiver vídeo (incluindo <code>dub_video</code> no estilo Choicer) ou imagens, eles aparecem no palco.</p>
             <label class="primary">
-              Importar ZIP
+              <span data-i18n="packs.import">Importar ZIP</span>
               <input id="packInputEmpty" type="file" accept=".zip,application/zip" hidden />
             </label>
           </div>
@@ -125,12 +129,12 @@
         <section id="recordTab" class="tab-view">
           <section class="choicer-workspace">
             <header class="choicer-topbar">
-              <button id="prevBtn" class="back-link" type="button">← Voltar</button>
+              <button id="prevBtn" class="back-link" type="button" data-i18n="record.back">← Voltar</button>
               <div>
-                <h2>Nova dublagem</h2>
-                <p id="projectMeta">Siga os passos e grave no tempo certo.</p>
+                <h2 data-i18n="record.title">Nova dublagem</h2>
+                <p id="projectMeta" data-i18n="record.meta">Siga os passos e grave no tempo certo.</p>
               </div>
-              <button id="exportVideoBtn" class="primary is-hidden" type="button">Finalizar dublagem</button>
+              <button id="exportVideoBtn" class="primary is-hidden" type="button" data-i18n="record.finish">Finalizar dublagem</button>
             </header>
 
             <div class="choicer-stage">
@@ -164,10 +168,10 @@
                     <strong id="character">Personagem</strong>
                     <span id="subtitle">A fala aparece aqui.</span>
                   </div>
-                  <button id="referenceBtn" class="secondary" type="button">▶ Referência</button>
+                  <button id="referenceBtn" class="secondary" type="button" data-i18n="record.reference">▶ Referência</button>
                   <button id="recordBtn" class="mic stop-ready" type="button" aria-label="Gravar">🎙</button>
                   <div class="record-timer">
-                    <small id="micHint">Toque para começar</small>
+                    <small id="micHint" data-i18n="record.mic">Toque para começar</small>
                     <strong id="timerValue">0.0</strong>
                     <div id="voiceMeter" class="voice-meter" hidden>
                       <b><i id="voiceMeterFill"></i></b>
@@ -184,39 +188,40 @@
 
               <aside class="save-panel">
                 <button id="previewBtn" class="preview-mini" type="button" aria-label="Ouvir take">▶</button>
-                <span id="previewHint">Grave este take para ouvir aqui</span>
-                <button id="listenTakeBtn" class="secondary wide listen-take" type="button">▶ Ouvir meu take</button>
-                <button id="nextBtn" class="secondary wide" type="button">Próxima cena →</button>
+                <span id="previewHint" data-i18n="record.preview.hint">Grave este take para ouvir aqui</span>
+                <button id="listenTakeBtn" class="secondary wide listen-take" type="button" data-i18n="record.listen">▶ Ouvir meu take</button>
+                <button id="nextBtn" class="secondary wide" type="button" data-i18n="record.next">Próxima cena →</button>
               </aside>
             </div>
 
             <footer class="scene-nav">
-              <button class="secondary" type="button" id="prevSceneBtn">← Cena anterior</button>
+              <button class="secondary" type="button" id="prevSceneBtn" data-i18n="record.prev">← Cena anterior</button>
               <strong id="topCounter">Fala 0 de 0</strong>
-              <button class="secondary" type="button" id="nextSceneBtn">Próxima cena →</button>
+              <button class="secondary" type="button" id="nextSceneBtn" data-i18n="record.next">Próxima cena →</button>
             </footer>
           </section>
         </section>
 
         <section id="dubTab" class="tab-view info-card final-video-page">
-          <h2>Vídeo final</h2>
-          <p>O resultado é o vídeo completo da cena, com o ambiente original e as vozes que você dublou no lugar dos personagens.</p>
+          <h2 data-i18n="dub.title">Vídeo final</h2>
+          <p data-i18n="dub.body">O resultado é o vídeo completo da cena, com o ambiente original e as vozes que você dublou no lugar dos personagens.</p>
+          <p id="dubChromeNote" class="hint-copy is-hidden" data-i18n="export.chrome.note">No Chrome, o vídeo é convertido para MP4 automaticamente após a gravação.</p>
           <div id="finalVideoWrap" class="final-video-wrap">
             <video id="finalVideo" controls playsinline></video>
             <video id="exportFilm" muted playsinline></video>
-            <div id="finalVideoEmpty" class="empty-frame">Grave as falas e gere o MP4 para assistir sua dublagem completa.</div>
+            <div id="finalVideoEmpty" class="empty-frame" data-i18n="dub.empty">Grave as falas e gere o MP4 para assistir sua dublagem completa.</div>
           </div>
-          <p id="exportStatus" class="hint-copy">Nenhum vídeo gerado ainda.</p>
+          <p id="exportStatus" class="hint-copy" data-i18n="dub.status.none">Nenhum vídeo gerado ainda.</p>
           <div id="exportProgressWrap" class="export-progress is-hidden">
             <div class="export-progress-track"><b id="exportProgressBar"></b></div>
             <strong id="exportProgressLabel">0%</strong>
           </div>
-          <button id="generateMp4Btn" class="primary wide" type="button">Finalizar dublagem</button>
-          <a id="downloadMp4Btn" class="primary wide is-hidden" download>Baixar vídeo</a>
+          <button id="generateMp4Btn" class="primary wide" type="button" data-i18n="record.finish">Finalizar dublagem</button>
+          <button id="downloadMp4Btn" class="primary wide is-hidden" type="button" data-i18n="dub.download">Baixar MP4</button>
         </section>
 
         <section id="profileTab" class="tab-view info-card">
-          <h2>Perfil</h2>
+          <h2 data-i18n="profile.title">Perfil</h2>
           <div class="profile-hero">
             <label class="profile-avatar-picker">
               <input id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
@@ -224,31 +229,54 @@
                 <span class="avatar-fallback">👤</span>
                 <img alt="" hidden />
               </span>
-              <small>Tocar para trocar a foto</small>
+              <small data-i18n="profile.avatar">Tocar para trocar a foto</small>
             </label>
             <div>
               <h3 id="profileName">Conta</h3>
               <p id="profileMeta">Faça login para dublar</p>
             </div>
           </div>
-          <p>Dublar é <strong>grátis</strong>. Créditos servem só para gerar o MP4 final. Você tem <strong id="profileCredits">1 crédito</strong>. Packs desta conta expiram em 2 dias — ou apague quando quiser.</p>
-          <button class="primary wide" type="button" data-tab="credits">Ver planos e créditos</button>
-          <button id="logoutBtn" class="secondary wide" type="button">Sair da conta</button>
+          <p id="profileCreditsLine">Dublar é grátis. Créditos servem só para gerar o MP4 final.</p>
+          <button class="primary wide" type="button" data-tab="credits" data-i18n="profile.plans">Ver planos e créditos</button>
+          <button id="logoutBtn" class="secondary wide" type="button" data-i18n="profile.logout">Sair da conta</button>
         </section>
 
         <section id="creditsTab" class="tab-view info-card">
-          <h2>Planos e créditos</h2>
-          <p><strong>Grátis:</strong> importar pack, gravar, ouvir referência e takes. <strong>MP4 final:</strong> 1 crédito. Com apenas 1 crédito no plano gratuito, o vídeo sai com marca d'água DubPack Studio.</p>
-          <p>Saldo atual: <strong id="creditsBalance">1 crédito</strong></p>
+          <h2 data-i18n="credits.title">Planos e créditos</h2>
+          <p data-i18n="credits.intro">Grátis: importar pack, gravar, ouvir referência e takes. MP4 final: 1 crédito.</p>
+          <p><span data-i18n="credits.balance">Saldo atual:</span> <strong id="creditsBalance">1 crédito</strong></p>
+
+          <section class="funnel-card" aria-labelledby="funnelTitle">
+            <h3 id="funnelTitle" class="shop-section-title" data-i18n="funnel.title">Como o Studio cresce com você</h3>
+            <ol class="funnel-steps">
+              <li>
+                <strong data-i18n="funnel.1.title">Grátis — experimente</strong>
+                <span data-i18n="funnel.1.body">Importe seu pack, ouça a referência, grave e revise takes sem pagar.</span>
+              </li>
+              <li>
+                <strong data-i18n="funnel.2.title">Duble — perceba valor</strong>
+                <span data-i18n="funnel.2.body">Finalize no seu ritmo. O núcleo do produto fica acessível para você descobrir o Studio.</span>
+              </li>
+              <li>
+                <strong data-i18n="funnel.3.title">PRO — volte sempre</strong>
+                <span data-i18n="funnel.3.body">Assinatura com créditos mensais, sem marca d'água e mais conveniência.</span>
+              </li>
+              <li>
+                <strong data-i18n="funnel.4.title">Créditos extras — quando precisar</strong>
+                <span data-i18n="funnel.4.body">Compre pacotes avulsos para exportar mais MP4s ou recursos premium no futuro.</span>
+              </li>
+            </ol>
+          </section>
+
           <div id="creditShop" class="credit-shop"></div>
-          <p class="hint-copy">Pagamento real (Pix/cartão) entra depois. Assinatura PRO e créditos extras são simulados neste aparelho para você testar o fluxo.</p>
+          <p class="hint-copy" data-i18n="credits.footer">Pagamento real (Pix/cartão/Stripe) entra na próxima etapa.</p>
         </section>
       </section>
 
       <aside class="right-rail">
         <section class="score-card">
           <div>
-            <h2>Seu desempenho</h2>
+            <h2 data-i18n="score.title">Seu desempenho</h2>
           </div>
           <div class="score-body">
             <div class="score-ring">
@@ -258,16 +286,16 @@
               </div>
             </div>
             <ul class="score-metrics">
-              <li><span>Falas gravadas</span><b id="scoreCoverage">—</b></li>
-              <li><span>Duração vs referência</span><b id="scoreDuration">—</b></li>
-              <li><span>Takes no tempo</span><b id="scoreOnTime">—</b></li>
-              <li><span>Pack atual</span><b id="scorePack">—</b></li>
+              <li><span data-i18n="score.recorded">Falas gravadas</span><b id="scoreCoverage">—</b></li>
+              <li><span data-i18n="score.duration">Duração vs referência</span><b id="scoreDuration">—</b></li>
+              <li><span data-i18n="score.ontime">Takes no tempo</span><b id="scoreOnTime">—</b></li>
+              <li><span data-i18n="score.pack">Pack atual</span><b id="scorePack">—</b></li>
             </ul>
           </div>
         </section>
 
         <section class="tips-card" aria-live="polite">
-          <h2><span aria-hidden="true">✦</span> Dicas do Studio</h2>
+          <h2><span aria-hidden="true">✦</span> <span data-i18n="tips.title">Dicas do Studio</span></h2>
           <div class="tips-body">
             <div>
               <p id="tipTitle"><strong>Foque na emoção!</strong></p>
@@ -279,11 +307,12 @@
         </section>
       </aside>
     </main>
-    <footer class="site-footer">DubPack Studio © 2026 · Feito para dubladores apaixonados</footer>
+    <footer class="site-footer" data-i18n="footer">DubPack Studio © 2026 · Feito para dubladores apaixonados</footer>
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=62"></script>
-    <script src="./app.js?v=62"></script>
+    <script src="./vendor/fflate.min.js?v=63"></script>
+    <script src="./i18n.js?v=63"></script>
+    <script src="./app.js?v=63"></script>
   </body>
 </html>
