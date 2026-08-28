@@ -5,6 +5,7 @@ import { currentPack, currentScene, selectScene } from './pack.js';
 import { abortCapture } from './recorder.js';
 import { setTab } from './ui.js';
 import { formatSeconds, interruptibleWait, iosAudioHint, isIOS, rememberUrl, safeFile, takeLooksLikeWebm, toast } from './utils.js';
+import { destroyStageOgv, ensureStageOgv, pauseStageOgv, playStageOgv, seekStageOgv, urlLooksLikeOgg, warmOgvDecoder } from './ogv.js';
 
 export function playClickAudio(layers, duration) {
   stopActivePlayback();
@@ -203,6 +204,7 @@ export function bindSceneVisual(scene) {
   if (scene.imageUrl) {
     video.pause();
     video.style.display = 'none';
+    destroyStageOgv();
     empty.style.display = 'none';
     empty.replaceChildren();
     image.style.display = 'block';
@@ -214,40 +216,88 @@ export function bindSceneVisual(scene) {
     image.style.display = 'none';
     empty.style.display = 'none';
     empty.replaceChildren();
-    video.style.display = 'block';
-    video.muted = true;
-    video.playsInline = true;
-    if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
-    showSceneStill(scene);
+    void bindSceneVideo(scene);
     return;
   }
 
   video.pause();
   if (video.src) video.removeAttribute('src');
   video.style.display = 'none';
+  destroyStageOgv();
   image.style.display = 'none';
   paintEmptyScene(scene);
+}
+
+async function bindSceneVideo(scene) {
+  const video = els.sceneVideo;
+  if (!video || !scene?.videoUrl) return;
+  const useOgv = await urlLooksLikeOgg(scene.videoUrl);
+  if (useOgv) {
+    video.pause();
+    if (video.src) video.removeAttribute('src');
+    video.style.display = 'none';
+    warmOgvDecoder();
+    try {
+      await ensureStageOgv(scene.videoUrl);
+      await seekStageOgv(Number(scene.videoOffset) || 0.04);
+      pauseStageOgv();
+    } catch {
+      toast('Este pack usa .ogv. Aguarde o decoder carregar e tente de novo.');
+    }
+    return;
+  }
+
+  destroyStageOgv();
+  video.style.display = 'block';
+  video.muted = true;
+  video.playsInline = true;
+  if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
+  showSceneStill(scene);
 }
 
 export function playSceneMedia(scene, duration) {
   if (scene.imageUrl && els.sceneImage) {
     els.sceneImage.style.display = 'block';
     if (els.sceneVideo) els.sceneVideo.style.display = 'none';
+    destroyStageOgv();
     return;
   }
   if (!scene.videoUrl || !els.sceneVideo) return;
+  void playSceneVideo(scene, duration);
+}
+
+async function playSceneVideo(scene, duration) {
   const video = els.sceneVideo;
+  const start = Number(scene.videoOffset) || 0;
+  const useOgv = await urlLooksLikeOgg(scene.videoUrl);
+  clearTimeout(state.videoTimer);
+
+  if (useOgv) {
+    video.style.display = 'none';
+    try {
+      await ensureStageOgv(scene.videoUrl);
+      await seekStageOgv(start);
+      await playStageOgv();
+    } catch {
+      return;
+    }
+    state.videoTimer = setTimeout(() => {
+      pauseStageOgv();
+      void seekStageOgv(start || 0.04);
+    }, duration * 1000);
+    return;
+  }
+
+  destroyStageOgv();
   video.muted = true;
   video.playsInline = true;
   video.style.display = 'block';
-  const start = Number(scene.videoOffset) || 0;
   try {
     video.currentTime = start;
   } catch {
     // ignore
   }
   video.play().catch(() => undefined);
-  clearTimeout(state.videoTimer);
   state.videoTimer = setTimeout(() => {
     video.pause();
     showSceneStill(scene);
@@ -257,23 +307,29 @@ export function playSceneMedia(scene, duration) {
 export function showSceneStill(scene) {
   const video = els.sceneVideo;
   if (!video || !scene.videoUrl) return;
-  const apply = () => {
-    const duration = Number.isFinite(video.duration) ? video.duration : 0;
-    const offset = Number(scene.videoOffset) || 0;
-    const target = duration
-      ? Math.min(Math.max(offset, 0), Math.max(0, duration - 0.08))
-      : offset;
-    try {
-      video.currentTime = target || 0.04;
-    } catch {
-      // Alguns arquivos ainda não aceitam seek.
+  void urlLooksLikeOgg(scene.videoUrl).then((useOgv) => {
+    if (useOgv) {
+      void seekStageOgv(Number(scene.videoOffset) || 0.04).then(() => pauseStageOgv());
+      return;
     }
-  };
-  if (video.readyState >= 2) apply();
-  else video.addEventListener('loadeddata', apply, { once: true });
-  video.addEventListener('seeked', () => {
-    if (!state.previewing && !state.recorder) video.pause();
-  }, { once: true });
+    const apply = () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const offset = Number(scene.videoOffset) || 0;
+      const target = duration
+        ? Math.min(Math.max(offset, 0), Math.max(0, duration - 0.08))
+        : offset;
+      try {
+        video.currentTime = target || 0.04;
+      } catch {
+        // Alguns arquivos ainda não aceitam seek.
+      }
+    };
+    if (video.readyState >= 2) apply();
+    else video.addEventListener('loadeddata', apply, { once: true });
+    video.addEventListener('seeked', () => {
+      if (!state.previewing && !state.recorder) video.pause();
+    }, { once: true });
+  });
 }
 
 export function paintEmptyScene(scene) {
@@ -357,7 +413,8 @@ export function stopActivePlayback() {
     audio.currentTime = 0;
   });
   state.activeAudios = [];
-    state.activeAudio = null;
+  state.activeAudio = null;
+  pauseStageOgv();
 }
 
 export function animateProgress(duration) {

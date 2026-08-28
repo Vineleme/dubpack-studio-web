@@ -9,6 +9,7 @@ import { bindSceneVisual, stopActivePlayback, stopProjectPreview, warmSceneAudio
 import { abortCapture, profileTakeAudio, setVoiceMeter } from './recorder.js';
 import { renderTakeRail, setTab, timingMessage, updateScoreCard, updateTimingDesk } from './ui.js';
 import { clampDuration, detectCharacter, estimateDuration, findBackingTrack, findSceneArt, findSharedVideo, finishCtaLabel, forgetUrl, formatSeconds, getMediaDuration, isIOS, isJunkPath, mimeFor, namesMatch, normalizeEmail, packIsComplete, packIsExpired, parseChoicerFields, readPackMeta, readSidecarText, rememberUrl, revokeAllObjectUrls, spokenLineFromName, toast, visualUrlFor, wait } from './utils.js';
+import { urlLooksLikeOgg, warmOgvDecoder } from './ogv.js';
 
 export function releasePackSession() {
   abortCapture();
@@ -69,6 +70,18 @@ export async function importPack(event) {
     setTab('record');
     scheduleSave();
     warmSceneAudio(pack.scenes);
+    if (pack.filmUrl) {
+      void urlLooksLikeOgg(pack.filmUrl).then((isOgg) => {
+        if (isOgg) warmOgvDecoder();
+      });
+    } else {
+      const firstVideo = pack.scenes.find((scene) => scene.videoUrl)?.videoUrl;
+      if (firstVideo) {
+        void urlLooksLikeOgg(firstVideo).then((isOgg) => {
+          if (isOgg) warmOgvDecoder();
+        });
+      }
+    }
     const count = pack.scenes.length;
     toast(`${count} ${count === 1 ? 'fala' : 'falas'} em “${pack.name}”.`);
   } catch (error) {

@@ -1165,6 +1165,18 @@ body.needs-auth .dashboard {
   border-radius: 10px;
 }
 
+.video-shell .scene-ogv,
+.video-shell ogvjs.scene-ogv {
+  position: absolute;
+  inset: 14px;
+  width: calc(100% - 28px) !important;
+  height: calc(100% - 28px) !important;
+  border-radius: 10px;
+  z-index: 2;
+  background: #000;
+  overflow: hidden;
+}
+
 .video-shell .empty-frame {
   gap: 8px;
   background: radial-gradient(circle at 50% 28%, #2c2540, #0b0b0e 68%);

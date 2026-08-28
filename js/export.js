@@ -9,6 +9,7 @@ import { stopProjectPreview } from './playback.js';
 import { abortCapture } from './recorder.js';
 import { setTab } from './ui.js';
 import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packIsComplete, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
+import { ensureOgvPlayer, urlLooksLikeOgg } from './ogv.js';
 
 export async function downloadFinalMp4() {
   if (!isLoggedIn()) {
@@ -180,17 +181,6 @@ export function hideExportProgress() {
   els.exportProgressWrap?.classList.add('is-hidden');
 }
 
-export async function urlLooksLikeOgg(url) {
-  try {
-    const blob = await fetch(url).then((response) => response.blob());
-    if (/ogg|ogv|ogm|oga/i.test(blob.type)) return true;
-    const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
-    return head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
-  } catch {
-    return false;
-  }
-}
-
 export function filmCandidates(pack) {
   const urls = [];
   const add = (url) => {
@@ -326,19 +316,6 @@ async function runSeekDrivenFilm(film, durationSec, onTick) {
     onTick?.(Math.min(t, total));
     await wait(Math.max(20, Math.round(1000 / fps) - 8));
   }
-}
-
-export async function ensureOgvPlayer() {
-  if (window.OGVPlayer || window.ogv?.OGVPlayer) return window.OGVPlayer || window.ogv.OGVPlayer;
-  window.OGVLoader = window.OGVLoader || {};
-  // Host decoder files ourselves — CSP blocks unpkg, and browsers cannot play .ogv natively.
-  const base = new URL('./vendor/ogv/', window.location.href).href;
-  window.OGVLoader.base = base;
-  await loadScript(`${base}ogv-support.js`);
-  await loadScript(`${base}ogv.js`);
-  const Player = window.OGVPlayer || window.ogv?.OGVPlayer;
-  if (!Player) throw new Error('Não carregou o player de .ogv.');
-  return Player;
 }
 
 export async function openOgvFilm(url, onProgress) {
