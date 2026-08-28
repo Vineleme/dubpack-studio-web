@@ -2419,6 +2419,29 @@ body.needs-auth .dashboard {
   pointer-events: none;
 }
 .auth-gate.is-hidden { display: none; }
+
+body.auth-checking .auth-gate {
+  display: none;
+}
+
+.auth-remember {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #b7b5ce;
+  cursor: pointer;
+}
+
+.auth-remember input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #635bff;
+  cursor: pointer;
+}
+
 .auth-card {
   width: min(480px, 100%);
   display: grid;

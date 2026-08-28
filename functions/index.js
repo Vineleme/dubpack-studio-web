@@ -9,12 +9,12 @@ const db = admin.firestore();
 const stripeSecret = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
 
-const PRO_USD = 1.99;
+const PRO_USD = 2.99;
 const PRO_BRL = 9.9;
 const PRO_CREDITS = 200;
 const PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 const PACKS = {
-  c100: { credits: 100, brl: 9.9, usd: 1.99, label: '+100 credits' },
+  c100: { credits: 100, brl: 9.9, usd: 2.99, label: '+100 credits' },
   c200: { credits: 200, brl: 12.9, usd: 2.49, label: '+200 credits' },
   c300: { credits: 300, brl: 15.9, usd: 2.99, label: '+300 credits' }
 };

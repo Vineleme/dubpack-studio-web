@@ -10,10 +10,11 @@ const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
 const PRO_MONTHLY_PRICE = 9.9;
-const PRO_MONTHLY_PRICE_USD = 1.99;
+const PRO_MONTHLY_PRICE_USD = 2.99;
 const PRO_MONTHLY_CREDITS = 200;
 const PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_USER_KEY = 'dubpack-user';
+const REMEMBER_ME_KEY = 'dubpack-remember-me';
 const USERS_KEY = 'dubpack-users';
 const OWNER_EMAILS = [
   'viniciusleme@gmail.com',
@@ -34,6 +35,7 @@ const FIREBASE_CONFIG = {
 let firebaseAuth = null;
 let firebaseAuthReady = Promise.resolve();
 let authListenerBound = false;
+let authBootDone = false;
 
 try {
   if (window.firebase?.apps?.length) {
@@ -44,17 +46,36 @@ try {
   }
   if (firebaseAuth) {
     firebaseAuth.languageCode = 'pt';
-    firebaseAuthReady = ensureAuthPersistence();
+    firebaseAuthReady = ensureAuthPersistence(readRememberMe());
   }
 } catch (error) {
   console.error(error);
   firebaseAuth = null;
 }
 
-async function ensureAuthPersistence() {
+function readRememberMe() {
+  try {
+    return localStorage.getItem(REMEMBER_ME_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+function writeRememberMe(remember) {
+  try {
+    localStorage.setItem(REMEMBER_ME_KEY, remember ? '1' : '0');
+  } catch {
+    // ignore
+  }
+}
+
+async function ensureAuthPersistence(remember = readRememberMe()) {
   if (!firebaseAuth?.setPersistence || !window.firebase?.auth?.Auth?.Persistence) return;
   try {
-    await firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+    const mode = remember
+      ? window.firebase.auth.Auth.Persistence.LOCAL
+      : window.firebase.auth.Auth.Persistence.SESSION;
+    await firebaseAuth.setPersistence(mode);
   } catch (error) {
     console.error(error);
   }
@@ -82,6 +103,7 @@ function bindFirebaseAuthListener() {
       await finishLogin(account, { toast: false });
       return;
     }
+    if (!authBootDone) return;
     if (state.user) {
       state.user = null;
       localStorage.removeItem(SESSION_USER_KEY);
@@ -92,29 +114,33 @@ function bindFirebaseAuthListener() {
 
 async function restoreAuthSession() {
   if (!firebaseAuth) return false;
-  await firebaseAuthReady;
-  bindFirebaseAuthListener();
-  if (typeof firebaseAuth.authStateReady === 'function') {
-    try {
-      await firebaseAuth.authStateReady();
-    } catch (error) {
-      console.error(error);
+  try {
+    await firebaseAuthReady;
+    bindFirebaseAuthListener();
+    if (typeof firebaseAuth.authStateReady === 'function') {
+      try {
+        await firebaseAuth.authStateReady();
+      } catch (error) {
+        console.error(error);
+      }
     }
-  }
 
-  let fbUser = firebaseAuth.currentUser;
-  if (!fbUser) {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    fbUser = firebaseAuth.currentUser;
-  }
-  if (!fbUser) return false;
+    let fbUser = firebaseAuth.currentUser;
+    if (!fbUser) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      fbUser = firebaseAuth.currentUser;
+    }
+    if (!fbUser) return false;
 
-  if (state.user?.uid === fbUser.uid) {
-    showAuthGate(false);
+    if (state.user?.uid === fbUser.uid) {
+      showAuthGate(false);
+      return true;
+    }
+    await finishLogin(accountFromFirebase(fbUser), { toast: false });
     return true;
+  } finally {
+    authBootDone = true;
   }
-  await finishLogin(accountFromFirebase(fbUser), { toast: false });
-  return true;
 }
 
 function getStudioTips() {
@@ -225,6 +251,8 @@ const els = {
   authGate: document.querySelector('#authGate'),
   authForm: document.querySelector('#authForm'),
   authEmail: document.querySelector('#authEmail'),
+  authRememberWrap: document.querySelector('#authRememberWrap'),
+  authRememberMe: document.querySelector('#authRememberMe'),
   authPassword: document.querySelector('#authPassword'),
   authName: document.querySelector('#authName'),
   authNameWrap: document.querySelector('#authNameWrap'),
@@ -236,7 +264,7 @@ const els = {
   authPasswordWrap: document.querySelector('#authPasswordWrap'),
   authPasswordLabel: document.querySelector('#authPasswordLabel'),
   authPasswordToggle: document.querySelector('#authPasswordToggle'),
-  authError: document.querySelector('#authError'),
+  authRememberLabel: document.querySelector('#authRememberLabel'),
   tipTitle: document.querySelector('#tipTitle'),
   tipBody: document.querySelector('#tipBody'),
   tipDots: document.querySelector('#tipDots'),
@@ -293,7 +321,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '96';
+  const swVersion = '97';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -381,8 +409,9 @@ document.querySelectorAll('[data-tab]').forEach((button) => {
 
 async function bootApp() {
   applyI18n();
+  initAuthRememberUi();
   showStudio();
-  showAuthGate(true);
+  document.body.classList.add('auth-checking');
   window.DubpackCart?.initCart({
     toast,
     t,
@@ -391,19 +420,26 @@ async function bootApp() {
   handleCheckoutReturn();
   renderCreditShop();
   if (!firebaseAuth) {
+    document.body.classList.remove('auth-checking');
+    showAuthGate(true);
     toast('Firebase não carregou. Recarregue a página.');
     return;
   }
   await firebaseAuthReady;
-  const restored = await restoreAuthSession();
-  if (!restored && readSessionUser()?.email) {
+  let restored = await restoreAuthSession();
+  if (!restored && readSessionUser()?.email && readRememberMe()) {
     await new Promise((resolve) => setTimeout(resolve, 1200));
     if (firebaseAuth.currentUser) {
       await finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false });
-      return;
+      restored = true;
     }
   }
+  document.body.classList.remove('auth-checking');
   if (!restored && !state.user) showAuthGate(true);
+}
+
+function initAuthRememberUi() {
+  if (els.authRememberMe) els.authRememberMe.checked = readRememberMe();
 }
 
 function normalizeEmail(value) {
@@ -544,6 +580,7 @@ function refreshAuthI18n() {
   if (els.authPasswordToggle && els.authPassword?.type === 'password') {
     els.authPasswordToggle.setAttribute('aria-label', t('auth.password.show'));
   }
+  if (els.authRememberLabel) els.authRememberLabel.textContent = t('auth.remember');
 }
 
 function togglePasswordVisibility() {
@@ -584,6 +621,7 @@ function setAuthMode(mode) {
   setPasswordVisible(false);
   refreshAuthI18n();
   if (els.authForgotBtn) els.authForgotBtn.classList.toggle('is-hidden', reset);
+  if (els.authRememberWrap) els.authRememberWrap.classList.toggle('is-hidden', reset);
   if (!login && !reset) suggestSignupName();
 }
 
@@ -808,7 +846,9 @@ async function submitAuth(event) {
 
   setAuthBusy(true);
   try {
-    await ensureAuthPersistence();
+    const remember = els.authRememberMe?.checked !== false;
+    writeRememberMe(remember);
+    await ensureAuthPersistence(remember);
     if (state.authMode === 'signup') {
       const name = String(els.authName?.value || '').trim() || displayNameFromEmail(email);
       const cred = await firebaseAuth.createUserWithEmailAndPassword(email, password);
@@ -2446,7 +2486,7 @@ function toast(message) {
 
 const CREDIT_KEY = 'dubpack-credits';
 const CREDIT_PACKS = [
-  { id: 'c100', credits: 100, price: 9.9, priceUsd: 1.99, labelKey: 'pack.c100.label', hintKey: 'pack.c100.hint' },
+  { id: 'c100', credits: 100, price: 9.9, priceUsd: 2.99, labelKey: 'pack.c100.label', hintKey: 'pack.c100.hint' },
   { id: 'c200', credits: 200, price: 12.9, priceUsd: 2.49, labelKey: 'pack.c200.label', hintKey: 'pack.c200.hint' },
   { id: 'c300', credits: 300, price: 15.9, priceUsd: 2.99, labelKey: 'pack.c300.label', hintKey: 'pack.c300.hint', featured: true }
 ];
