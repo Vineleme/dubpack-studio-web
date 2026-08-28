@@ -78,20 +78,13 @@ function clearCart() {
   renderCart();
 }
 
-function renderCart() {
-  const root = document.querySelector('#sideCart');
-  const list = document.querySelector('#cartItems');
-  const empty = document.querySelector('#cartEmpty');
-  const footer = document.querySelector('#cartFooter');
-  const count = document.querySelector('#cartCount');
-  const totalBrl = document.querySelector('#cartTotalBrl');
-  const totalUsd = document.querySelector('#cartTotalUsd');
-  if (!root || !list || !empty || !footer) return;
-
-  loadCart();
-  const items = cartState.items;
-  const itemCount = items.reduce((sum, row) => sum + (Number(row.quantity) || 1), 0);
-  if (count) count.textContent = String(itemCount);
+function paintCartPanel(root, items, totals) {
+  const list = root.querySelector('[data-cart-items]');
+  const empty = root.querySelector('[data-cart-empty]');
+  const footer = root.querySelector('[data-cart-footer]');
+  const totalBrl = root.querySelector('[data-cart-total-brl]');
+  const totalUsd = root.querySelector('[data-cart-total-usd]');
+  if (!list || !empty || !footer) return;
 
   list.replaceChildren();
   if (!items.length) {
@@ -135,9 +128,32 @@ function renderCart() {
     list.append(row);
   });
 
-  const totals = cartTotals();
   if (totalBrl) totalBrl.textContent = formatBrlCart(totals.brl);
   if (totalUsd) totalUsd.textContent = formatUsd(totals.usd);
+}
+
+function renderCart() {
+  loadCart();
+  const items = cartState.items;
+  const totals = cartTotals();
+  const itemCount = items.reduce((sum, row) => sum + (Number(row.quantity) || 1), 0);
+
+  document.querySelectorAll('[data-cart-count]').forEach((node) => {
+    node.textContent = String(itemCount);
+  });
+  document.querySelectorAll('[data-cart-badge]').forEach((node) => {
+    node.textContent = String(itemCount);
+    node.hidden = itemCount === 0;
+  });
+  document.querySelectorAll('[data-cart-panel]').forEach((root) => paintCartPanel(root, items, totals));
+}
+
+function scrollToCart() {
+  const mobile = window.matchMedia('(max-width: 860px)').matches;
+  const target = mobile
+    ? document.querySelector('#shopCart')
+    : document.querySelector('#sideCart');
+  target?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function checkoutCart(provider) {
@@ -199,9 +215,13 @@ function initCart(hooks = {}) {
   cartState.hooks = { ...cartState.hooks, ...hooks };
   loadCart();
   renderCart();
-  document.querySelector('#cartCheckoutMp')?.addEventListener('click', () => checkoutCart('mercadopago'));
-  document.querySelector('#cartCheckoutStripe')?.addEventListener('click', () => checkoutCart('stripe'));
-  document.querySelector('#cartClear')?.addEventListener('click', clearCart);
+  if (cartState.bound) return;
+  cartState.bound = true;
+  document.body.addEventListener('click', (event) => {
+    if (event.target.closest('[data-cart-checkout="mercadopago"]')) checkoutCart('mercadopago');
+    if (event.target.closest('[data-cart-checkout="stripe"]')) checkoutCart('stripe');
+    if (event.target.closest('[data-cart-clear]')) clearCart();
+  });
 }
 
 window.DubpackCart = {
@@ -210,5 +230,6 @@ window.DubpackCart = {
   removeCartItem,
   clearCart,
   renderCart,
-  loadCart
+  loadCart,
+  scrollToCart
 };

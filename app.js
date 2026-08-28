@@ -45,6 +45,27 @@ try {
   firebaseAuth = null;
 }
 
+async function ensureAuthPersistence() {
+  if (!firebaseAuth?.setPersistence || !window.firebase?.auth?.Auth?.Persistence) return;
+  try {
+    await firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function restoreAuthSession() {
+  if (!firebaseAuth) return false;
+  await ensureAuthPersistence();
+  if (typeof firebaseAuth.authStateReady === 'function') {
+    await firebaseAuth.authStateReady();
+  }
+  const fbUser = firebaseAuth.currentUser;
+  if (!fbUser) return false;
+  await finishLogin(accountFromFirebase(fbUser), { toast: false });
+  return true;
+}
+
 function getStudioTips() {
   return [1, 2, 3, 4].map((index) => ({
     title: t(`tip.${index}.title`),
@@ -223,9 +244,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
-      return script.includes('sw.js?v=87') ? Promise.resolve() : reg.unregister();
+      return script.includes('sw.js?v=88') ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register('./sw.js?v=87'))
+    .then(() => navigator.serviceWorker.register('./sw.js?v=88'))
     .catch(() => undefined);
 }
 
@@ -319,19 +340,12 @@ async function bootApp() {
     toast('Firebase não carregou. Recarregue a página.');
     return;
   }
-  await new Promise((resolve) => {
-    const stop = firebaseAuth.onAuthStateChanged(async (fbUser) => {
-      stop();
-      if (fbUser) {
-        await finishLogin(accountFromFirebase(fbUser), { toast: false });
-      } else {
-        state.user = null;
-        localStorage.removeItem(SESSION_USER_KEY);
-        showAuthGate(true);
-      }
-      resolve();
-    });
-  });
+  const restored = await restoreAuthSession();
+  if (!restored) {
+    state.user = null;
+    localStorage.removeItem(SESSION_USER_KEY);
+    showAuthGate(true);
+  }
 }
 
 function normalizeEmail(value) {
@@ -710,6 +724,7 @@ async function submitAuth(event) {
 
   setAuthBusy(true);
   try {
+    await ensureAuthPersistence();
     if (state.authMode === 'signup') {
       const name = String(els.authName?.value || '').trim() || displayNameFromEmail(email);
       const cred = await firebaseAuth.createUserWithEmailAndPassword(email, password);
@@ -2551,10 +2566,6 @@ function renderCreditShop() {
 }
 
 function addPackToCart(pack) {
-  if (isOwner()) {
-    toast(t('cart.owner'));
-    return;
-  }
   window.DubpackCart?.addCartItem({
     id: pack.id,
     type: 'pack',
@@ -2564,10 +2575,11 @@ function addPackToCart(pack) {
     priceUsd: pack.priceUsd
   });
   setTab('credits');
+  window.DubpackCart?.scrollToCart();
 }
 
 function addProToCart() {
-  if (isOwner() || isPro()) return;
+  if (isPro() && !isOwner()) return;
   window.DubpackCart?.addCartItem({
     id: 'pro-monthly',
     type: 'pro',
@@ -2577,6 +2589,7 @@ function addProToCart() {
     priceUsd: PRO_MONTHLY_PRICE_USD
   });
   setTab('credits');
+  window.DubpackCart?.scrollToCart();
 }
 
 function handleCheckoutReturn() {
