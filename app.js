@@ -245,9 +245,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
-      return script.includes('sw.js?v=89') ? Promise.resolve() : reg.unregister();
+      return script.includes('sw.js?v=90') ? Promise.resolve() : reg.unregister();
     })))
-    .then(() => navigator.serviceWorker.register('./sw.js?v=89'))
+    .then(() => navigator.serviceWorker.register('./sw.js?v=90'))
     .catch(() => undefined);
 }
 
@@ -684,6 +684,7 @@ async function finishLogin(account, options = {}) {
   window.DubpackCart?.renderCart();
   renderActivity();
   showFinalVideo(currentPack());
+  await syncAccountFromServer();
 }
 
 function setAuthBusy(on) {
@@ -2619,13 +2620,83 @@ function addProToCart() {
   window.DubpackCart?.scrollToCart();
 }
 
+function getPaymentEndpoint(name) {
+  return window.DubpackCart?.paymentEndpoint?.(name) || '';
+}
+
+async function syncAccountFromServer() {
+  if (!state.user?.email || isOwner()) return;
+  const url = getPaymentEndpoint('syncAccount');
+  if (!url) return;
+  try {
+    const response = await fetch(`${url}?email=${encodeURIComponent(state.user.email)}`);
+    const data = await response.json();
+    if (!response.ok) return;
+    if (Number.isFinite(Number(data.credits))) setCredits(Number(data.credits));
+    if (data.pro?.active) {
+      writeProState({
+        active: true,
+        subscribedAt: Number(data.pro.subscribedAt) || Date.now(),
+        periodEnd: Number(data.pro.periodEnd) || (Date.now() + PRO_PERIOD_MS),
+        lastCreditMonth: data.pro.lastCreditMonth || ''
+      });
+    }
+    refreshAccountUi();
+  } catch {
+    // Server sync is optional until functions are deployed.
+  }
+}
+
+async function verifyStripeCheckout(sessionId) {
+  const url = getPaymentEndpoint('verifyCheckout');
+  if (!url || !state.user?.email) {
+    toast(t('cart.checkout.pending'));
+    return;
+  }
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        email: state.user.email
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'verify-failed');
+    if (Number.isFinite(Number(data.credits))) setCredits(Number(data.credits));
+    if (data.pro) {
+      const now = Date.now();
+      writeProState({
+        active: true,
+        subscribedAt: now,
+        periodEnd: now + PRO_PERIOD_MS,
+        lastCreditMonth: new Date().toISOString().slice(0, 7)
+      });
+    }
+    window.DubpackCart?.clearCart();
+    refreshAccountUi();
+    toast(t('cart.checkout.success'));
+  } catch (error) {
+    console.error(error);
+    toast(t('cart.checkout.verify'));
+  }
+}
+
 function handleCheckoutReturn() {
   const params = new URLSearchParams(window.location.search);
   const status = params.get('checkout');
+  const sessionId = params.get('session_id');
   if (!status) return;
-  if (status === 'success') toast(t('cart.checkout.success'));
-  else if (status === 'cancel') toast(t('cart.checkout.cancel'));
+  if (status === 'success' && sessionId) {
+    void verifyStripeCheckout(sessionId);
+  } else if (status === 'success') {
+    toast(t('cart.checkout.success'));
+  } else if (status === 'cancel') {
+    toast(t('cart.checkout.cancel'));
+  }
   params.delete('checkout');
+  params.delete('session_id');
   const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`;
   window.history.replaceState({}, '', next);
 }

@@ -9,6 +9,13 @@ const cartState = {
   }
 };
 
+function paymentEndpoint(name) {
+  const config = window.DUBPACK_PAYMENTS || {};
+  if (config.functions?.[name]) return config.functions[name];
+  const base = String(config.apiBase || '').replace(/\/$/, '');
+  return base ? `${base}/${name}` : '';
+}
+
 function cartStorageKey() {
   const email = cartState.hooks.getUser()?.email;
   return email ? `${CART_KEY}:${String(email).trim().toLowerCase()}` : CART_KEY;
@@ -169,8 +176,10 @@ async function checkoutCart(provider) {
   }
 
   const config = window.DUBPACK_PAYMENTS || {};
-  const apiBase = String(config.apiBase || '').replace(/\/$/, '');
-  if (!apiBase) {
+  const checkoutUrl = provider === 'mercadopago'
+    ? paymentEndpoint('createMercadoCheckout')
+    : paymentEndpoint('createCheckout');
+  if (!checkoutUrl) {
     cartState.hooks.toast(cartState.hooks.t('cart.checkout.pending'));
     return;
   }
@@ -195,7 +204,7 @@ async function checkoutCart(provider) {
   };
 
   try {
-    const response = await fetch(`${apiBase}/createCheckout`, {
+    const response = await fetch(checkoutUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -231,5 +240,6 @@ window.DubpackCart = {
   clearCart,
   renderCart,
   loadCart,
-  scrollToCart
+  scrollToCart,
+  paymentEndpoint
 };

@@ -1,12 +1,19 @@
-// Copy to payments.config.js and fill in your keys.
-// payments.config.js is gitignored — never commit real secrets.
+// 1) Create a Stripe account: https://dashboard.stripe.com/register
+// 2) Copy the test Publishable key (pk_test_...) into stripePublishableKey below.
+// 3) Deploy Firebase Functions (see repo functions/ folder).
+// 4) Paste each function URL into functions.createCheckout / verifyCheckout / syncAccount.
+// 5) In Stripe → Developers → Webhooks, add endpoint:
+//    https://YOUR-STRIPE-WEBHOOK-URL (from Firebase stripeWebhook function)
+//    Events: checkout.session.completed, invoice.paid
+// 6) Save the webhook signing secret as Firebase secret STRIPE_WEBHOOK_SECRET.
 window.DUBPACK_PAYMENTS = {
-  // Firebase Function, Vercel, or your API that creates checkout sessions.
-  apiBase: 'https://YOUR-REGION-YOUR-PROJECT.cloudfunctions.net',
-
-  // Stripe publishable key (pk_live_... or pk_test_...)
-  stripePublishableKey: '',
-
-  // Mercado Pago public key (APP_USR-...)
+  apiBase: '',
+  functions: {
+    createCheckout: '',
+    createMercadoCheckout: '',
+    verifyCheckout: '',
+    syncAccount: ''
+  },
+  stripePublishableKey: 'pk_test_REPLACE_ME',
   mercadoPagoPublicKey: ''
 };
