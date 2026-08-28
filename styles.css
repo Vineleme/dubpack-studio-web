@@ -1656,6 +1656,31 @@ body.needs-auth .dashboard {
 
 .nav-label { white-space: nowrap; }
 
+.nav-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+
+.nav-svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.85;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.side-nav button.active .nav-ico,
+.side-nav button:hover .nav-ico {
+  opacity: 1;
+}
+
 .user-chip {
   display: flex;
   align-items: center;
@@ -1684,10 +1709,23 @@ body.needs-auth .dashboard {
 }
 
 .user-chip-meta small {
-  color: #ffd21e;
+  color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
+}
+
+.credit-highlight,
+.credit-word {
+  color: #5bff3a;
+  text-shadow:
+    0 0 8px rgba(91, 255, 58, 0.55),
+    0 0 18px rgba(91, 255, 58, 0.28);
+  font-weight: 800;
+}
+
+.credit-highlight {
+  font-weight: 900;
 }
 
 .avatar-shell {
@@ -1857,7 +1895,109 @@ body.needs-auth .dashboard {
 .credit-shop {
   display: grid;
   gap: 16px;
-  margin: 16px 0;
+  margin: 16px 0 20px;
+}
+.shop-lead {
+  margin: 0;
+  color: #b7b5ce;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.shop-owner-banner {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(91, 255, 58, 0.08);
+  border: 1px solid rgba(91, 255, 58, 0.28);
+  color: #d8ffd0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.pricing-tier-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.pricing-tier {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 20px 18px;
+  border-radius: 18px;
+  background: rgba(16, 13, 38, 0.88);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  min-height: 100%;
+}
+.pricing-tier.is-featured {
+  border-color: rgba(245, 46, 131, 0.55);
+  background: linear-gradient(160deg, rgba(53, 24, 79, 0.95), rgba(16, 13, 38, 0.95));
+  box-shadow: 0 0 28px rgba(168, 85, 247, 0.14);
+}
+.pricing-tier.is-active {
+  border-color: rgba(91, 255, 58, 0.45);
+  box-shadow: 0 0 20px rgba(91, 255, 58, 0.08);
+}
+.tier-step {
+  display: inline-flex;
+  align-self: start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #d8d6ef;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.pricing-tier.is-featured .tier-step {
+  background: rgba(245, 46, 131, 0.18);
+  color: #ffd0e6;
+}
+.tier-title {
+  font-size: 24px;
+  line-height: 1.1;
+}
+.tier-price {
+  color: #ffd21e;
+  font-size: 30px;
+  line-height: 1.05;
+}
+.tier-price-note {
+  margin: 0;
+  color: #b7b5ce;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.tier-features {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.tier-features li {
+  position: relative;
+  padding-left: 18px;
+  color: #d8d6ef;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.tier-features li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #5bff3a;
+  font-weight: 900;
+}
+.tier-status {
+  display: inline-flex;
+  align-self: start;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(91, 255, 58, 0.12);
+  border: 1px solid rgba(91, 255, 58, 0.35);
+  color: #5bff3a;
+  font-size: 12px;
+  font-weight: 800;
 }
 .credit-pack-grid {
   display: grid;
@@ -2002,6 +2142,7 @@ body.needs-auth .dashboard {
     justify-self: start;
   }
   .credit-pack-grid { grid-template-columns: 1fr; }
+  .pricing-tier-grid { grid-template-columns: 1fr; }
   .site-footer {
     padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }

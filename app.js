@@ -9,8 +9,8 @@ const BED_DUCK = 0.012;
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
-const PRO_MONTHLY_PRICE = 19.9;
-const PRO_MONTHLY_CREDITS = 5;
+const PRO_MONTHLY_PRICE = 9.9;
+const PRO_MONTHLY_CREDITS = 200;
 const PRO_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_USER_KEY = 'dubpack-user';
 const USERS_KEY = 'dubpack-users';
@@ -44,24 +44,12 @@ try {
   firebaseAuth = null;
 }
 
-const STUDIO_TIPS = [
-  {
-    title: 'Foque na emoção!',
-    body: 'Transmita sentimento na sua voz. Isso faz toda a diferença na dublagem.'
-  },
-  {
-    title: 'Ouça uma vez, depois grave',
-    body: 'A referência é o guia. No take, só a sua voz no tempo da fala.'
-  },
-  {
-    title: 'O countdown é o “ação”',
-    body: 'Três segundos para respirar. Toque no microfone de novo para parar.'
-  },
-  {
-    title: 'Fone ajuda, não é obrigatório',
-    body: 'Use fone se puder, para a referência não vazar no take.'
-  }
-];
+function getStudioTips() {
+  return [1, 2, 3, 4].map((index) => ({
+    title: t(`tip.${index}.title`),
+    body: t(`tip.${index}.body`)
+  }));
+}
 
 const state = {
   packs: [],
@@ -454,6 +442,7 @@ function changeLang(lang) {
   refreshAuthI18n();
   if (state.user) refreshAccountUi();
   renderCreditShop();
+  refreshStudioTips();
   const pack = currentPack();
   if (pack) {
     updateFinishCta(pack);
@@ -1752,8 +1741,9 @@ async function exportTakesZip() {
 
 function startStudioTips() {
   if (!els.tipDots || !els.tipTitle) return;
+  const tips = getStudioTips();
   els.tipDots.replaceChildren();
-  STUDIO_TIPS.forEach((tip, index) => {
+  tips.forEach((tip, index) => {
     const dot = document.createElement('button');
     dot.type = 'button';
     dot.setAttribute('aria-label', tip.title);
@@ -1763,13 +1753,24 @@ function startStudioTips() {
   showStudioTip(0);
   clearInterval(state.tipTimer);
   state.tipTimer = setInterval(() => {
-    showStudioTip((state.tipIndex + 1) % STUDIO_TIPS.length);
+    showStudioTip((state.tipIndex + 1) % tips.length);
   }, 6500);
 }
 
+function refreshStudioTips() {
+  if (!els.tipDots || !els.tipTitle) return;
+  const tips = getStudioTips();
+  els.tipDots.querySelectorAll('button').forEach((dot, index) => {
+    dot.setAttribute('aria-label', tips[index]?.title || '');
+  });
+  showStudioTip(state.tipIndex ?? 0);
+}
+
 function showStudioTip(index, pause) {
+  const tips = getStudioTips();
   state.tipIndex = index;
-  const tip = STUDIO_TIPS[index];
+  const tip = tips[index];
+  if (!tip) return;
   if (els.tipTitle) els.tipTitle.innerHTML = `<strong>${tip.title}</strong>`;
   if (els.tipBody) els.tipBody.textContent = tip.body;
   els.tipDots?.querySelectorAll('button').forEach((dot, i) => {
@@ -1778,7 +1779,7 @@ function showStudioTip(index, pause) {
   if (pause) {
     clearInterval(state.tipTimer);
     state.tipTimer = setInterval(() => {
-      showStudioTip((state.tipIndex + 1) % STUDIO_TIPS.length);
+      showStudioTip((state.tipIndex + 1) % tips.length);
     }, 6500);
   }
 }
@@ -2300,11 +2301,68 @@ function toast(message) {
 
 const CREDIT_KEY = 'dubpack-credits';
 const CREDIT_PACKS = [
-  { id: 'c1', credits: 1, price: 3, label: '1 crédito', hint: 'Uma dublagem MP4' },
-  { id: 'c2', credits: 2, price: 5, label: '2 créditos', hint: 'R$ 2,50 cada' },
-  { id: 'c5', credits: 5, price: 11, label: '5 créditos', hint: 'Melhor custo', featured: true },
-  { id: 'c10', credits: 10, price: 20, label: '10 créditos', hint: 'R$ 2,00 cada' }
+  { id: 'c100', credits: 100, price: 9.9, labelKey: 'pack.c100.label', hintKey: 'pack.c100.hint' },
+  { id: 'c200', credits: 200, price: 12.9, labelKey: 'pack.c200.label', hintKey: 'pack.c200.hint' },
+  { id: 'c300', credits: 300, price: 15.9, labelKey: 'pack.c300.label', hintKey: 'pack.c300.hint', featured: true }
 ];
+
+function formatBrl(value, { monthly = false } = {}) {
+  const amount = Number.isInteger(value)
+    ? `R$ ${value},00`
+    : `R$ ${value.toFixed(2).replace('.', ',')}`;
+  if (!monthly) return amount;
+  return `${amount}/${getLang() === 'en' ? 'mo' : 'mês'}`;
+}
+
+function createPricingTier({ step, title, price, priceNote, features, variant, featured, active, cta }) {
+  const card = document.createElement('article');
+  card.className = `pricing-tier tier-${variant}${featured ? ' is-featured' : ''}${active ? ' is-active' : ''}`;
+
+  const stepEl = document.createElement('span');
+  stepEl.className = 'tier-step';
+  stepEl.textContent = step;
+
+  const titleEl = document.createElement('strong');
+  titleEl.className = 'tier-title';
+  titleEl.textContent = title;
+
+  const priceEl = document.createElement('b');
+  priceEl.className = 'tier-price';
+  priceEl.textContent = price;
+
+  const noteEl = document.createElement('p');
+  noteEl.className = 'tier-price-note';
+  noteEl.textContent = priceNote;
+
+  const list = document.createElement('ul');
+  list.className = 'tier-features';
+  features.forEach((feature) => {
+    const item = document.createElement('li');
+    item.textContent = feature;
+    list.append(item);
+  });
+
+  card.append(stepEl, titleEl, priceEl, noteEl, list);
+
+  if (active) {
+    const status = document.createElement('span');
+    status.className = 'tier-status';
+    status.textContent = t('shop.current');
+    card.append(status);
+  }
+
+  if (cta) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `primary wide${cta.secondary ? ' secondary' : ''}`;
+    button.textContent = cta.text;
+    button.disabled = Boolean(cta.disabled);
+    if (cta.onClick) button.addEventListener('click', cta.onClick);
+    card.append(button);
+  }
+
+  return card;
+}
 
 function getCredits() {
   if (isOwner()) return Number.POSITIVE_INFINITY;
@@ -2334,15 +2392,24 @@ function creditLabel(count) {
   return `${count} ${word}`;
 }
 
+function creditBadgeHtml(count) {
+  if (!Number.isFinite(count) || count === Number.POSITIVE_INFINITY) {
+    return `<span class="credit-word">${t('credit.infinite')}</span>`;
+  }
+  const word = count === 1 ? t('credit.one') : t('credit.many');
+  return `<span class="credit-highlight">${count}</span> <span class="credit-word">${word}</span>`;
+}
+
 function updateCreditUi() {
   const count = getCredits();
   const label = creditLabel(count);
+  const badgeHtml = creditBadgeHtml(count);
   if (els.creditBadge) {
-    els.creditBadge.textContent = isPro() && !isOwner() ? `PRO · ${label}` : label;
+    els.creditBadge.innerHTML = isPro() && !isOwner() ? `PRO · ${badgeHtml}` : badgeHtml;
   }
-  if (els.creditsBalance) els.creditsBalance.textContent = label;
+  if (els.creditsBalance) els.creditsBalance.innerHTML = badgeHtml;
   if (els.profileCreditsLine) {
-    els.profileCreditsLine.textContent = t('profile.body', { credits: label });
+    els.profileCreditsLine.innerHTML = t('profile.body', { credits: badgeHtml });
   }
   if (els.proBtn) {
     els.proBtn.textContent = isOwner() ? t('pro.btn.owner') : isPro() ? t('pro.btn.manage') : t('pro.btn');
@@ -2352,58 +2419,85 @@ function updateCreditUi() {
 function renderCreditShop() {
   if (!els.creditShop) return;
   els.creditShop.replaceChildren();
+
   if (isOwner()) {
-    const note = document.createElement('p');
-    note.className = 'hint-copy';
-    note.textContent = getLang() === 'en'
-      ? 'Owner account: unlimited credits and exports without watermark.'
-      : 'Conta de dono: créditos infinitos e exportação sem marca d\'água.';
-    els.creditShop.append(note);
-    return;
+    const banner = document.createElement('div');
+    banner.className = 'shop-owner-banner';
+    banner.textContent = t('shop.owner.banner');
+    els.creditShop.append(banner);
   }
 
-  const proCard = document.createElement('article');
-  proCard.className = `pro-plan-card${isPro() ? ' is-active' : ''}`;
-  const proTitle = document.createElement('strong');
-  proTitle.textContent = t('pro.card.title');
-  const proPrice = document.createElement('b');
-  proPrice.textContent = `R$ ${PRO_MONTHLY_PRICE.toFixed(2).replace('.', ',')}/mês`;
-  const proHint = document.createElement('p');
-  proHint.className = 'hint-copy';
-  proHint.textContent = isPro()
-    ? `${proStatusLabel()}. ${PRO_MONTHLY_CREDITS} ${t('credit.many')}, ${getLang() === 'en' ? 'no watermark' : 'sem marca d\'água'}.`
-    : `${PRO_MONTHLY_CREDITS} ${t('credit.many')}/${getLang() === 'en' ? 'month' : 'mês'}, ${getLang() === 'en' ? 'no watermark on MP4' : 'MP4 sem marca d\'água'}. ${getLang() === 'en' ? 'Dubbing stays free.' : 'Dublar continua grátis.'}`;
-  const proBtn = document.createElement('button');
-  proBtn.type = 'button';
-  proBtn.className = 'primary wide';
-  proBtn.textContent = isPro() ? t('pro.active') : t('pro.subscribe');
-  proBtn.disabled = isPro();
-  proBtn.addEventListener('click', subscribePro);
-  proCard.append(proTitle, proPrice, proHint, proBtn);
-  els.creditShop.append(proCard);
+  const tiersTitle = document.createElement('h3');
+  tiersTitle.className = 'shop-section-title';
+  tiersTitle.textContent = t('shop.tiers.title');
+  const tiersLead = document.createElement('p');
+  tiersLead.className = 'shop-lead';
+  tiersLead.textContent = t('shop.tiers.lead');
+  els.creditShop.append(tiersTitle, tiersLead);
+
+  const tierGrid = document.createElement('div');
+  tierGrid.className = 'pricing-tier-grid';
+
+  tierGrid.append(createPricingTier({
+    step: t('shop.step.1'),
+    title: t('shop.free.title'),
+    price: formatBrl(0),
+    priceNote: t('shop.free.priceNote'),
+    features: [t('shop.free.f1'), t('shop.free.f2'), t('shop.free.f3')],
+    variant: 'free',
+    active: !isPro() && !isOwner()
+  }));
+
+  tierGrid.append(createPricingTier({
+    step: t('shop.step.3'),
+    title: t('pro.card.title'),
+    price: formatBrl(PRO_MONTHLY_PRICE, { monthly: true }),
+    priceNote: t('shop.pro.priceNote', { credits: PRO_MONTHLY_CREDITS }),
+    features: [t('shop.pro.f1'), t('shop.pro.f2'), t('shop.pro.f3')],
+    variant: 'pro',
+    featured: true,
+    active: isPro() && !isOwner(),
+    cta: isOwner()
+      ? { text: t('plan.owner'), disabled: true, secondary: true }
+      : isPro()
+        ? { text: t('pro.active'), disabled: true }
+        : { text: t('pro.subscribe'), onClick: subscribePro }
+  }));
+
+  tierGrid.append(createPricingTier({
+    step: t('shop.step.4'),
+    title: t('shop.extra.title'),
+    price: t('shop.extra.from', { price: formatBrl(9.9) }),
+    priceNote: t('shop.extra.priceNote'),
+    features: [t('shop.extra.f1'), t('shop.extra.f2'), t('shop.extra.f3')],
+    variant: 'extra'
+  }));
+
+  els.creditShop.append(tierGrid);
 
   const packsTitle = document.createElement('h3');
   packsTitle.className = 'shop-section-title';
-  packsTitle.textContent = t('credits.extra');
-  const packsHint = document.createElement('p');
-  packsHint.className = 'hint-copy';
-  packsHint.textContent = t('credits.extra.hint');
-  els.creditShop.append(packsTitle, packsHint);
+  packsTitle.textContent = t('shop.packs.title');
+  const packsLead = document.createElement('p');
+  packsLead.className = 'shop-lead';
+  packsLead.textContent = t('shop.packs.lead');
+  els.creditShop.append(packsTitle, packsLead);
 
   const packGrid = document.createElement('div');
   packGrid.className = 'credit-pack-grid';
   CREDIT_PACKS.forEach((pack) => {
+    const label = t(pack.labelKey);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `credit-card${pack.featured ? ' featured' : ''}`;
     const title = document.createElement('strong');
-    title.textContent = pack.label;
+    title.textContent = label;
     const price = document.createElement('b');
-    price.textContent = `R$ ${pack.price},00`;
+    price.textContent = formatBrl(pack.price);
     const hint = document.createElement('span');
-    hint.textContent = pack.hint;
+    hint.textContent = t(pack.hintKey);
     button.append(title, price, hint);
-    button.addEventListener('click', () => buyCredits(pack));
+    button.addEventListener('click', () => buyCredits({ ...pack, label }));
     packGrid.append(button);
   });
   els.creditShop.append(packGrid);
@@ -2411,7 +2505,7 @@ function renderCreditShop() {
 
 function buyCredits(pack) {
   setCredits(getCredits() + pack.credits);
-  toast(`${pack.label} adicionados. Pagamento real entra na próxima etapa.`);
+  toast(t('shop.buy.simulated', { label: pack.label }));
 }
 
 function renderActivity() {
