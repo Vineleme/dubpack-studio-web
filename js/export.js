@@ -83,16 +83,9 @@ export async function requestFinalMp4() {
   if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = true;
   try {
     const composed = await composeDubbedVideo(pack, setExportProgress);
-    let output = composed;
-    if (isIOS() && !composed.type.includes('mp4')) {
-      setExportProgress(92, 'Convertendo para MP4');
-      output = await convertToMp4(composed);
-    }
-    if (isIOS() && !output.type.includes('mp4')) {
-      throw new Error(getLang() === 'en'
-        ? 'Could not generate MP4 on this device. Try again on Wi‑Fi.'
-        : 'Não consegui gerar MP4 neste aparelho. Tente de novo com Wi‑Fi ligado.');
-    }
+    const output = String(composed.type || '').includes('webm') || String(composed.type || '').includes('mp4')
+      ? composed
+      : new Blob([composed], { type: 'video/webm' });
     setExportProgress(100, 'Pronto');
     if (pack.finalUrl) URL.revokeObjectURL(pack.finalUrl);
     pack.finalBlob = output;
@@ -135,19 +128,12 @@ export async function requestFinalMp4() {
 }
 
 export function pickVideoMime() {
-  const mp4Types = [
-    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-    'video/mp4;codecs=h264,aac',
-    'video/mp4'
-  ];
   const webmTypes = [
     'video/webm;codecs=vp8,opus',
     'video/webm;codecs=vp9,opus',
     'video/webm'
   ];
-  // iPhone: tenta MP4. Chrome/PC: WebM nativo, sem conversão.
-  const types = isIOS() ? [...mp4Types, ...webmTypes] : [...webmTypes, ...mp4Types];
-  return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
+  return webmTypes.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
 
 export function exportVideoBitrate() {
