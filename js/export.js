@@ -8,7 +8,7 @@ import { scheduleSave } from './persist.js';
 import { stopProjectPreview } from './playback.js';
 import { abortCapture } from './recorder.js';
 import { setTab } from './ui.js';
-import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packIsComplete, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
+import { coverDraw, gainForTake, isIOS, isPhone, loadImage, loadScript, packIsComplete, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
 
 export async function downloadFinalMp4() {
   if (!isLoggedIn()) {
@@ -228,7 +228,131 @@ export async function ensureOgvPlayer() {
   return Player;
 }
 
-export async function openOgvFilm(url, onProgress) {
+function pickOgvCanvas(player, ignore) {
+  const nodes = [];
+  if (player?._canvas) nodes.push(player._canvas);
+  player?.querySelectorAll?.('canvas')?.forEach((node) => nodes.push(node));
+  return nodes.find((node) => node && node !== ignore && (node.width > 1 || node.height > 1)) || null;
+}
+
+function sourceLooksLit(source) {
+  if (!source) return false;
+  const w = source.videoWidth || source.width || 0;
+  const h = source.videoHeight || source.height || 0;
+  if (w < 2 || h < 2) return false;
+  const probe = document.createElement('canvas');
+  probe.width = 32;
+  probe.height = 32;
+  const ctx = probe.getContext('2d', { willReadFrequently: true });
+  try {
+    ctx.drawImage(source, 0, 0, 32, 32);
+  } catch {
+    return true;
+  }
+  const data = ctx.getImageData(0, 0, 32, 32).data;
+  let lit = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] + data[i + 1] + data[i + 2] > 24) lit += 1;
+  }
+  return lit >= 10;
+}
+
+function sceneTimeSeconds(value) {
+  const n = Number(value) || 0;
+  return n > 20 * 60 ? n / 1000 : n;
+}
+
+async function loadSceneStills(pack) {
+  const scenes = (pack?.scenes || []).map((raw) => decorateScene(raw));
+  const loaded = await Promise.all(scenes.map(async (scene) => {
+    if (!scene.imageUrl) return { scene, image: null };
+    try {
+      return { scene, image: await loadImage(scene.imageUrl) };
+    } catch {
+      return { scene, image: null };
+    }
+  }));
+  return loaded;
+}
+
+function stillAt(t, stills) {
+  let current = null;
+  stills.forEach((item) => {
+    const start = sceneTimeSeconds(item.scene.videoOffset);
+    if (start <= t) current = item.image;
+  });
+  return current || stills.find((item) => item.image)?.image || null;
+}
+
+export async function openStillsFilm(pack, onProgress) {
+  onProgress?.(18, 'Montando as imagens da cena');
+  const stills = await loadSceneStills(pack);
+  const wrap = els.finalVideoWrap;
+  if (!wrap) throw new Error('Não achei a área do vídeo final.');
+  wrap.querySelectorAll('ogvjs, canvas.export-ogv-paint').forEach((node) => node.remove());
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'export-ogv-paint';
+  canvas.width = 1280;
+  canvas.height = 720;
+  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4;background:#05040d';
+  wrap.appendChild(canvas);
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const lineEnd = (pack.scenes || []).reduce((max, raw) => {
+    const scene = decorateScene(raw);
+    return Math.max(max, sceneTimeSeconds(scene.videoOffset) + (Number(scene.duration) || 0));
+  }, 0);
+  const duration = Math.min(Math.max(lineEnd, 8), 20 * 60);
+  let playing = false;
+  let startedAt = 0;
+  let captureStream = null;
+  let raf = 0;
+  const time = () => (playing ? (performance.now() - startedAt) / 1000 : 0);
+  const frameAt = (t) => {
+    ctx.fillStyle = '#05040d';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const image = stillAt(t, stills);
+    if (image) coverDraw(ctx, image, canvas.width, canvas.height);
+  };
+  const loop = () => {
+    if (!playing) return;
+    frameAt(time());
+    raf = requestAnimationFrame(loop);
+  };
+  frameAt(0);
+  onProgress?.(25, 'Imagens da cena prontas');
+  return {
+    duration,
+    srcUrl: pack.filmUrl || pack.scenes?.[0]?.videoUrl || '',
+    currentTime: time,
+    hasPicture: () => stills.some((item) => item.image),
+    play: () => {
+      playing = true;
+      startedAt = performance.now();
+      loop();
+      return Promise.resolve();
+    },
+    pause: () => {
+      playing = false;
+      cancelAnimationFrame(raf);
+    },
+    ended: new Promise(() => {}),
+    getPaintSource: () => canvas,
+    getTrack: () => {
+      captureStream = canvas.captureStream(30);
+      frameAt(time());
+      return captureStream.getVideoTracks()[0] || null;
+    },
+    stop: () => {
+      playing = false;
+      cancelAnimationFrame(raf);
+      captureStream?.getTracks().forEach((track) => track.stop());
+      canvas.remove();
+    }
+  };
+}
+
+export async function openOgvFilm(url, onProgress, pack) {
   onProgress?.(12, 'Abrindo o vídeo Choicer');
   const Player = await ensureOgvPlayer();
   const wrap = els.finalVideoWrap;
@@ -243,6 +367,7 @@ export async function openOgvFilm(url, onProgress) {
   player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
   wrap.appendChild(player);
 
+  const stills = await loadSceneStills(pack);
   const paintCanvas = document.createElement('canvas');
   paintCanvas.className = 'export-ogv-paint';
   paintCanvas.width = 1280;
@@ -255,9 +380,15 @@ export async function openOgvFilm(url, onProgress) {
   let captureTrack = null;
   const paint = () => {
     if (!painting) return;
-    const from = player._canvas || player.querySelector('canvas');
-    if (from && from !== paintCanvas && from.width > 1) {
-      try { ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height); } catch { /* frame not ready */ }
+    const t = Number(player.currentTime) || 0;
+    ctx.fillStyle = '#05040d';
+    ctx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
+    const from = pickOgvCanvas(player, paintCanvas);
+    if (!from || !sourceLooksLit(from)) {
+      const image = stillAt(t, stills);
+      if (image) coverDraw(ctx, image, paintCanvas.width, paintCanvas.height);
+    } else {
+      try { coverDraw(ctx, from, paintCanvas.width, paintCanvas.height); } catch { /* frame not ready */ }
     }
     requestAnimationFrame(paint);
   };
@@ -269,12 +400,15 @@ export async function openOgvFilm(url, onProgress) {
 
   const deadline = performance.now() + 4000;
   while (performance.now() < deadline) {
-    const from = player._canvas || player.querySelector('canvas');
+    const from = pickOgvCanvas(player, paintCanvas);
     const w = player.videoWidth || from?.width || 0;
     const h = player.videoHeight || from?.height || 0;
     if (w > 1 && h > 1) break;
     await wait(50);
   }
+
+  try { player.pause(); } catch { /* ignore */ }
+  try { player.currentTime = 0; } catch { /* ignore */ }
 
   const width = Math.max(640, player.videoWidth || paintCanvas.width);
   const height = Math.max(360, player.videoHeight || paintCanvas.height);
@@ -287,13 +421,11 @@ export async function openOgvFilm(url, onProgress) {
     duration: Number.isFinite(durationRaw) ? durationRaw : 0,
     srcUrl: url,
     currentTime: () => Number(player.currentTime) || 0,
+    hasPicture: () => Boolean(pickOgvCanvas(player, paintCanvas) || stills.some((item) => item.image)),
     play: () => player.play(),
     pause: () => player.pause(),
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
-    getPaintSource: () => {
-      const from = player._canvas || player.querySelector('canvas');
-      return (from && from !== paintCanvas && from.width > 1) ? from : paintCanvas;
-    },
+    getPaintSource: () => paintCanvas,
     getTrack: () => {
       if (captureTrack) return captureTrack;
       captureStream = paintCanvas.captureStream(30);
@@ -325,6 +457,7 @@ export async function openNativeFilm(url) {
     ended: new Promise((resolve) => {
       video.onended = resolve;
     }),
+    hasPicture: () => (video.videoWidth || 0) > 1,
     getPaintSource: () => video,
     getTrack: () => {
       const capture = video.captureStream?.bind(video) || video.mozCaptureStream?.bind(video);
@@ -347,20 +480,23 @@ export async function openNativeFilm(url) {
   };
 }
 
-export async function openFilmPlayback(candidates, onProgress) {
+export async function openFilmPlayback(candidates, onProgress, pack) {
   let lastError = null;
   for (const url of candidates) {
     try {
-      if (await urlLooksLikeOgg(url)) return await openOgvFilm(url, onProgress);
+      if (await urlLooksLikeOgg(url)) return await openOgvFilm(url, onProgress, pack);
       return await openNativeFilm(url);
     } catch (error) {
       lastError = error;
       try {
-        return await openOgvFilm(url, onProgress);
+        return await openOgvFilm(url, onProgress, pack);
       } catch (ogvError) {
         lastError = ogvError;
       }
     }
+  }
+  if (pack?.scenes?.some((scene) => scene.imageUrl)) {
+    return openStillsFilm(pack, onProgress);
   }
   throw lastError || new Error('Não achei o vídeo da cena no ZIP.');
 }
@@ -536,7 +672,11 @@ export async function composeDubbedVideo(pack, onProgress) {
 
   try {
     onProgress?.(4, 'Carregando o vídeo da cena');
-    film = await openFilmPlayback(candidates, setExportProgress);
+    film = await openFilmPlayback(candidates, setExportProgress, pack);
+    if (!film.hasPicture?.() && pack.scenes.some((scene) => scene.imageUrl)) {
+      film.stop?.();
+      film = await openStillsFilm(pack, setExportProgress);
+    }
 
     const lastLineEnd = pack.scenes.reduce((max, raw) => {
       const scene = decorateScene(raw);
