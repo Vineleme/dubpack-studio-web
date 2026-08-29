@@ -122,25 +122,30 @@ export function stageOgvMatches(url) {
   return Boolean(stageOgvPlayer && stageOgvUrl && stageOgvUrl === url);
 }
 
+export function ogvDecoderCanvas(player) {
+  const from = player?._canvas || player?.querySelector?.('canvas');
+  if (from && from.width > 1 && from.height > 1) return from;
+  return null;
+}
+
+export function ogvPaintSource(player) {
+  return ogvDecoderCanvas(player);
+}
+
 export async function waitForOgvFrame(player, fallbackCanvas, timeoutMs = 45000) {
   if (!player) return false;
   await player.play?.()?.catch?.(() => undefined);
   const deadline = performance.now() + timeoutMs;
   while (performance.now() < deadline) {
-    const from = player._canvas || player.querySelector?.('canvas');
-    const w = player.videoWidth || from?.width || fallbackCanvas?.width || 0;
-    const h = player.videoHeight || from?.height || fallbackCanvas?.height || 0;
-    if (w > 1 && h > 1) {
-      if (from && from.width > 1) return true;
-      if (player.readyState >= 2) return true;
+    const from = ogvDecoderCanvas(player);
+    if (from) return true;
+    const w = player.videoWidth || fallbackCanvas?.width || 0;
+    const h = player.videoHeight || fallbackCanvas?.height || 0;
+    if (w > 1 && h > 1 && player.readyState >= 2) {
+      await wait(120);
+      if (ogvDecoderCanvas(player)) return true;
     }
     await wait(60);
   }
   return false;
-}
-
-export function ogvPaintSource(player, fallbackCanvas) {
-  const from = player?._canvas || player?.querySelector?.('canvas');
-  if (from && from.width > 1 && from.height > 1) return from;
-  return fallbackCanvas || from || player;
 }
