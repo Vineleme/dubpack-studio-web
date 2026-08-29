@@ -461,9 +461,9 @@ export function shouldWatermarkExport() {
   return !isOwner() && !isPro();
 }
 
-export function canExportVideo(pack, cost = 1, { viaAd = false } = {}) {
+export function canExportVideo(cost = 1) {
   if (isOwner()) return true;
-  return exportAllowance(cost, { viaAd }).ok;
+  return exportAllowance(cost).ok;
 }
 
 export function consumeExportCredit(amount = 1) {

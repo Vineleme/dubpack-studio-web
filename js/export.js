@@ -1,29 +1,29 @@
-import { t, getLang } from './i18n-bridge.js';
+﻿import { t, getLang } from './i18n-bridge.js';
 import { BED_EXPORT, BED_DUCK, EXPORT_WATERMARK_LABEL } from './constants.js';
 import { state, els } from './state.js';
 import { isLoggedIn, requireAuth } from './auth.js';
 import { canExportVideo, consumeExportCredit, isPro, shouldWatermarkExport } from './credits.js';
-import { requestRewardedExport } from './ads.js';
-import {
-  exportAllowance,
-  getExportCreditCost,
-  markAdExportUsed,
-  recordDailyExport
-} from './plan.js';
 import { currentPack, decorateScene, showFinalVideo } from './pack.js';
 import { scheduleSave } from './persist.js';
 import { stopProjectPreview } from './playback.js';
 import { abortCapture } from './recorder.js';
 import { setTab } from './ui.js';
 import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packIsComplete, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
-import { ensureOgvPlayer, getStageOgv, ogvPaintSource, stageOgvMatches, urlLooksLikeOgg, waitForOgvFrame } from './ogv.js';
+import { ensureOgvPlayer, urlLooksLikeOgg } from './ogv.js';
+
+const FFMPEG_CDNS = [
+  {
+    script: 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js',
+    core: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+  },
+  {
+    script: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js',
+    core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+  }
+];
 
 export function exportTargetIsMp4() {
   return isIOS();
-}
-
-export function exportFormatLabel() {
-  return exportTargetIsMp4() ? 'MP4' : 'WebM';
 }
 
 export async function downloadFinalMp4() {
@@ -70,78 +70,41 @@ export async function requestFinalMp4() {
   }
   const recorded = pack.scenes.filter((scene) => pack.takes[scene.id]).length;
   if (!packIsComplete(pack)) {
-    toast(`Grave todas as falas para gerar o vídeo. Faltam ${pack.scenes.length - recorded}.`);
+    toast(`Grave todas as falas para gerar o MP4. Faltam ${pack.scenes.length - recorded}.`);
     setTab('record');
     return;
   }
-  if (state.exporting) {
-    toast('Já estou montando o vídeo.');
-    return;
-  }
-
-  const creditCost = await getExportCreditCost(pack);
-  let viaAd = false;
-  let allowance = exportAllowance(creditCost);
-  if (!allowance.ok && allowance.reason === 'ad-offer') {
-    const watched = await requestRewardedExport();
-    if (!watched) return;
-    markAdExportUsed();
-    viaAd = true;
-    allowance = exportAllowance(creditCost, { viaAd: true });
-  }
-  if (!allowance.ok) {
-    toast(allowance.message || (isPro()
+  if (!canExportVideo()) {
+    toast(isPro()
       ? 'Créditos do mês acabaram. Compre extras ou aguarde a renovação PRO.'
-      : 'Sem créditos. Assine o PRO, compre um pacote ou assista um anúncio amanhã.'));
-    if (!isPro() || allowance.reason === 'pro') setTab('credits');
+      : 'Sem créditos. Assine o PRO ou compre um pacote para gerar o MP4.');
+    setTab('credits');
     return;
   }
-  if (!canExportVideo(pack, creditCost, { viaAd })) {
-    toast(allowance.message || 'Não foi possível iniciar a exportação agora.');
+  if (state.exporting) {
+    toast('Já estou montando o MP4.');
     return;
   }
-
   const watermarked = shouldWatermarkExport();
-  const targetMp4 = exportTargetIsMp4();
-  if (watermarked && !viaAd) {
-    toast(getLang() === 'en'
-      ? `Free plan: your ${exportFormatLabel()} includes a ${EXPORT_WATERMARK_LABEL} watermark. PRO removes it.`
-      : `Plano grátis: o ${exportFormatLabel()} sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
-  } else if (watermarked && viaAd) {
-    toast(getLang() === 'en'
-      ? `Today's ad export includes a ${EXPORT_WATERMARK_LABEL} watermark.`
-      : `Export do anúncio de hoje sai com marca d'água ${EXPORT_WATERMARK_LABEL}.`);
-  } else if (creditCost > 1) {
-    toast(getLang() === 'en'
-      ? `Advanced export uses ${creditCost} credits on this project.`
-      : `Export avançado neste projeto usa ${creditCost} créditos.`);
+  if (watermarked) {
+    toast(`Plano gratuito com 1 crédito: o MP4 sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
   }
   stopProjectPreview();
   abortCapture();
   state.exporting = true;
   setTab('dub');
-  setExportPreview(true);
   setExportProgress(2, 'Começando');
   if (els.generateMp4Btn) els.generateMp4Btn.disabled = true;
   els.exportVideoBtn.disabled = true;
   if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = true;
-  // Unlock media playback while still inside the click gesture (critical on iOS).
-  try {
-    if (els.exportFilm) {
-      els.exportFilm.muted = true;
-      els.exportFilm.playsInline = true;
-      const unlock = els.exportFilm.play();
-      if (unlock) unlock.then(() => els.exportFilm.pause()).catch(() => undefined);
-    }
-  } catch { /* ignore */ }
   try {
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
-    if (targetMp4 && !composed.type.includes('mp4')) {
+    if (exportTargetIsMp4() && !composed.type.includes('mp4')) {
       setExportProgress(92, 'Convertendo para MP4');
       output = await convertToMp4(composed);
     }
-    if (targetMp4 && !output.type.includes('mp4')) {
+    if (exportTargetIsMp4() && !output.type.includes('mp4')) {
       throw new Error(getLang() === 'en'
         ? 'Could not generate MP4 on this device. Try again on Wi‑Fi.'
         : 'Não consegui gerar MP4 neste aparelho. Tente de novo com Wi‑Fi ligado.');
@@ -152,8 +115,7 @@ export async function requestFinalMp4() {
     pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
     pack.watermarked = watermarked;
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
-    if (!viaAd) consumeExportCredit(creditCost);
-    recordDailyExport();
+    consumeExportCredit();
     showFinalVideo(pack);
     scheduleSave();
     const isMp4 = pack.finalExt === 'mp4';
@@ -199,7 +161,7 @@ export function pickVideoMime() {
     'video/webm;codecs=vp9,opus',
     'video/webm'
   ];
-  // iPhone/Safari: MP4. Desktop/Android: WebM direto, sem conversão.
+  // iPhone: tenta MP4. Chrome/PC: WebM nativo, sem conversão.
   const types = exportTargetIsMp4() ? [...mp4Types, ...webmTypes] : webmTypes;
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
@@ -236,14 +198,11 @@ export function filmCandidates(pack) {
 
 export function loadExportVideo(src) {
   const video = els.exportFilm || document.createElement('video');
-  // blob: URLs break when crossOrigin is forced; only set it for http(s).
   if (/^https?:/i.test(String(src || ''))) video.crossOrigin = 'anonymous';
   else video.removeAttribute('crossorigin');
   video.muted = true;
   video.defaultMuted = true;
   video.playsInline = true;
-  video.setAttribute('playsinline', '');
-  video.setAttribute('webkit-playsinline', '');
   video.preload = 'auto';
   video.loop = false;
   video.controls = false;
@@ -251,7 +210,7 @@ export function loadExportVideo(src) {
   video.src = src;
   video.load();
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timeout')), 20000);
+    const timer = setTimeout(() => reject(new Error('timeout')), 8000);
     const done = () => {
       clearTimeout(timer);
       resolve(video);
@@ -265,206 +224,69 @@ export function loadExportVideo(src) {
   });
 }
 
-export async function waitForFilmReady(film, { needTime = false, timeoutMs = 20000 } = {}) {
-  await film.play?.()?.catch?.(() => undefined);
-  const deadline = performance.now() + timeoutMs;
-  let lastTime = film.currentTime?.() || 0;
-  let advanced = false;
+export async function waitForFilmReady(film) {
+  const deadline = performance.now() + 10000;
   while (performance.now() < deadline) {
-    const dims = film.getDimensions?.();
     const source = film.getPaintSource?.();
-    const w = dims?.w || source?.videoWidth || source?.width || 0;
-    const h = dims?.h || source?.videoHeight || source?.height || 0;
+    const w = source?.videoWidth || source?.width || 0;
+    const h = source?.videoHeight || source?.height || 0;
     const t = film.currentTime?.() || 0;
-    if (t > lastTime + 0.01) advanced = true;
-    lastTime = Math.max(lastTime, t);
-    const hasFrame = w > 1 && h > 1;
-    if (hasFrame && (!needTime || advanced || t > 0.02 || film.isPlaying?.())) return true;
+    if (w > 1 && h > 1 && t > 0.04) return true;
     await wait(60);
   }
   return false;
 }
 
-async function acquireExportVideoTrack(film, watermarked) {
-  // Canvas path works on Safari/iOS where video.captureStream is missing.
-  for (let attempt = 0; attempt < 24; attempt += 1) {
-    const pipeline = watermarked
-      ? await buildWatermarkedVideoTrack(film)
-      : await buildCanvasVideoTrack(film);
-    if (pipeline.track) return { track: pipeline.track, pipeline };
-    pipeline.stop?.();
-    await wait(80);
-  }
-  return { track: null, pipeline: null };
-}
-
-export async function buildCanvasVideoTrack(film) {
-  let width = 1280;
-  let height = 720;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const source = film.getPaintSource?.();
-    const w = source?.videoWidth || source?.width || 0;
-    const h = source?.videoHeight || source?.height || 0;
-    if (w > 1 && h > 1) {
-      width = w;
-      height = h;
-      break;
-    }
-    await wait(40);
-  }
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
-  let painting = true;
-  const paint = () => {
-    if (!painting) return;
-    const source = film.getPaintSource?.();
-    if (source) {
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, width, height);
-      try { coverDraw(ctx, source, width, height); } catch { /* frame not ready */ }
-    }
-    requestAnimationFrame(paint);
-  };
-  paint();
-  const stream = canvas.captureStream(30);
-  return {
-    track: stream.getVideoTracks()[0] || null,
-    stop: () => {
-      painting = false;
-      stream.getTracks().forEach((track) => track.stop());
-    }
-  };
-}
-
-async function driveFilmPlayback(film, durationSec) {
-  await film.seekTo?.(0);
-  await film.play()?.catch?.(() => undefined);
-  await wait(120);
-  const start = film.currentTime?.() || 0;
-  await wait(350);
-  const moved = (film.currentTime?.() || 0) > start + 0.02;
-  if (moved || film.isPlaying?.()) {
-    return { mode: 'realtime' };
-  }
-  // Safari/iOS often loses the user-gesture after awaits — drive frames by seek.
-  return { mode: 'seek' };
-}
-
-async function runSeekDrivenFilm(film, durationSec, onTick) {
-  const fps = isPhone() ? 12 : 18;
-  const step = 1 / fps;
-  const total = Math.max(0.5, Number(durationSec) || 1);
-  for (let t = 0; t <= total + 0.001; t += step) {
-    await film.seekTo?.(Math.min(t, total));
-    onTick?.(Math.min(t, total));
-    await wait(Math.max(20, Math.round(1000 / fps) - 8));
-  }
-}
-
 export async function openOgvFilm(url, onProgress) {
   onProgress?.(12, 'Abrindo o vídeo Choicer');
   const Player = await ensureOgvPlayer();
-  let player;
-  let paintCanvas;
-  let painting = true;
-  let reused = false;
-
-  if (stageOgvMatches(url)) {
-    player = getStageOgv();
-    reused = Boolean(player);
-    onProgress?.(18, reused ? 'Reutilizando o filme do palco' : 'Preparando o filme da cena');
-  } else {
-    onProgress?.(18, 'Preparando o filme da cena');
-    player = new Player({ wasm: true, webGL: false });
-    player.muted = true;
-    player.setAttribute('playsinline', '');
-    player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
-    els.finalVideoWrap.appendChild(player);
-    player.src = url;
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), isPhone() ? 60000 : 45000);
-      const ok = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-      player.addEventListener('loadedmetadata', ok, { once: true });
-      player.addEventListener('canplay', ok, { once: true });
-      player.addEventListener('error', () => {
-        clearTimeout(timer);
-        reject(new Error('Não deu para ler o vídeo da cena do pack.'));
-      }, { once: true });
-    });
-  }
-
-  paintCanvas = document.createElement('canvas');
+  onProgress?.(18, 'Preparando o filme da cena');
+  const player = new Player({ wasm: true, webGL: false });
+  player.muted = true;
+  player.setAttribute('playsinline', '');
+  player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
+  els.finalVideoWrap.appendChild(player);
+  player.src = url;
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), 25000);
+    const ok = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    player.addEventListener('loadedmetadata', ok, { once: true });
+    player.addEventListener('canplay', ok, { once: true });
+    player.addEventListener('error', () => {
+      clearTimeout(timer);
+      reject(new Error('Não deu para ler o vídeo da cena do pack.'));
+    }, { once: true });
+  });
+  const paintCanvas = document.createElement('canvas');
   paintCanvas.width = Math.max(640, player.videoWidth || 1280);
   paintCanvas.height = Math.max(360, player.videoHeight || 720);
-  if (!reused) {
-    paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4';
-    els.finalVideoWrap.appendChild(paintCanvas);
-  }
+  paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4';
+  els.finalVideoWrap.appendChild(paintCanvas);
   const ctx = paintCanvas.getContext('2d', { alpha: false, desynchronized: true });
+  let painting = true;
   const paint = () => {
     if (!painting) return;
     const from = player._canvas || player.querySelector('canvas');
-    if (from && from.width > 1) ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height);
+    if (from) ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height);
     requestAnimationFrame(paint);
   };
   paint();
-
-  onProgress?.(20, 'Decodificando o filme');
-  const decodeTimeout = reused ? 25000 : (isPhone() ? 90000 : 60000);
-  let pulse = 20;
-  const pulseTimer = window.setInterval(() => {
-    pulse = Math.min(23.5, pulse + 0.35);
-    onProgress?.(Math.round(pulse), 'Decodificando o filme');
-  }, 700);
-  await player.play?.()?.catch?.(() => undefined);
-  let primed = await waitForOgvFrame(player, paintCanvas, decodeTimeout);
-  window.clearInterval(pulseTimer);
-
-  if (!primed && reused) {
-    onProgress?.(21, 'Reabrindo o filme');
-    try { player.pause(); } catch { /* ignore */ }
-    player.src = url;
-    await player.play?.()?.catch?.(() => undefined);
-    primed = await waitForOgvFrame(player, paintCanvas, 45000);
-  }
-
-  if (!primed) {
-    throw new Error(getLang() === 'en'
-      ? 'Could not decode the .ogv film. Re-import the ZIP on Wi‑Fi.'
-      : 'Não consegui decodificar o filme .ogv. Importe o ZIP de novo com Wi‑Fi.');
-  }
-
-  onProgress?.(24, 'Filme pronto');
-
   return {
     duration: Number(player.duration) || 0,
     srcUrl: url,
     currentTime: () => Number(player.currentTime) || 0,
-    isPlaying: () => !player.paused && !player.ended,
-    getDimensions: () => ({
-      w: player.videoWidth || paintCanvas.width,
-      h: player.videoHeight || paintCanvas.height
-    }),
     play: () => player.play(),
     pause: () => player.pause(),
-    seekTo: async (time = 0) => {
-      try { player.currentTime = time; } catch { /* ignore */ }
-      await wait(80);
-    },
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
-    getPaintSource: () => ogvPaintSource(player, paintCanvas),
-    getTrack: () => null,
+    getPaintSource: () => player._canvas || player.querySelector('canvas') || paintCanvas,
+    getTrack: () => paintCanvas.captureStream(30).getVideoTracks()[0],
     stop: () => {
       painting = false;
-      if (!reused) {
-        try { player.pause(); } catch { /* ignore */ }
-        player.remove();
-      }
+      try { player.pause(); } catch { /* ignore */ }
+      player.remove();
       paintCanvas.remove();
     }
   };
@@ -473,46 +295,35 @@ export async function openOgvFilm(url, onProgress) {
 export async function openNativeFilm(url) {
   const video = await loadExportVideo(url);
   video.muted = true;
-  video.defaultMuted = true;
-  video.volume = 0;
   try { video.currentTime = 0; } catch { /* ignore */ }
-  // Kick decode ASAP while still close to the click gesture.
-  video.play()?.catch?.(() => undefined);
   return {
     duration: Number(video.duration) || 0,
     srcUrl: url,
     currentTime: () => Number(video.currentTime) || 0,
-    isPlaying: () => !video.paused && !video.ended,
-    play: () => {
-      video.muted = true;
-      video.defaultMuted = true;
-      return video.play();
-    },
+    play: () => video.play(),
     pause: () => video.pause(),
-    seekTo: async (time = 0) => {
-      const target = Math.max(0, Number(time) || 0);
-      try {
-        if (typeof video.fastSeek === 'function') video.fastSeek(target);
-        else video.currentTime = target;
-      } catch {
-        try { video.currentTime = target; } catch { /* ignore */ }
-      }
-      await new Promise((resolve) => {
-        const done = () => resolve();
-        video.addEventListener('seeked', done, { once: true });
-        setTimeout(done, 180);
-      });
-    },
     ended: new Promise((resolve) => {
       video.onended = resolve;
     }),
     getPaintSource: () => video,
-    getTrack: () => null,
-    stop: () => {
-      try { video.pause(); } catch { /* ignore */ }
-      video.removeAttribute('src');
-      video.load();
-    }
+    getTrack: () => {
+      const capture = video.captureStream?.bind(video) || video.mozCaptureStream?.bind(video);
+      if (capture) return capture().getVideoTracks()[0];
+      const width = Math.max(640, video.videoWidth || 1280);
+      const height = Math.max(360, video.videoHeight || 720);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+      const stream = canvas.captureStream(30);
+      const paint = () => {
+        if (video.videoWidth) ctx.drawImage(video, 0, 0, width, height);
+        if (!video.ended) requestAnimationFrame(paint);
+      };
+      paint();
+      return stream.getVideoTracks()[0];
+    },
+    stop: () => video.pause()
   };
 }
 
@@ -520,16 +331,15 @@ export async function openFilmPlayback(candidates, onProgress) {
   let lastError = null;
   for (const url of candidates) {
     try {
-      // Choicer packs ship Theora .ogv — Chrome/Safari cannot play it natively.
       if (await urlLooksLikeOgg(url)) return await openOgvFilm(url, onProgress);
-      try {
-        return await openNativeFilm(url);
-      } catch (nativeError) {
-        lastError = nativeError;
-        return await openOgvFilm(url, onProgress);
-      }
+      return await openNativeFilm(url);
     } catch (error) {
       lastError = error;
+      try {
+        return await openOgvFilm(url, onProgress);
+      } catch (ogvError) {
+        lastError = ogvError;
+      }
     }
   }
   throw lastError || new Error('Não achei o vídeo da cena no ZIP.');
@@ -704,14 +514,10 @@ export async function composeDubbedVideo(pack, onProgress) {
   let stopped = Promise.resolve();
   const chunks = [];
   setExportPreview(true);
-  // Give the dub tab a paint so #exportFilm is visible before play().
-  await wait(40);
 
   try {
     onProgress?.(4, 'Carregando o vídeo da cena');
     film = await openFilmPlayback(candidates, setExportProgress);
-    // Warm playback immediately (still close to the click gesture).
-    await film.play()?.catch?.(() => undefined);
 
     const lastLineEnd = pack.scenes.reduce((max, raw) => {
       const scene = decorateScene(raw);
@@ -746,20 +552,18 @@ export async function composeDubbedVideo(pack, onProgress) {
     }
 
     const takeBuffers = [];
-    let decoded = 0;
-    const decodedTakes = await Promise.all(takeWindows.map(async (win) => {
+    for (let index = 0; index < takeWindows.length; index += 1) {
+      const win = takeWindows[index];
+      setExportProgress(20 + ((index + 1) / Math.max(1, takeWindows.length)) * 8, 'Preparando as vozes');
       try {
-        const buffer = await decodeAudioFrom(audioCtx, win.take.blob, win.take.url);
-        decoded += 1;
-        setExportProgress(20 + (decoded / Math.max(1, takeWindows.length)) * 8, 'Preparando as vozes');
-        return { ...win, buffer };
+        takeBuffers.push({
+          ...win,
+          buffer: await decodeAudioFrom(audioCtx, win.take.blob, win.take.url)
+        });
       } catch {
-        decoded += 1;
-        setExportProgress(20 + (decoded / Math.max(1, takeWindows.length)) * 8, 'Preparando as vozes');
-        return null;
+        // Sem take decodificado, a fala original do filme fica.
       }
-    }));
-    takeBuffers.push(...decodedTakes.filter(Boolean));
+    }
 
     if (!playBacking) {
       try {
@@ -770,20 +574,11 @@ export async function composeDubbedVideo(pack, onProgress) {
     }
 
     const watermarked = shouldWatermarkExport();
-    setExportProgress(24, 'Preparando o filme da cena');
-    await film.play()?.catch?.(() => undefined);
-    const frameReady = await waitForFilmReady(film, { needTime: false, timeoutMs: isPhone() ? 45000 : 30000 });
-    if (!frameReady) {
-      throw new Error(getLang() === 'en'
-        ? 'Could not decode the scene video. Re-import the ZIP and try again on Wi‑Fi.'
-        : 'Não consegui ler o vídeo da cena. Importe o ZIP de novo e tente com Wi‑Fi.');
-    }
-
-    const captured = await acquireExportVideoTrack(film, watermarked);
-    videoPipeline = captured.pipeline;
-    const videoTrack = captured.track;
+    const videoTrack = watermarked
+      ? (videoPipeline = await buildWatermarkedVideoTrack(film)).track
+      : film.getTrack();
     if (!videoTrack) throw new Error('Não deu para capturar o filme da cena.');
-    if (watermarked) onProgress?.(26, 'Gravando a marca d\'água no vídeo');
+    if (watermarked) onProgress?.(24, 'Gravando a marca d\'água no vídeo');
 
     const mixed = new MediaStream([
       videoTrack,
@@ -806,11 +601,15 @@ export async function composeDubbedVideo(pack, onProgress) {
       recorder.onstop = resolve;
     });
 
-    const duration = film.duration > 0 ? film.duration : Math.max(lastLineEnd, 8);
     if (bed) bed.el.currentTime = 0;
-    const drive = await driveFilmPlayback(film, duration);
+    await film.play()?.catch?.(() => undefined);
     if (bed) await bed.el.play().catch(() => undefined);
-
+    const ready = await waitForFilmReady(film);
+    if (!ready) {
+      throw new Error(getLang() === 'en'
+        ? 'The scene video did not start. Reload the page and try again.'
+        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
+    }
     recorder.start(isIOS() ? 100 : 250);
     recordingStarted = true;
     const t0 = audioCtx.currentTime + 0.05;
@@ -820,28 +619,15 @@ export async function composeDubbedVideo(pack, onProgress) {
       stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, gainForTake(win.buffer)).stop);
     });
 
-    if (drive.mode === 'seek') {
-      setExportProgress(30, 'Gerando o vídeo');
-      await runSeekDrivenFilm(film, duration, (t) => {
-        setExportProgress(30 + Math.min(60, (t / duration) * 60), 'Gerando o vídeo');
-      });
-    } else {
-      let finished = false;
-      film.ended.then(() => { finished = true; });
-      const startedAt = performance.now();
-      while (!finished && performance.now() - startedAt < duration * 1000 + 1500) {
-        const t = film.currentTime?.() || 0;
-        setExportProgress(30 + Math.min(60, (t / duration) * 60), 'Gerando o vídeo');
-        if (t >= duration - 0.12) break;
-        // If playback stalled mid-way, finish by seek.
-        if (performance.now() - startedAt > 1800 && t < 0.05) {
-          await runSeekDrivenFilm(film, duration, (seekT) => {
-            setExportProgress(30 + Math.min(60, (seekT / duration) * 60), 'Gerando o vídeo');
-          });
-          break;
-        }
-        await wait(200);
-      }
+    const duration = film.duration > 0 ? film.duration : Math.max(lastLineEnd, 8);
+    let finished = false;
+    film.ended.then(() => { finished = true; });
+    const startedAt = performance.now();
+    while (!finished && performance.now() - startedAt < duration * 1000 + 1000) {
+      const t = film.currentTime?.() || 0;
+      setExportProgress(30 + Math.min(60, (t / duration) * 60), 'Gerando o vídeo');
+      if (t >= duration - 0.12) break;
+      await wait(200);
     }
     setExportProgress(90, 'Finalizando');
   } finally {
