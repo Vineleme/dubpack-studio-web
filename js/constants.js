@@ -6,6 +6,7 @@ export const GUIDE_VOLUME = 0.08;
 export const BED_VOLUME = 0.03;
 export const BED_EXPORT = 0.06;
 export const BED_DUCK = 0.012;
+export const BED_ORIGINAL = 0.88;
 export const TAKE_PEAK_TARGET = 0.62;
 export const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 export const WELCOME_CREDITS = 1;

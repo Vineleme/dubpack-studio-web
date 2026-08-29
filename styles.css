@@ -780,6 +780,7 @@ body.needs-auth .dashboard {
 }
 
 .stage-state.recorded { background: rgba(67,233,123,0.16); color: #43e97b; }
+.stage-state.skipped { background: rgba(255,255,255,0.08); color: #c8c6de; }
 .stage-state.recording { background: rgba(245,46,131,0.22); color: #fff; }
 
 .countdown-badge {
@@ -1129,6 +1130,12 @@ body.needs-auth .dashboard {
   color: #07110b;
 }
 
+.rail-dot.is-skipped {
+  background: rgba(255,255,255,0.18);
+  color: #d7d5ea;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.22);
+}
+
 .rail-dot.is-active {
   outline: 2px solid #f52e83;
   background: #f52e83;
@@ -1238,13 +1245,19 @@ body.needs-auth .dashboard {
 .record-strip {
   width: min(760px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   gap: 12px;
   align-items: center;
   padding: 12px;
   border-radius: 18px;
   background: rgba(10,10,18,0.72);
   border: 1px solid rgba(255,255,255,0.08);
+}
+
+.skip-scene {
+  padding: 10px 12px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .take-meta {
@@ -1801,12 +1814,49 @@ body.needs-auth .dashboard {
 }
 .export-progress {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: center;
+  gap: 10px;
   width: min(420px, 100%);
   margin: 8px auto 16px;
   text-align: left;
+}
+.export-progress-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.export-progress-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(245, 46, 131, 0.25);
+  border-top-color: #f52e83;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.export-progress.is-busy .export-progress-spinner {
+  opacity: 1;
+  animation: export-spin 0.9s linear infinite;
+}
+.export-progress-hint {
+  margin: 0;
+  color: #b7b5ce;
+  font-size: 14px;
+  line-height: 1.45;
+  min-height: 1.4em;
+}
+.export-progress.is-stalled .export-progress-hint {
+  color: #ffd21e;
+}
+.export-progress.is-stalled .export-progress-track b {
+  animation: export-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes export-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes export-shimmer {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.35); }
 }
 .export-progress-track {
   height: 10px;

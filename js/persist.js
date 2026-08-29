@@ -34,6 +34,7 @@ export async function persistSession() {
       finalBlob: pack.finalBlob || null,
       finalExt: pack.finalExt || '',
       watermarked: Boolean(pack.watermarked),
+      skipped: pack.skipped || {},
       takes: Object.fromEntries(await Promise.all(Object.entries(pack.takes).map(async ([id, take]) => {
         const blob = take.blob || await fetch(take.url).then((response) => response.blob());
         return [id, {
@@ -88,6 +89,7 @@ export async function restoreSession() {
       pack.id = saved.id;
       pack.importedAt = saved.importedAt || Date.now();
       pack.takes = {};
+      pack.skipped = saved.skipped || {};
       Object.entries(saved.takes || {}).forEach(([id, take]) => {
         const url = rememberUrl(URL.createObjectURL(take.blob));
         pack.takes[id] = { ...take, url };

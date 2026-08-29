@@ -9,7 +9,7 @@ import { scheduleSave } from './persist.js';
 import { bindSceneVisual, stopActivePlayback, stopProjectPreview, warmSceneAudio } from './playback.js';
 import { abortCapture, profileTakeAudio, setVoiceMeter } from './recorder.js';
 import { renderTakeRail, setTab, timingMessage, updateScoreCard, updateTimingDesk } from './ui.js';
-import { clampDuration, detectCharacter, estimateDuration, findBackingTrack, findSceneArt, findSharedVideo, finishCtaLabel, forgetUrl, formatSeconds, getMediaDuration, isIOS, isJunkPath, mimeFor, namesMatch, normalizeEmail, packIsComplete, packIsExpired, parseChoicerFields, readPackMeta, readSidecarText, rememberUrl, revokeAllObjectUrls, spokenLineFromName, toast, visualUrlFor, wait } from './utils.js';
+import { clampDuration, detectCharacter, estimateDuration, findBackingTrack, findSceneArt, findSharedVideo, finishCtaLabel, forgetUrl, formatSeconds, getMediaDuration, isIOS, isJunkPath, mimeFor, namesMatch, normalizeEmail, packCanExport, packIsComplete, packIsExpired, packRecordedCount, parseChoicerFields, readPackMeta, readSidecarText, rememberUrl, revokeAllObjectUrls, spokenLineFromName, toast, visualUrlFor, wait } from './utils.js';
 import { urlLooksLikeOgg, warmOgvDecoder } from './ogv.js';
 
 export function releasePackSession() {
@@ -256,7 +256,9 @@ export function selectScene(index, { keepCapture = false } = {}) {
   els.topCounter.textContent = counter;
   els.counter.textContent = counter;
   els.projectTitle.textContent = pack.name;
-  els.projectMeta.textContent = take ? `${counter} · gravado` : `${counter} · original`;
+  els.projectMeta.textContent = take
+    ? `${counter} · gravado`
+    : (pack.skipped?.[scene.id] ? `${counter} · áudio original` : `${counter} · pule ou grave`);
   if (els.sidePackTitle) els.sidePackTitle.textContent = pack.name;
   if (els.sideSceneTitle) els.sideSceneTitle.textContent = counter;
   els.character.textContent = scene.character;
@@ -274,9 +276,9 @@ export function selectScene(index, { keepCapture = false } = {}) {
   if (els.recordingStatus) els.recordingStatus.textContent = take ? 'Gravado' : 'Pronto';
   els.videoProgress.style.width = '0%';
   if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
-  els.stageState.textContent = take ? 'Take gravado' : 'Pronto para gravar';
-  els.stageState.className = `stage-state ${take ? 'recorded' : ''}`;
-  const canFinish = !canGoNext && packIsComplete(pack);
+  els.stageState.textContent = take ? 'Take gravado' : (pack.skipped?.[scene.id] ? 'Áudio original' : 'Pronto para gravar');
+  els.stageState.className = `stage-state ${take ? 'recorded' : ''}${pack.skipped?.[scene.id] && !take ? ' skipped' : ''}`;
+  const canFinish = !canGoNext && packCanExport(pack);
   els.nextBtn.disabled = !(canGoNext || canFinish);
   els.nextSceneBtn.disabled = !(canGoNext || canFinish);
   els.prevSceneBtn.disabled = !canGoPrev;
@@ -284,6 +286,10 @@ export function selectScene(index, { keepCapture = false } = {}) {
   els.nextSceneBtn.textContent = canFinish ? 'Finalizar dublagem' : 'Próxima cena →';
   els.nextBtn.classList.toggle('pulse-next', (Boolean(take) && canGoNext) || canFinish);
   els.nextSceneBtn.classList.toggle('pulse-next', (Boolean(take) && canGoNext) || canFinish);
+  if (els.skipSceneBtn) {
+    els.skipSceneBtn.disabled = Boolean(take);
+    els.skipSceneBtn.classList.toggle('is-hidden', Boolean(take));
+  }
   els.previewBtn.disabled = !take;
   els.listenTakeBtn.disabled = !take;
   els.listenTakeBtn.classList.toggle('is-hidden', !take);
@@ -317,39 +323,61 @@ export function selectScene(index, { keepCapture = false } = {}) {
 }
 
 export function updateFinishCta(pack) {
-  const done = packIsComplete(pack);
+  const ready = packCanExport(pack);
   const label = finishCtaLabel(pack);
-  els.exportVideoBtn?.classList.toggle('is-hidden', !done);
-  els.exportVideoBtn?.classList.toggle('pulse-next', done && !pack?.finalUrl);
+  els.exportVideoBtn?.classList.toggle('is-hidden', !ready);
+  els.exportVideoBtn?.classList.toggle('pulse-next', ready && !pack?.finalUrl);
   if (els.exportVideoBtn) {
     els.exportVideoBtn.disabled = false;
     els.exportVideoBtn.textContent = label;
   }
   if (els.generateMp4Btn) {
-    els.generateMp4Btn.classList.toggle('is-hidden', !done);
+    els.generateMp4Btn.classList.toggle('is-hidden', !ready);
     els.generateMp4Btn.disabled = false;
     els.generateMp4Btn.textContent = label;
   }
-  if (done && isIOS()) void preloadFfmpeg();
+  if (ready && isIOS()) void preloadFfmpeg();
+}
+
+export function skipScene() {
+  const pack = currentPack();
+  const scene = currentScene();
+  if (!pack || !scene || pack.takes[scene.id]) return;
+  pack.skipped = pack.skipped || {};
+  pack.skipped[scene.id] = true;
+  scheduleSave();
+  if (state.activeIndex >= pack.scenes.length - 1) {
+    if (packCanExport(pack)) {
+      setTab('dub');
+      toast('Falas puladas mantêm o áudio original. Toque em Finalizar dublagem.');
+    } else {
+      toast('Grave pelo menos uma fala para finalizar.');
+    }
+    return;
+  }
+  selectScene(state.activeIndex + 1);
+  toast('Fala pulada. O áudio original desta cena será mantido.');
 }
 
 export function goNextScene() {
   const pack = currentPack();
   const scene = currentScene();
   if (!pack || !scene) return;
-  if (!pack.takes[scene.id]) {
-    els.recordBtn.classList.add('attention');
-    setTimeout(() => els.recordBtn.classList.remove('attention'), 900);
-  }
   if (state.activeIndex >= pack.scenes.length - 1) {
-    const finished = pack.scenes.every((item) => pack.takes[item.id]);
-    if (finished) {
+    if (packCanExport(pack)) {
       setTab('dub');
-      toast('Tudo gravado. Toque em Finalizar dublagem.');
+      toast(packIsComplete(pack)
+        ? 'Tudo gravado. Toque em Finalizar dublagem.'
+        : 'Falas puladas mantêm o áudio original. Toque em Finalizar dublagem.');
     } else {
-      toast('Última fala. Grave as que faltam para finalizar.');
+      toast('Grave pelo menos uma fala para finalizar.');
     }
     return;
+  }
+  if (!pack.takes[scene.id] && !pack.skipped?.[scene.id]) {
+    pack.skipped = pack.skipped || {};
+    pack.skipped[scene.id] = true;
+    scheduleSave();
   }
   selectScene(state.activeIndex + 1);
 }

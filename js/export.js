@@ -1,5 +1,5 @@
 ﻿import { t, getLang } from './i18n-bridge.js';
-import { BED_EXPORT, BED_DUCK, EXPORT_WATERMARK_LABEL } from './constants.js';
+import { BED_DUCK, BED_EXPORT, BED_ORIGINAL, EXPORT_WATERMARK_LABEL } from './constants.js';
 import { state, els } from './state.js';
 import { isLoggedIn, requireAuth } from './auth.js';
 import { canExportVideo, consumeExportCredit, isPro, shouldWatermarkExport } from './credits.js';
@@ -8,7 +8,7 @@ import { scheduleSave } from './persist.js';
 import { stopProjectPreview } from './playback.js';
 import { abortCapture } from './recorder.js';
 import { setTab } from './ui.js';
-import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packIsComplete, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
+import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packCanExport, packIsComplete, packRecordedCount, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
 import { destroyStageOgv, ensureOgvPlayer, ensureStageOgv, getStageOgv, ogvPaintSource, stageOgvMatches, takeStageOgvForExport, urlLooksLikeOgg, waitForOgvFrame } from './ogv.js';
 
 const FFMPEG_CDNS = [
@@ -68,11 +68,14 @@ export async function requestFinalMp4() {
     toast('Importe um pack e grave as falas primeiro.');
     return;
   }
-  const recorded = pack.scenes.filter((scene) => pack.takes[scene.id]).length;
-  if (!packIsComplete(pack)) {
-    toast(`Grave todas as falas para gerar o MP4. Faltam ${pack.scenes.length - recorded}.`);
+  const recorded = packRecordedCount(pack);
+  if (!packCanExport(pack)) {
+    toast('Grave pelo menos uma fala para gerar o vídeo.');
     setTab('record');
     return;
+  }
+  if (!packIsComplete(pack)) {
+    toast(`Falas não gravadas mantêm o áudio original (${recorded}/${pack.scenes.length} dubladas).`);
   }
   if (!canExportVideo()) {
     toast(isPro()
@@ -95,6 +98,7 @@ export async function requestFinalMp4() {
   setTab('dub');
   setExportPreview(true);
   setExportProgress(2, 'Começando');
+  beginExportProgress();
   if (els.generateMp4Btn) els.generateMp4Btn.disabled = true;
   els.exportVideoBtn.disabled = true;
   if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = true;
@@ -153,6 +157,7 @@ export async function requestFinalMp4() {
     if (els.exportStatus) els.exportStatus.textContent = message;
   } finally {
     state.exporting = false;
+    endExportProgress();
     if (els.generateMp4Btn) els.generateMp4Btn.disabled = false;
     els.exportVideoBtn.disabled = false;
     if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = false;
@@ -184,16 +189,84 @@ export function setExportPreview(on) {
   els.finalVideoWrap?.classList.toggle('is-exporting', Boolean(on));
 }
 
+let exportHintTimer = null;
+let exportLastPct = -1;
+let exportLastChange = 0;
+let exportPulsePhase = 0;
+
+const EXPORT_HINTS = {
+  'Começando': 'Iniciando a exportação…',
+  'Abrindo o vídeo Choicer': 'Carregando o player do filme…',
+  'Preparando o filme da cena': 'Preparando o filme da cena…',
+  'Decodificando o filme': 'Decodificando o filme. Pode levar um minuto — aguarde.',
+  'Filme pronto': 'Filme pronto. Montando as vozes…',
+  'Preparando as vozes': 'Montando as vozes que você gravou…',
+  'Gravando a marca d\'água no vídeo': 'Aplicando marca d\'água…',
+  'Gerando o vídeo': 'Gerando o vídeo. Não feche esta aba.',
+  'Finalizando': 'Quase lá. Finalizando o arquivo…',
+  'Convertendo para MP4': 'Convertendo para MP4…',
+  'Carregando conversor MP4': 'Carregando o conversor de vídeo…',
+  'Pronto': 'Pronto!'
+};
+
+function exportHintFor(text) {
+  if (!text) return 'Processando…';
+  const key = Object.keys(EXPORT_HINTS).find((item) => text.includes(item));
+  return EXPORT_HINTS[key] || 'Ainda trabalhando… não feche esta aba.';
+}
+
+export function beginExportProgress() {
+  exportLastChange = performance.now();
+  exportLastPct = -1;
+  exportPulsePhase = 0;
+  els.exportProgressWrap?.classList.add('is-busy');
+  els.exportProgressWrap?.classList.remove('is-stalled');
+  window.clearInterval(exportHintTimer);
+  exportHintTimer = window.setInterval(() => {
+    if (!state.exporting) return;
+    const stalled = performance.now() - exportLastChange > 2800;
+    els.exportProgressWrap?.classList.toggle('is-stalled', stalled);
+    if (stalled && els.exportProgressHint) {
+      exportPulsePhase = (exportPulsePhase + 1) % 3;
+      const dots = '.'.repeat(exportPulsePhase + 1);
+      const base = els.exportProgressHint.dataset.baseHint || els.exportProgressHint.textContent || 'Ainda processando';
+      els.exportProgressHint.textContent = `${base.replace(/\.+$/, '')}${dots}`;
+    }
+  }, 700);
+}
+
+export function endExportProgress() {
+  window.clearInterval(exportHintTimer);
+  exportHintTimer = null;
+  els.exportProgressWrap?.classList.remove('is-busy', 'is-stalled');
+}
+
 export function setExportProgress(pct, text) {
   const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  if (n !== exportLastPct) {
+    exportLastPct = n;
+    exportLastChange = performance.now();
+    els.exportProgressWrap?.classList.remove('is-stalled');
+  }
   els.exportProgressWrap?.classList.remove('is-hidden');
   if (els.exportProgressBar) els.exportProgressBar.style.width = `${n}%`;
-  if (els.exportProgressLabel) els.exportProgressLabel.textContent = text ? `${text} ${n}%` : `${n}%`;
-  if (els.exportStatus && text) els.exportStatus.textContent = `${text} ${n}%`;
+  const label = text ? `${text} · ${n}%` : `${n}%`;
+  if (els.exportProgressLabel) els.exportProgressLabel.textContent = label;
+  if (els.exportProgressHint) {
+    const hint = exportHintFor(text);
+    els.exportProgressHint.dataset.baseHint = hint;
+    els.exportProgressHint.textContent = hint;
+  }
+  if (els.exportStatus) els.exportStatus.textContent = label;
 }
 
 export function hideExportProgress() {
+  endExportProgress();
   els.exportProgressWrap?.classList.add('is-hidden');
+  if (els.exportProgressHint) {
+    els.exportProgressHint.textContent = '';
+    delete els.exportProgressHint.dataset.baseHint;
+  }
 }
 
 export function filmCandidates(pack) {
@@ -464,14 +537,14 @@ export function startBufferAt(audioCtx, dest, buffer, when, gainValue) {
 
 export function duckDuringTakes(gainNode, t0, windows) {
   const param = gainNode.gain;
-  param.setValueAtTime(BED_EXPORT, t0);
+  param.setValueAtTime(BED_ORIGINAL, t0);
   windows.forEach((win) => {
     const start = t0 + win.offset;
     const end = start + win.duration;
-    param.setValueAtTime(BED_EXPORT, Math.max(t0, start - 0.08));
+    param.setValueAtTime(BED_ORIGINAL, Math.max(t0, start - 0.08));
     param.linearRampToValueAtTime(BED_DUCK, start + 0.05);
     param.setValueAtTime(BED_DUCK, Math.max(start + 0.05, end - 0.05));
-    param.linearRampToValueAtTime(BED_EXPORT, end + 0.12);
+    param.linearRampToValueAtTime(BED_ORIGINAL, end + 0.12);
   });
 }
 
@@ -482,7 +555,7 @@ export function attachMediaBed(audioCtx, dest, srcUrl) {
   audio.src = srcUrl;
   document.body.appendChild(audio);
   const gain = audioCtx.createGain();
-  gain.gain.value = BED_EXPORT;
+  gain.gain.value = BED_ORIGINAL;
   const source = audioCtx.createMediaElementSource(audio);
   source.connect(gain);
   gain.connect(dest);
