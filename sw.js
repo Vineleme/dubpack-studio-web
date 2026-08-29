@@ -1,21 +1,9 @@
-const CACHE = 'dubpack-studio-web-v130';
+const CACHE = 'dubpack-studio-web-v131';
 const PRECACHE = [
   './',
   './index.html',
   './styles.css',
-  './js/boot.js',
-  './js/constants.js',
-  './js/state.js',
-  './js/i18n-bridge.js',
-  './js/utils.js',
-  './js/auth.js',
-  './js/credits.js',
-  './js/pack.js',
-  './js/playback.js',
-  './js/recorder.js',
-  './js/export.js',
-  './js/persist.js',
-  './js/ui.js',
+  './app.js',
   './i18n.js',
   './payments.js',
   './payments.config.js',
@@ -23,9 +11,7 @@ const PRECACHE = [
   './assets/dubpack-logo.jpg',
   './assets/dubpack-logo-brand.jpg',
   './assets/studio-mic-neon.png',
-  './vendor/fflate.min.js',
-  './vendor/ogv/ogv-support.js',
-  './vendor/ogv/ogv.js'
+  './vendor/fflate.min.js'
 ];
 
 self.addEventListener('install', (event) => {
