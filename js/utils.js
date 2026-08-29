@@ -207,7 +207,8 @@ export function loadScript(src) {
     }
     const script = document.createElement('script');
     script.src = src;
-    script.crossOrigin = 'anonymous';
+    const absolute = new URL(src, window.location.href);
+    if (absolute.origin !== window.location.origin) script.crossOrigin = 'anonymous';
     script.dataset.src = src;
     script.onload = resolve;
     script.onerror = () => reject(new Error(`Não carreguei ${src}`));

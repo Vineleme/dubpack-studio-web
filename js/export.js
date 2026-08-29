@@ -153,11 +153,12 @@ export function hideExportProgress() {
 
 export async function urlLooksLikeOgg(url) {
   if (!url) return false;
+  if (/\.(ogv|ogg|ogm|oga)(\?|#|$)/i.test(String(url))) return true;
   const known = state.blobByUrl?.get(url);
+  if (!known) return false;
   try {
-    const blob = known || await fetch(url).then((response) => response.blob());
-    if (/ogg|ogv|ogm|oga/i.test(blob.type || '')) return true;
-    const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+    if (/ogg|ogv|ogm|oga/i.test(known.type || '')) return true;
+    const head = new Uint8Array(await known.slice(0, 4).arrayBuffer());
     return head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
   } catch {
     return false;
@@ -235,8 +236,9 @@ export async function openOgvFilm(url, onProgress) {
   wrap.querySelectorAll('ogvjs, canvas.export-ogv-paint').forEach((node) => node.remove());
 
   onProgress?.(18, 'Preparando o filme da cena');
-  const player = new Player({ wasm: true, webGL: false });
+  const player = new Player({ wasm: true, webGL: false, threading: false, simd: false });
   player.muted = true;
+  player.volume = 0;
   player.setAttribute('playsinline', '');
   player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
   wrap.appendChild(player);
@@ -261,17 +263,17 @@ export async function openOgvFilm(url, onProgress) {
   };
   paint();
 
+  await wait(0);
   player.src = url;
-  player.play?.()?.catch?.(() => undefined);
+  void player.play?.()?.catch?.(() => undefined);
 
-  const deadline = performance.now() + 8000;
+  const deadline = performance.now() + 4000;
   while (performance.now() < deadline) {
     const from = player._canvas || player.querySelector('canvas');
     const w = player.videoWidth || from?.width || 0;
     const h = player.videoHeight || from?.height || 0;
     if (w > 1 && h > 1) break;
-    onProgress?.(18, 'Preparando o filme da cena');
-    await wait(80);
+    await wait(50);
   }
 
   const width = Math.max(640, player.videoWidth || paintCanvas.width);
