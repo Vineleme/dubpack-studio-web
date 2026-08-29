@@ -193,7 +193,8 @@ export function filmCandidates(pack) {
 
 export function loadExportVideo(src) {
   const video = els.exportFilm || document.createElement('video');
-  video.crossOrigin = 'anonymous';
+  if (/^https?:/i.test(String(src || ''))) video.crossOrigin = 'anonymous';
+  else video.removeAttribute('crossorigin');
   video.muted = true;
   video.defaultMuted = true;
   video.playsInline = true;
@@ -219,13 +220,13 @@ export function loadExportVideo(src) {
 }
 
 export async function waitForFilmReady(film) {
-  const deadline = performance.now() + 10000;
+  await film.play?.()?.catch?.(() => undefined);
+  const deadline = performance.now() + 20000;
   while (performance.now() < deadline) {
     const source = film.getPaintSource?.();
     const w = source?.videoWidth || source?.width || 0;
     const h = source?.videoHeight || source?.height || 0;
-    const t = film.currentTime?.() || 0;
-    if (w > 1 && h > 1 && t > 0.04) return true;
+    if (w > 1 && h > 1) return true;
     await wait(60);
   }
   return false;
@@ -271,15 +272,20 @@ export async function openOgvFilm(url, onProgress) {
   paintCanvas.height = Math.max(360, player.videoHeight || 720);
   paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4';
   els.finalVideoWrap.appendChild(paintCanvas);
-  const ctx = paintCanvas.getContext('2d', { alpha: false, desynchronized: true });
+  const ctx = paintCanvas.getContext('2d', { alpha: false });
   let painting = true;
+  let captureStream = null;
+  let captureTrack = null;
   const paint = () => {
     if (!painting) return;
     const from = player._canvas || player.querySelector('canvas');
-    if (from) ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height);
+    if (from && from !== paintCanvas) {
+      try { ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height); } catch { /* frame not ready */ }
+    }
     requestAnimationFrame(paint);
   };
   paint();
+  try { await player.play?.(); } catch { /* wait until compose */ }
   return {
     duration: Number(player.duration) || 0,
     srcUrl: url,
@@ -287,10 +293,21 @@ export async function openOgvFilm(url, onProgress) {
     play: () => player.play(),
     pause: () => player.pause(),
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
-    getPaintSource: () => player._canvas || player.querySelector('canvas') || paintCanvas,
-    getTrack: () => paintCanvas.captureStream(30).getVideoTracks()[0],
+    getPaintSource: () => {
+      const from = player._canvas || player.querySelector('canvas');
+      return (from && from !== paintCanvas && from.width > 1) ? from : paintCanvas;
+    },
+    getTrack: () => {
+      if (captureTrack) return captureTrack;
+      captureStream = paintCanvas.captureStream(30);
+      captureTrack = captureStream.getVideoTracks()[0] || null;
+      return captureTrack;
+    },
     stop: () => {
       painting = false;
+      captureStream?.getTracks().forEach((track) => track.stop());
+      captureStream = null;
+      captureTrack = null;
       try { player.pause(); } catch { /* ignore */ }
       player.remove();
       paintCanvas.remove();
@@ -373,7 +390,7 @@ export function startBufferAt(audioCtx, dest, buffer, when, gainValue) {
   const source = audioCtx.createBufferSource();
   source.buffer = buffer;
   source.connect(gain);
-  source.start(Math.max(when, audioCtx.currentTime));
+  source.start(Math.max(when, audioCtx.currentTime + 0.02));
   return {
     gain,
     stop: () => {
@@ -399,7 +416,8 @@ export function duckDuringTakes(gainNode, t0, windows) {
 
 export function attachMediaBed(audioCtx, dest, srcUrl) {
   const audio = document.createElement('audio');
-  audio.crossOrigin = 'anonymous';
+  if (/^https?:/i.test(String(srcUrl || ''))) audio.crossOrigin = 'anonymous';
+  else audio.removeAttribute('crossorigin');
   audio.preload = 'auto';
   audio.src = srcUrl;
   document.body.appendChild(audio);
@@ -498,6 +516,17 @@ export async function buildWatermarkedVideoTrack(film) {
   };
 }
 
+export function normalizeTakeOffset(offset, filmDuration) {
+  let value = Number(offset) || 0;
+  if (value < 0) return 0;
+  const duration = Number(filmDuration) || 0;
+  if (duration > 1 && value > duration * 1.6 && value > 180) {
+    const asSeconds = value / 1000;
+    if (asSeconds <= duration * 1.6 + 2) return asSeconds;
+  }
+  return value;
+}
+
 export async function composeDubbedVideo(pack, onProgress) {
   const candidates = filmCandidates(pack);
   if (!candidates.length) {
@@ -535,7 +564,7 @@ export async function composeDubbedVideo(pack, onProgress) {
       const take = pack.takes[scene.id];
       if (!take) return null;
       return {
-        offset: Number(scene.videoOffset) || 0,
+        offset: normalizeTakeOffset(scene.videoOffset, 0),
         duration: Number(scene.duration) || 2,
         take,
         scene
@@ -564,12 +593,30 @@ export async function composeDubbedVideo(pack, onProgress) {
       try {
         takeBuffers.push({
           ...win,
+          offset: normalizeTakeOffset(win.offset, film.duration || lastLineEnd),
           buffer: await decodeAudioFrom(audioCtx, win.take.blob, win.take.url)
         });
       } catch {
         // Sem take decodificado, a fala original do filme fica.
       }
     }
+    if (!takeBuffers.length) {
+      throw new Error(getLang() === 'en'
+        ? 'Could not read the recorded lines. Record them again and generate the video once more.'
+        : 'Não consegui ler as falas gravadas. Grave de novo e toque em finalizar.');
+    }
+
+    const keepAlive = audioCtx.createOscillator();
+    const keepAliveGain = audioCtx.createGain();
+    keepAliveGain.gain.value = 0.0001;
+    keepAlive.connect(keepAliveGain);
+    keepAliveGain.connect(dest);
+    keepAlive.start();
+    stops.push(() => {
+      try { keepAlive.stop(); } catch { /* ignore */ }
+      keepAlive.disconnect();
+      keepAliveGain.disconnect();
+    });
 
     if (!playBacking) {
       try {
@@ -577,6 +624,17 @@ export async function composeDubbedVideo(pack, onProgress) {
       } catch {
         bed = null;
       }
+    }
+
+    if (bed) bed.el.currentTime = 0;
+    await film.play()?.catch?.(() => undefined);
+    if (bed) await bed.el.play().catch(() => undefined);
+    await audioCtx.resume();
+    const ready = await waitForFilmReady(film);
+    if (!ready) {
+      throw new Error(getLang() === 'en'
+        ? 'The scene video did not start. Reload the page and try again.'
+        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
     }
 
     const watermarked = shouldWatermarkExport();
@@ -592,7 +650,7 @@ export async function composeDubbedVideo(pack, onProgress) {
     ]);
     try {
       recorder = mimeType
-        ? new MediaRecorder(mixed, { mimeType, videoBitsPerSecond: exportVideoBitrate() })
+        ? new MediaRecorder(mixed, { mimeType, videoBitsPerSecond: exportVideoBitrate(), audioBitsPerSecond: 128_000 })
         : new MediaRecorder(mixed);
     } catch {
       recorder = new MediaRecorder(mixed);
@@ -607,32 +665,24 @@ export async function composeDubbedVideo(pack, onProgress) {
       recorder.onstop = resolve;
     });
 
-    if (bed) bed.el.currentTime = 0;
-    await film.play()?.catch?.(() => undefined);
-    if (bed) await bed.el.play().catch(() => undefined);
-    const ready = await waitForFilmReady(film);
-    if (!ready) {
-      throw new Error(getLang() === 'en'
-        ? 'The scene video did not start. Reload the page and try again.'
-        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
-    }
+    await wait(80);
     recorder.start(isIOS() ? 100 : 250);
     recordingStarted = true;
-    const t0 = audioCtx.currentTime + 0.05;
+    const t0 = audioCtx.currentTime + 0.08;
     const bedGain = playBacking?.(t0) || bed?.gain;
     if (bedGain && takeBuffers.length) duckDuringTakes(bedGain, t0, takeBuffers);
     takeBuffers.forEach((win) => {
       stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, gainForTake(win.buffer)).stop);
     });
 
-    const duration = film.duration > 0 ? film.duration : Math.max(lastLineEnd, 8);
-    let finished = false;
-    film.ended.then(() => { finished = true; });
+    const duration = film.duration > 1 ? film.duration : Math.max(lastLineEnd, 8);
     const startedAt = performance.now();
-    while (!finished && performance.now() - startedAt < duration * 1000 + 1000) {
+    while (performance.now() - startedAt < duration * 1000 + 400) {
       const t = film.currentTime?.() || 0;
-      setExportProgress(30 + Math.min(60, (t / duration) * 60), 'Gerando o vídeo');
-      if (t >= duration - 0.12) break;
+      const elapsed = (performance.now() - startedAt) / 1000;
+      const shown = t > 0.2 ? t : elapsed;
+      setExportProgress(30 + Math.min(60, (shown / duration) * 60), 'Gerando o vídeo');
+      if (t > 0.4 && t >= duration - 0.12) break;
       await wait(200);
     }
     setExportProgress(90, 'Finalizando');
