@@ -97,6 +97,7 @@ export const els = {
   profileMeta: document.querySelector('#profileMeta'),
   profileCreditsLine: document.querySelector('#profileCreditsLine'),
   authGate: document.querySelector('#authGate'),
+  authCloseBtn: document.querySelector('#authCloseBtn'),
   authForm: document.querySelector('#authForm'),
   authEmail: document.querySelector('#authEmail'),
   authRememberWrap: document.querySelector('#authRememberWrap'),

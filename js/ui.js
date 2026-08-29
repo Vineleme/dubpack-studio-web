@@ -41,6 +41,7 @@ export function bindUi() {
   els.authGate?.addEventListener('click', (event) => {
     if (event.target === els.authGate) showAuthGate(false);
   });
+  els.authCloseBtn?.addEventListener('click', () => showAuthGate(false));
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
   document.querySelectorAll('label.text-link, .pack-empty label.primary').forEach((label) => {

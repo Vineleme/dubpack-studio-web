@@ -11,9 +11,30 @@ export let firebaseAuth = null;
 export let firebaseAuthReady = Promise.resolve();
 export let authListenerBound = false;
 export let authBootDone = false;
+let signOutTimer = 0;
 
 export function markAuthBootDone() {
   authBootDone = true;
+}
+
+export function hydrateLocalSession() {
+  if (state.user?.email) {
+    refreshAccountUi();
+    return Boolean(state.user.email);
+  }
+  const saved = readSessionUser();
+  if (!saved?.email) {
+    refreshAccountUi();
+    return false;
+  }
+  state.user = {
+    name: saved.name,
+    email: saved.email,
+    owner: Boolean(saved.owner),
+    uid: saved.uid || null
+  };
+  refreshAccountUi();
+  return true;
 }
 
 export function readRememberMe() {
@@ -53,57 +74,64 @@ export function readSessionUser() {
   }
 }
 
+export function waitForFirebaseUser(timeoutMs = 3500) {
+  if (!firebaseAuth) return Promise.resolve(null);
+  if (firebaseAuth.currentUser) return Promise.resolve(firebaseAuth.currentUser);
+  if (typeof firebaseAuth.authStateReady === 'function') {
+    return firebaseAuth.authStateReady()
+      .then(() => firebaseAuth.currentUser)
+      .catch(() => firebaseAuth.currentUser);
+  }
+  return new Promise((resolve) => {
+    const finish = (user) => {
+      window.clearTimeout(timer);
+      try { unsub?.(); } catch { /* ignore */ }
+      resolve(user || firebaseAuth.currentUser || null);
+    };
+    const timer = window.setTimeout(() => finish(firebaseAuth.currentUser), timeoutMs);
+    const unsub = firebaseAuth.onAuthStateChanged((user) => finish(user));
+  });
+}
+
 export function bindFirebaseAuthListener() {
   if (!firebaseAuth || authListenerBound) return;
   authListenerBound = true;
   firebaseAuth.onAuthStateChanged(async (fbUser) => {
+    window.clearTimeout(signOutTimer);
     if (fbUser) {
       const account = accountFromFirebase(fbUser);
-      if (state.user?.uid === account.uid) {
-        showAuthGate(false);
+      showAuthGate(false);
+      if (state.user?.uid === account.uid && state.user?.email === account.email) {
+        refreshAccountUi();
         return;
       }
       await finishLogin(account, { toast: false });
       return;
     }
     if (!authBootDone) return;
-    if (state.user) {
-      state.user = null;
-      localStorage.removeItem(SESSION_USER_KEY);
-      refreshAccountUi();
-    }
+    signOutTimer = window.setTimeout(() => {
+      if (firebaseAuth?.currentUser) return;
+      if (!state.user) {
+        refreshAccountUi();
+        return;
+      }
+    }, 800);
   });
 }
 
 export async function restoreAuthSession() {
-  if (!firebaseAuth) return false;
-  try {
-    await firebaseAuthReady;
-    bindFirebaseAuthListener();
-    if (typeof firebaseAuth.authStateReady === 'function') {
-      try {
-        await firebaseAuth.authStateReady();
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
-    let fbUser = firebaseAuth.currentUser;
-    if (!fbUser) {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      fbUser = firebaseAuth.currentUser;
-    }
-    if (!fbUser) return false;
-
-    if (state.user?.uid === fbUser.uid) {
-      showAuthGate(false);
-      return true;
-    }
-    await finishLogin(accountFromFirebase(fbUser), { toast: false });
+  if (!firebaseAuth) return Boolean(state.user?.email);
+  await firebaseAuthReady;
+  bindFirebaseAuthListener();
+  const fbUser = await waitForFirebaseUser();
+  if (!fbUser) return Boolean(state.user?.email);
+  if (state.user?.uid === fbUser.uid && state.user?.email) {
+    showAuthGate(false);
+    refreshAccountUi();
     return true;
-  } finally {
-    authBootDone = true;
   }
+  await finishLogin(accountFromFirebase(fbUser), { toast: false });
+  return true;
 }
 
 export function initAuthRememberUi() {
@@ -534,6 +562,7 @@ export function showPasswordReset() {
 }
 
 export async function logoutUser() {
+  window.clearTimeout(signOutTimer);
   try {
     if (firebaseAuth) await firebaseAuth.signOut();
   } catch {
@@ -558,7 +587,7 @@ try {
   }
   if (firebaseAuth) {
     firebaseAuth.languageCode = 'pt';
-    firebaseAuthReady = ensureAuthPersistence(readRememberMe());
+    firebaseAuthReady = waitForFirebaseUser();
   }
 } catch (error) {
   console.error(error);
