@@ -77,6 +77,7 @@ export async function requestFinalMp4() {
   abortCapture();
   state.exporting = true;
   setTab('dub');
+  setExportPreview(true);
   setExportProgress(2, 'Começando');
   if (els.generateMp4Btn) els.generateMp4Btn.disabled = true;
   els.exportVideoBtn.disabled = true;
@@ -175,7 +176,8 @@ export function filmCandidates(pack) {
 
 export function loadExportVideo(src) {
   const video = els.exportFilm || document.createElement('video');
-  video.crossOrigin = 'anonymous';
+  if (/^https?:/i.test(String(src || ''))) video.crossOrigin = 'anonymous';
+  else video.removeAttribute('crossorigin');
   video.muted = true;
   video.defaultMuted = true;
   video.playsInline = true;
@@ -228,51 +230,79 @@ export async function ensureOgvPlayer() {
 export async function openOgvFilm(url, onProgress) {
   onProgress?.(12, 'Abrindo o vídeo Choicer');
   const Player = await ensureOgvPlayer();
+  const wrap = els.finalVideoWrap;
+  if (!wrap) throw new Error('Não achei a área do vídeo final.');
+  wrap.querySelectorAll('ogvjs, canvas.export-ogv-paint').forEach((node) => node.remove());
+
   onProgress?.(18, 'Preparando o filme da cena');
   const player = new Player({ wasm: true, webGL: false });
   player.muted = true;
   player.setAttribute('playsinline', '');
   player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
-  els.finalVideoWrap.appendChild(player);
-  player.src = url;
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), 25000);
-    const ok = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    player.addEventListener('loadedmetadata', ok, { once: true });
-    player.addEventListener('canplay', ok, { once: true });
-    player.addEventListener('error', () => {
-      clearTimeout(timer);
-      reject(new Error('Não deu para ler o vídeo da cena do pack.'));
-    }, { once: true });
-  });
+  wrap.appendChild(player);
+
   const paintCanvas = document.createElement('canvas');
-  paintCanvas.width = Math.max(640, player.videoWidth || 1280);
-  paintCanvas.height = Math.max(360, player.videoHeight || 720);
-  paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4';
-  els.finalVideoWrap.appendChild(paintCanvas);
-  const ctx = paintCanvas.getContext('2d', { alpha: false, desynchronized: true });
+  paintCanvas.className = 'export-ogv-paint';
+  paintCanvas.width = 1280;
+  paintCanvas.height = 720;
+  paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none';
+  wrap.appendChild(paintCanvas);
+  const ctx = paintCanvas.getContext('2d', { alpha: false });
   let painting = true;
+  let captureStream = null;
+  let captureTrack = null;
   const paint = () => {
     if (!painting) return;
     const from = player._canvas || player.querySelector('canvas');
-    if (from) ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height);
+    if (from && from !== paintCanvas && from.width > 1) {
+      try { ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height); } catch { /* frame not ready */ }
+    }
     requestAnimationFrame(paint);
   };
   paint();
+
+  player.src = url;
+  player.play?.()?.catch?.(() => undefined);
+
+  const deadline = performance.now() + 8000;
+  while (performance.now() < deadline) {
+    const from = player._canvas || player.querySelector('canvas');
+    const w = player.videoWidth || from?.width || 0;
+    const h = player.videoHeight || from?.height || 0;
+    if (w > 1 && h > 1) break;
+    onProgress?.(18, 'Preparando o filme da cena');
+    await wait(80);
+  }
+
+  const width = Math.max(640, player.videoWidth || paintCanvas.width);
+  const height = Math.max(360, player.videoHeight || paintCanvas.height);
+  paintCanvas.width = width;
+  paintCanvas.height = height;
+  onProgress?.(25, 'Filme pronto');
+
+  const durationRaw = Number(player.duration);
   return {
-    duration: Number(player.duration) || 0,
+    duration: Number.isFinite(durationRaw) ? durationRaw : 0,
     srcUrl: url,
     currentTime: () => Number(player.currentTime) || 0,
     play: () => player.play(),
     pause: () => player.pause(),
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
-    getPaintSource: () => player._canvas || player.querySelector('canvas') || paintCanvas,
-    getTrack: () => paintCanvas.captureStream(30).getVideoTracks()[0],
+    getPaintSource: () => {
+      const from = player._canvas || player.querySelector('canvas');
+      return (from && from !== paintCanvas && from.width > 1) ? from : paintCanvas;
+    },
+    getTrack: () => {
+      if (captureTrack) return captureTrack;
+      captureStream = paintCanvas.captureStream(30);
+      captureTrack = captureStream.getVideoTracks()[0] || null;
+      return captureTrack;
+    },
     stop: () => {
       painting = false;
+      captureStream?.getTracks().forEach((track) => track.stop());
+      captureStream = null;
+      captureTrack = null;
       try { player.pause(); } catch { /* ignore */ }
       player.remove();
       paintCanvas.remove();
