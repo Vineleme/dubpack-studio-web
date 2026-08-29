@@ -56,6 +56,22 @@ export function destroyStageOgv() {
   stageOgvUrl = '';
 }
 
+/** Move o player do palco para o export (um decoder WASM só). */
+export function takeStageOgvForExport(targetWrap) {
+  if (!stageOgvPlayer || !targetWrap) return null;
+  const player = stageOgvPlayer;
+  const url = stageOgvUrl;
+  stageOgvPlayer = null;
+  stageOgvUrl = '';
+  try { player.pause(); } catch { /* ignore */ }
+  targetWrap.querySelectorAll('ogvjs, canvas.export-ogv-paint').forEach((node) => node.remove());
+  player.muted = true;
+  player.setAttribute('playsinline', '');
+  player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
+  targetWrap.appendChild(player);
+  return { player, url };
+}
+
 export async function ensureStageOgv(url) {
   const shell = els.sceneVideo?.parentElement;
   if (!shell || !url) return null;
@@ -114,7 +130,10 @@ export async function waitForOgvFrame(player, fallbackCanvas, timeoutMs = 45000)
     const from = player._canvas || player.querySelector?.('canvas');
     const w = player.videoWidth || from?.width || fallbackCanvas?.width || 0;
     const h = player.videoHeight || from?.height || fallbackCanvas?.height || 0;
-    if (w > 1 && h > 1) return true;
+    if (w > 1 && h > 1) {
+      if (from && from.width > 1) return true;
+      if (player.readyState >= 2) return true;
+    }
     await wait(60);
   }
   return false;
