@@ -157,9 +157,11 @@ export function hideExportProgress() {
 }
 
 export async function urlLooksLikeOgg(url) {
+  if (!url) return false;
+  const known = state.blobByUrl?.get(url);
   try {
-    const blob = await fetch(url).then((response) => response.blob());
-    if (/ogg|ogv|ogm|oga/i.test(blob.type)) return true;
+    const blob = known || await fetch(url).then((response) => response.blob());
+    if (/ogg|ogv|ogm|oga/i.test(blob.type || '')) return true;
     const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
     return head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
   } catch {
@@ -207,13 +209,13 @@ export function loadExportVideo(src) {
 
 export async function waitForFilmReady(film) {
   await film.play?.()?.catch?.(() => undefined);
-  const deadline = performance.now() + 20000;
+  const deadline = performance.now() + 4000;
   while (performance.now() < deadline) {
     const source = film.getPaintSource?.();
     const w = source?.videoWidth || source?.width || 0;
     const h = source?.videoHeight || source?.height || 0;
     if (w > 1 && h > 1) return true;
-    await wait(60);
+    await wait(40);
   }
   return false;
 }
@@ -241,7 +243,7 @@ export async function openOgvFilm(url, onProgress) {
   els.finalVideoWrap.appendChild(player);
   player.src = url;
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), 25000);
+    const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), 8000);
     const ok = () => {
       clearTimeout(timer);
       resolve();
@@ -273,7 +275,7 @@ export async function openOgvFilm(url, onProgress) {
   paint();
   try { await player.play?.(); } catch { /* wait until compose */ }
   return {
-    duration: Number(player.duration) || 0,
+    duration: Number.isFinite(Number(player.duration)) ? Number(player.duration) : 0,
     srcUrl: url,
     currentTime: () => Number(player.currentTime) || 0,
     play: () => player.play(),
@@ -306,7 +308,7 @@ export async function openNativeFilm(url) {
   video.muted = true;
   try { video.currentTime = 0; } catch { /* ignore */ }
   return {
-    duration: Number(video.duration) || 0,
+    duration: Number.isFinite(Number(video.duration)) ? Number(video.duration) : 0,
     srcUrl: url,
     currentTime: () => Number(video.currentTime) || 0,
     play: () => video.play(),
@@ -542,7 +544,8 @@ export async function composeDubbedVideo(pack, onProgress) {
 
     const lastLineEnd = pack.scenes.reduce((max, raw) => {
       const scene = decorateScene(raw);
-      return Math.max(max, (Number(scene.videoOffset) || 0) + (Number(scene.duration) || 0));
+      const offset = normalizeTakeOffset(scene.videoOffset, Number.isFinite(film.duration) ? film.duration : 0);
+      return Math.max(max, offset + (Number(scene.duration) || 0));
     }, 0);
 
     const takeWindows = pack.scenes.map((raw) => {
@@ -661,7 +664,12 @@ export async function composeDubbedVideo(pack, onProgress) {
       stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, gainForTake(win.buffer)).stop);
     });
 
-    const duration = film.duration > 1 ? film.duration : Math.max(lastLineEnd, 8);
+    const duration = (() => {
+      const fromFilm = Number(film.duration);
+      const fromLines = Math.max(lastLineEnd, 8);
+      if (Number.isFinite(fromFilm) && fromFilm > 1 && fromFilm <= 20 * 60) return fromFilm;
+      return Math.min(fromLines, 20 * 60);
+    })();
     const startedAt = performance.now();
     while (performance.now() - startedAt < duration * 1000 + 400) {
       const t = film.currentTime?.() || 0;
