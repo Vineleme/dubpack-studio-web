@@ -1,9 +1,8 @@
 import { applyI18n, t } from './i18n-bridge.js';
 import { state } from './state.js';
 import { firebaseAuth, firebaseAuthReady, markAuthBootDone } from './auth.js';
-import { accountFromFirebase, finishLogin, hydrateLocalSession, initAuthRememberUi, refreshAccountUi, requireAuth, restoreAuthSession, revealStudio } from './auth.js';
+import { accountFromFirebase, finishLogin, initAuthRememberUi, readRememberMe, readSessionUser, refreshAccountUi, requireAuth, restoreAuthSession, revealStudio } from './auth.js';
 import { handleCheckoutReturn } from './credits.js';
-import { restoreSession } from './persist.js';
 import { toast } from './utils.js';
 import { bindUi } from './ui.js';
 
@@ -11,10 +10,7 @@ export async function bootApp() {
   applyI18n();
   initAuthRememberUi();
   revealStudio();
-  hydrateLocalSession();
-  if (state.user) {
-    restoreSession().catch(() => undefined);
-  }
+  refreshAccountUi();
   window.DubpackCart?.initCart({
     toast,
     t,
@@ -23,17 +19,20 @@ export async function bootApp() {
   });
   handleCheckoutReturn();
   if (!firebaseAuth) {
-    if (!state.user) toast('Firebase não carregou. Recarregue a página.');
-    markAuthBootDone();
+    toast('Firebase não carregou. Recarregue a página.');
     return;
   }
   try {
     await firebaseAuthReady;
-    const restored = await restoreAuthSession();
-    if (!restored && firebaseAuth.currentUser) {
-      await finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false });
+    let restored = await restoreAuthSession();
+    if (!restored && readSessionUser()?.email && readRememberMe()) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      if (firebaseAuth.currentUser) {
+        await finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false });
+        restored = true;
+      }
     }
-    refreshAccountUi();
+    if (!restored) refreshAccountUi();
   } finally {
     markAuthBootDone();
   }
@@ -47,7 +46,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '120';
+  const swVersion = '121';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');

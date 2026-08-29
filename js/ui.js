@@ -4,7 +4,7 @@ import { firebaseAuth } from './auth.js';
 import { accountFromFirebase, changeLang, clearAuthError, finishLogin, handleAvatarUpload, isLoggedIn, logoutUser, refreshAccountUi, requireAuth, setAuthMode, showAuthGate, showPasswordReset, submitAuth, suggestSignupName, togglePasswordVisibility } from './auth.js';
 import { renderActivity, renderCreditShop, updateCreditUi } from './credits.js';
 import { downloadFinalMp4, requestFinalMp4 } from './export.js';
-import { currentPack, goNextScene, importPack, selectScene, showFinalVideo, skipScene } from './pack.js';
+import { currentPack, goNextScene, importPack, selectScene, showFinalVideo } from './pack.js';
 import { downloadTake, playCurrentTake, playProjectPreview, playReference, stopProjectPreview, unlockAudio } from './playback.js';
 import { abortCapture, startTakeFlow } from './recorder.js';
 import { formatClock, takePlaceholder, toast } from './utils.js';
@@ -41,7 +41,6 @@ export function bindUi() {
   els.authGate?.addEventListener('click', (event) => {
     if (event.target === els.authGate) showAuthGate(false);
   });
-  els.authCloseBtn?.addEventListener('click', () => showAuthGate(false));
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
   document.querySelectorAll('label.text-link, .pack-empty label.primary').forEach((label) => {
@@ -64,7 +63,6 @@ export function bindUi() {
   els.prevSceneBtn?.addEventListener('click', () => selectScene(state.activeIndex - 1));
   els.nextSceneBtn?.addEventListener('click', goNextScene);
   els.nextBtn?.addEventListener('click', goNextScene);
-  els.skipSceneBtn?.addEventListener('click', skipScene);
   els.referenceBtn?.addEventListener('click', playReference);
   els.referenceBtnBottom?.addEventListener('click', playReference);
   els.recordBtn?.addEventListener('click', startTakeFlow);
@@ -214,7 +212,6 @@ export function renderTakeRail() {
     button.className = 'rail-dot';
     button.classList.toggle('is-active', index === state.activeIndex);
     button.classList.toggle('is-recorded', Boolean(pack.takes[scene.id]));
-    button.classList.toggle('is-skipped', Boolean(pack.skipped?.[scene.id]) && !pack.takes[scene.id]);
     button.title = scene.subtitle;
     button.textContent = String(index + 1);
     button.addEventListener('click', () => selectScene(index));

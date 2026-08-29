@@ -1,6 +1,5 @@
 import { t } from './i18n-bridge.js';
-import { PRO_MONTHLY_PRICE, PRO_MONTHLY_PRICE_USD, PRO_MONTHLY_CREDITS, PRO_PERIOD_MS, CREDIT_KEY, WELCOME_CREDITS } from './constants.js';
-import { exportAllowance } from './plan.js';
+import { PRO_MONTHLY_PRICE, PRO_MONTHLY_PRICE_USD, PRO_MONTHLY_CREDITS, PRO_PERIOD_MS } from './constants.js';
 import { state, els } from './state.js';
 import { isLoggedIn, isOwner, refreshAccountUi } from './auth.js';
 import { selectScene } from './pack.js';
@@ -119,8 +118,8 @@ export function getCredits() {
   const key = state.user?.email ? `dubpack-credits:${normalizeEmail(state.user.email)}` : CREDIT_KEY;
   const stored = localStorage.getItem(key);
   if (stored === null) {
-    localStorage.setItem(key, String(WELCOME_CREDITS));
-    return WELCOME_CREDITS;
+    localStorage.setItem(key, '1');
+    return 1;
   }
   const value = Number(stored);
   return Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -191,20 +190,6 @@ export function renderCreditShop() {
   const tiersLead = document.createElement('p');
   tiersLead.className = 'shop-lead';
   tiersLead.textContent = t('shop.tiers.lead');
-
-  const howCard = document.createElement('section');
-  howCard.className = 'funnel-card';
-  howCard.innerHTML = `
-    <h3 class="shop-section-title">${t('plan.how.title')}</h3>
-    <ol class="funnel-steps">
-      <li><strong>${t('plan.how.1.title')}</strong><span>${t('plan.how.1.body')}</span></li>
-      <li><strong>${t('plan.how.2.title')}</strong><span>${t('plan.how.2.body')}</span></li>
-      <li><strong>${t('plan.how.3.title')}</strong><span>${t('plan.how.3.body')}</span></li>
-      <li><strong>${t('plan.how.4.title')}</strong><span>${t('plan.how.4.body')}</span></li>
-    </ol>
-  `;
-  els.creditShop.append(howCard);
-
   els.creditShop.append(tiersTitle, tiersLead);
 
   const tierGrid = document.createElement('div');
@@ -215,7 +200,7 @@ export function renderCreditShop() {
     title: t('shop.free.title'),
     price: formatBrl(0),
     priceNote: t('shop.free.priceNote'),
-    features: [t('shop.free.f1'), t('shop.free.f2'), t('shop.free.f3'), t('shop.free.f4')],
+    features: [t('shop.free.f1'), t('shop.free.f2'), t('shop.free.f3')],
     variant: 'free',
     active: !isPro() && !isOwner()
   }));
@@ -225,7 +210,7 @@ export function renderCreditShop() {
     title: t('pro.card.title'),
     price: formatBrl(PRO_MONTHLY_PRICE, { monthly: true }),
     priceNote: t('shop.pro.priceNote', { credits: PRO_MONTHLY_CREDITS }),
-    features: [t('shop.pro.f1'), t('shop.pro.f2'), t('shop.pro.f3'), t('shop.pro.f4')],
+    features: [t('shop.pro.f1'), t('shop.pro.f2'), t('shop.pro.f3')],
     variant: 'pro',
     featured: true,
     active: isPro() && !isOwner(),
@@ -458,15 +443,14 @@ export function renderActivity() {
 }
 
 export function shouldWatermarkExport() {
-  return !isOwner() && !isPro();
+  return !isOwner() && !isPro() && getCredits() <= 1;
 }
 
-export function canExportVideo(cost = 1) {
-  if (isOwner()) return true;
-  return exportAllowance(cost).ok;
+export function canExportVideo() {
+  return isOwner() || getCredits() >= 1;
 }
 
-export function consumeExportCredit(amount = 1) {
-  if (isOwner() || amount <= 0) return;
-  setCredits(getCredits() - amount);
+export function consumeExportCredit() {
+  if (isOwner()) return;
+  setCredits(getCredits() - 1);
 }

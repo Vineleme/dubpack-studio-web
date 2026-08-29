@@ -780,7 +780,6 @@ body.needs-auth .dashboard {
 }
 
 .stage-state.recorded { background: rgba(67,233,123,0.16); color: #43e97b; }
-.stage-state.skipped { background: rgba(255,255,255,0.08); color: #c8c6de; }
 .stage-state.recording { background: rgba(245,46,131,0.22); color: #fff; }
 
 .countdown-badge {
@@ -1130,12 +1129,6 @@ body.needs-auth .dashboard {
   color: #07110b;
 }
 
-.rail-dot.is-skipped {
-  background: rgba(255,255,255,0.18);
-  color: #d7d5ea;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.22);
-}
-
 .rail-dot.is-active {
   outline: 2px solid #f52e83;
   background: #f52e83;
@@ -1170,18 +1163,6 @@ body.needs-auth .dashboard {
   width: calc(100% - 28px);
   height: calc(100% - 28px);
   border-radius: 10px;
-}
-
-.video-shell .scene-ogv,
-.video-shell ogvjs.scene-ogv {
-  position: absolute;
-  inset: 14px;
-  width: calc(100% - 28px) !important;
-  height: calc(100% - 28px) !important;
-  border-radius: 10px;
-  z-index: 2;
-  background: #000;
-  overflow: hidden;
 }
 
 .video-shell .empty-frame {
@@ -1245,19 +1226,13 @@ body.needs-auth .dashboard {
 .record-strip {
   width: min(760px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 12px;
   align-items: center;
   padding: 12px;
   border-radius: 18px;
   background: rgba(10,10,18,0.72);
   border: 1px solid rgba(255,255,255,0.08);
-}
-
-.skip-scene {
-  padding: 10px 12px;
-  font-size: 13px;
-  white-space: nowrap;
 }
 
 .take-meta {
@@ -1611,21 +1586,6 @@ body.needs-auth .dashboard {
 
 .help-card .primary { width: 100%; margin-top: 8px; }
 
-.ad-card .ad-slot {
-  display: grid;
-  place-items: center;
-  min-height: 120px;
-  margin: 16px 0;
-  border-radius: 14px;
-  border: 1px dashed rgba(245, 46, 131, 0.35);
-  color: #8f8aa8;
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.ad-card .ghost.wide { margin-top: 8px; }
-
 .timing-hint,
 .hint-copy {
   color: #b7b5ce;
@@ -1814,49 +1774,12 @@ body.needs-auth .dashboard {
 }
 .export-progress {
   display: grid;
-  gap: 10px;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
   width: min(420px, 100%);
   margin: 8px auto 16px;
   text-align: left;
-}
-.export-progress-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: center;
-}
-.export-progress-spinner {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(245, 46, 131, 0.25);
-  border-top-color: #f52e83;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-.export-progress.is-busy .export-progress-spinner {
-  opacity: 1;
-  animation: export-spin 0.9s linear infinite;
-}
-.export-progress-hint {
-  margin: 0;
-  color: #b7b5ce;
-  font-size: 14px;
-  line-height: 1.45;
-  min-height: 1.4em;
-}
-.export-progress.is-stalled .export-progress-hint {
-  color: #ffd21e;
-}
-.export-progress.is-stalled .export-progress-track b {
-  animation: export-shimmer 1.4s ease-in-out infinite;
-}
-@keyframes export-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes export-shimmer {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.35); }
 }
 .export-progress-track {
   height: 10px;
@@ -1901,18 +1824,13 @@ body.needs-auth .dashboard {
 #exportFilm {
   position: absolute;
   inset: 0;
-  opacity: 0;
-  pointer-events: none;
+  display: none;
   object-fit: contain;
   background: #000;
   z-index: 2;
-  /* Keep in layout (not display:none) so Safari can decode frames during export. */
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 .final-video-wrap.is-exporting #exportFilm {
-  opacity: 1;
+  display: block;
 }
 .final-video-wrap ogvjs {
   position: absolute;
@@ -2095,7 +2013,7 @@ body.needs-auth .dashboard {
   border-radius: 16px;
   background: rgba(16, 13, 38, 0.72);
   border: 1px solid rgba(168, 85, 247, 0.22);
-  margin-bottom: 18px;
+  margin-bottom: 8px;
 }
 .funnel-steps {
   margin: 12px 0 0;
@@ -2251,19 +2169,6 @@ body.needs-auth .dashboard {
   isolation: isolate;
   pointer-events: auto;
 }
-.auth-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 36px;
-  height: 36px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.08);
-  color: #fff;
-  font-size: 16px;
-  cursor: pointer;
-}
 .auth-brand {
   display: grid;
   justify-items: center;
@@ -2387,26 +2292,6 @@ body:not(.in-studio) .site-footer { display: none; }
   align-items: center;
   justify-content: center;
   text-align: center;
-}
-
-.community-tip {
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(245, 46, 131, 0.08);
-  border: 1px solid rgba(245, 46, 131, 0.22);
-}
-
-.community-tip strong {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
-}
-
-.community-tip p {
-  margin: 0;
-  color: #b7b5ce;
-  font-size: 13px;
-  line-height: 1.45;
 }
 
 .community-card .hint-copy {

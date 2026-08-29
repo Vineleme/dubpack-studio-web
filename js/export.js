@@ -1,5 +1,5 @@
-﻿import { t, getLang } from './i18n-bridge.js';
-import { BED_DUCK, BED_EXPORT, BED_ORIGINAL, EXPORT_WATERMARK_LABEL } from './constants.js';
+import { t, getLang } from './i18n-bridge.js';
+import { BED_EXPORT, BED_DUCK, EXPORT_WATERMARK_LABEL } from './constants.js';
 import { state, els } from './state.js';
 import { isLoggedIn, requireAuth } from './auth.js';
 import { canExportVideo, consumeExportCredit, isPro, shouldWatermarkExport } from './credits.js';
@@ -8,23 +8,7 @@ import { scheduleSave } from './persist.js';
 import { stopProjectPreview } from './playback.js';
 import { abortCapture } from './recorder.js';
 import { setTab } from './ui.js';
-import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packCanExport, packIsComplete, packRecordedCount, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
-import { destroyStageOgv, ensureOgvPlayer, ensureStageOgv, getStageOgv, ogvDecoderCanvas, ogvPaintSource, stageOgvMatches, takeStageOgvForExport, urlLooksLikeOgg, waitForOgvFrame } from './ogv.js';
-
-const FFMPEG_CDNS = [
-  {
-    script: 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js',
-    core: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-  },
-  {
-    script: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js',
-    core: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-  }
-];
-
-export function exportTargetIsMp4() {
-  return isIOS();
-}
+import { coverDraw, gainForTake, isIOS, isPhone, loadScript, packIsComplete, rememberUrl, roundRectPath, safeFile, toast, wait } from './utils.js';
 
 export async function downloadFinalMp4() {
   if (!isLoggedIn()) {
@@ -68,14 +52,11 @@ export async function requestFinalMp4() {
     toast('Importe um pack e grave as falas primeiro.');
     return;
   }
-  const recorded = packRecordedCount(pack);
-  if (!packCanExport(pack)) {
-    toast('Grave pelo menos uma fala para gerar o vídeo.');
+  const recorded = pack.scenes.filter((scene) => pack.takes[scene.id]).length;
+  if (!packIsComplete(pack)) {
+    toast(`Grave todas as falas para gerar o MP4. Faltam ${pack.scenes.length - recorded}.`);
     setTab('record');
     return;
-  }
-  if (!packIsComplete(pack)) {
-    toast(`Falas não gravadas mantêm o áudio original (${recorded}/${pack.scenes.length} dubladas).`);
   }
   if (!canExportVideo()) {
     toast(isPro()
@@ -96,29 +77,18 @@ export async function requestFinalMp4() {
   abortCapture();
   state.exporting = true;
   setTab('dub');
-  setExportPreview(true);
   setExportProgress(2, 'Começando');
-  beginExportProgress();
   if (els.generateMp4Btn) els.generateMp4Btn.disabled = true;
   els.exportVideoBtn.disabled = true;
   if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = true;
   try {
-    if (els.exportFilm) {
-      els.exportFilm.muted = true;
-      els.exportFilm.playsInline = true;
-      const unlock = els.exportFilm.play();
-      if (unlock) unlock.then(() => els.exportFilm.pause()).catch(() => undefined);
-    }
-  } catch { /* ignore */ }
-  await wait(60);
-  try {
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
-    if (exportTargetIsMp4() && !composed.type.includes('mp4')) {
+    if (isIOS() && !composed.type.includes('mp4')) {
       setExportProgress(92, 'Convertendo para MP4');
       output = await convertToMp4(composed);
     }
-    if (exportTargetIsMp4() && !output.type.includes('mp4')) {
+    if (isIOS() && !output.type.includes('mp4')) {
       throw new Error(getLang() === 'en'
         ? 'Could not generate MP4 on this device. Try again on Wi‑Fi.'
         : 'Não consegui gerar MP4 neste aparelho. Tente de novo com Wi‑Fi ligado.');
@@ -157,7 +127,6 @@ export async function requestFinalMp4() {
     if (els.exportStatus) els.exportStatus.textContent = message;
   } finally {
     state.exporting = false;
-    endExportProgress();
     if (els.generateMp4Btn) els.generateMp4Btn.disabled = false;
     els.exportVideoBtn.disabled = false;
     if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = false;
@@ -177,7 +146,7 @@ export function pickVideoMime() {
     'video/webm'
   ];
   // iPhone: tenta MP4. Chrome/PC: WebM nativo, sem conversão.
-  const types = exportTargetIsMp4() ? [...mp4Types, ...webmTypes] : webmTypes;
+  const types = isIOS() ? [...mp4Types, ...webmTypes] : [...webmTypes, ...mp4Types];
   return types.find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -189,83 +158,26 @@ export function setExportPreview(on) {
   els.finalVideoWrap?.classList.toggle('is-exporting', Boolean(on));
 }
 
-let exportHintTimer = null;
-let exportLastPct = -1;
-let exportLastChange = 0;
-let exportPulsePhase = 0;
-
-const EXPORT_HINTS = {
-  'Começando': 'Iniciando a exportação…',
-  'Abrindo o vídeo Choicer': 'Carregando o player do filme…',
-  'Preparando o filme da cena': 'Preparando o filme da cena…',
-  'Decodificando o filme': 'Decodificando o filme. Pode levar um minuto — aguarde.',
-  'Filme pronto': 'Filme pronto. Montando as vozes…',
-  'Preparando as vozes': 'Montando as vozes que você gravou…',
-  'Gravando a marca d\'água no vídeo': 'Aplicando marca d\'água…',
-  'Gerando o vídeo': 'Gerando o vídeo. Não feche esta aba.',
-  'Finalizando': 'Quase lá. Finalizando o arquivo…',
-  'Convertendo para MP4': 'Convertendo para MP4…',
-  'Carregando conversor MP4': 'Carregando o conversor de vídeo…',
-  'Pronto': 'Pronto!'
-};
-
-function exportHintFor(text) {
-  if (!text) return 'Processando…';
-  const key = Object.keys(EXPORT_HINTS).find((item) => text.includes(item));
-  return EXPORT_HINTS[key] || 'Ainda trabalhando… não feche esta aba.';
-}
-
-export function beginExportProgress() {
-  exportLastChange = performance.now();
-  exportLastPct = -1;
-  exportPulsePhase = 0;
-  els.exportProgressWrap?.classList.add('is-busy');
-  els.exportProgressWrap?.classList.remove('is-stalled');
-  window.clearInterval(exportHintTimer);
-  exportHintTimer = window.setInterval(() => {
-    if (!state.exporting) return;
-    const stalled = performance.now() - exportLastChange > 2800;
-    els.exportProgressWrap?.classList.toggle('is-stalled', stalled);
-    if (stalled && els.exportProgressHint) {
-      exportPulsePhase = (exportPulsePhase + 1) % 3;
-      const dots = '.'.repeat(exportPulsePhase + 1);
-      const base = els.exportProgressHint.dataset.baseHint || els.exportProgressHint.textContent || 'Ainda processando';
-      els.exportProgressHint.textContent = `${base.replace(/\.+$/, '')}${dots}`;
-    }
-  }, 700);
-}
-
-export function endExportProgress() {
-  window.clearInterval(exportHintTimer);
-  exportHintTimer = null;
-  els.exportProgressWrap?.classList.remove('is-busy', 'is-stalled');
-}
-
 export function setExportProgress(pct, text) {
   const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
-  if (n !== exportLastPct) {
-    exportLastPct = n;
-    exportLastChange = performance.now();
-    els.exportProgressWrap?.classList.remove('is-stalled');
-  }
   els.exportProgressWrap?.classList.remove('is-hidden');
   if (els.exportProgressBar) els.exportProgressBar.style.width = `${n}%`;
-  const label = text ? `${text} · ${n}%` : `${n}%`;
-  if (els.exportProgressLabel) els.exportProgressLabel.textContent = label;
-  if (els.exportProgressHint) {
-    const hint = exportHintFor(text);
-    els.exportProgressHint.dataset.baseHint = hint;
-    els.exportProgressHint.textContent = hint;
-  }
-  if (els.exportStatus) els.exportStatus.textContent = label;
+  if (els.exportProgressLabel) els.exportProgressLabel.textContent = text ? `${text} ${n}%` : `${n}%`;
+  if (els.exportStatus && text) els.exportStatus.textContent = `${text} ${n}%`;
 }
 
 export function hideExportProgress() {
-  endExportProgress();
   els.exportProgressWrap?.classList.add('is-hidden');
-  if (els.exportProgressHint) {
-    els.exportProgressHint.textContent = '';
-    delete els.exportProgressHint.dataset.baseHint;
+}
+
+export async function urlLooksLikeOgg(url) {
+  try {
+    const blob = await fetch(url).then((response) => response.blob());
+    if (/ogg|ogv|ogm|oga/i.test(blob.type)) return true;
+    const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+    return head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
+  } catch {
+    return false;
   }
 }
 
@@ -281,8 +193,7 @@ export function filmCandidates(pack) {
 
 export function loadExportVideo(src) {
   const video = els.exportFilm || document.createElement('video');
-  if (/^https?:/i.test(String(src || ''))) video.crossOrigin = 'anonymous';
-  else video.removeAttribute('crossorigin');
+  video.crossOrigin = 'anonymous';
   video.muted = true;
   video.defaultMuted = true;
   video.playsInline = true;
@@ -308,153 +219,78 @@ export function loadExportVideo(src) {
 }
 
 export async function waitForFilmReady(film) {
-  await film.play?.()?.catch?.(() => undefined);
-  const deadline = performance.now() + 30000;
+  const deadline = performance.now() + 10000;
   while (performance.now() < deadline) {
     const source = film.getPaintSource?.();
     const w = source?.videoWidth || source?.width || 0;
     const h = source?.videoHeight || source?.height || 0;
-    if (w > 1 && h > 1) {
-      if (source?.tagName === 'CANVAS' && typeof source.getContext === 'function') {
-        try {
-          const sample = source.getContext('2d')?.getImageData(
-            Math.floor(w / 2),
-            Math.floor(h / 2),
-            1,
-            1
-          )?.data;
-          if (sample && sample[0] + sample[1] + sample[2] > 12) return true;
-        } catch {
-          return true;
-        }
-      } else {
-        return true;
-      }
-    }
+    const t = film.currentTime?.() || 0;
+    if (w > 1 && h > 1 && t > 0.04) return true;
     await wait(60);
   }
   return false;
 }
 
+export async function ensureOgvPlayer() {
+  if (window.OGVPlayer || window.ogv?.OGVPlayer) return window.OGVPlayer || window.ogv.OGVPlayer;
+  window.OGVLoader = window.OGVLoader || {};
+  const base = new URL('./vendor/ogv/', window.location.href).href;
+  window.OGVLoader.base = base;
+  await loadScript(`${base}ogv-support.js`);
+  await loadScript(`${base}ogv.js`);
+  const Player = window.OGVPlayer || window.ogv?.OGVPlayer;
+  if (!Player) throw new Error('Não carregou o player de .ogv.');
+  return Player;
+}
+
 export async function openOgvFilm(url, onProgress) {
   onProgress?.(12, 'Abrindo o vídeo Choicer');
   const Player = await ensureOgvPlayer();
-
-  onProgress?.(16, 'Preparando o filme da cena');
-  const wrap = els.finalVideoWrap;
-  if (!wrap) throw new Error('Não achei a área do vídeo final.');
-
-  if (!stageOgvMatches(url)) {
-    try {
-      await ensureStageOgv(url);
-      await waitForOgvFrame(getStageOgv(), null, 60000);
-    } catch {
-      destroyStageOgv();
-    }
-  }
-
-  const adopted = takeStageOgvForExport(wrap);
-  let player = adopted?.url === url ? adopted.player : null;
-  if (!player) {
-    if (adopted?.player) adopted.player.remove();
-    destroyStageOgv();
-    player = new Player({ wasm: true, webGL: false });
-    player.muted = true;
-    player.setAttribute('playsinline', '');
-    player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
-    wrap.appendChild(player);
-    player.src = url;
-  }
-
+  onProgress?.(18, 'Preparando o filme da cena');
+  const player = new Player({ wasm: true, webGL: false });
+  player.muted = true;
+  player.setAttribute('playsinline', '');
+  player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:3;background:#000';
+  els.finalVideoWrap.appendChild(player);
+  player.src = url;
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('O vídeo da cena demorou para abrir.')), 25000);
+    const ok = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    player.addEventListener('loadedmetadata', ok, { once: true });
+    player.addEventListener('canplay', ok, { once: true });
+    player.addEventListener('error', () => {
+      clearTimeout(timer);
+      reject(new Error('Não deu para ler o vídeo da cena do pack.'));
+    }, { once: true });
+  });
   const paintCanvas = document.createElement('canvas');
-  paintCanvas.className = 'export-ogv-paint';
-  paintCanvas.width = 1280;
-  paintCanvas.height = 720;
-  paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none';
-  wrap.appendChild(paintCanvas);
-
-  const ctx = paintCanvas.getContext('2d', { alpha: false });
+  paintCanvas.width = Math.max(640, player.videoWidth || 1280);
+  paintCanvas.height = Math.max(360, player.videoHeight || 720);
+  paintCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:4';
+  els.finalVideoWrap.appendChild(paintCanvas);
+  const ctx = paintCanvas.getContext('2d', { alpha: false, desynchronized: true });
   let painting = true;
-  let captureStream = null;
-  let captureTrack = null;
-  let paintedFrames = 0;
-
   const paint = () => {
     if (!painting) return;
-    const from = ogvDecoderCanvas(player);
-    const w = paintCanvas.width;
-    const h = paintCanvas.height;
-    if (from) {
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, w, h);
-      try {
-        ctx.drawImage(from, 0, 0, w, h);
-        paintedFrames += 1;
-      } catch { /* frame not ready */ }
-    }
+    const from = player._canvas || player.querySelector('canvas');
+    if (from) ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height);
     requestAnimationFrame(paint);
   };
   paint();
-
-  try { player.currentTime = 0; } catch { /* ignore */ }
-  onProgress?.(18, 'Decodificando o filme');
-  await player.play?.()?.catch?.(() => undefined);
-
-  let pulse = 18;
-  const pulseTimer = window.setInterval(() => {
-    pulse = Math.min(24, pulse + 0.35);
-    onProgress?.(Math.round(pulse), 'Decodificando o filme');
-  }, 600);
-
-  const ready = await waitForOgvFrame(player, paintCanvas, 90000);
-  window.clearInterval(pulseTimer);
-  if (!ready) {
-    throw new Error(getLang() === 'en'
-      ? 'Could not decode the .ogv film. Re-import the ZIP and try again.'
-      : 'Não consegui decodificar o filme .ogv. Importe o ZIP de novo e tente outra vez.');
-  }
-
-  paintCanvas.width = Math.max(640, player.videoWidth || paintCanvas.width);
-  paintCanvas.height = Math.max(360, player.videoHeight || paintCanvas.height);
-  onProgress?.(25, 'Filme pronto');
-
   return {
     duration: Number(player.duration) || 0,
     srcUrl: url,
     currentTime: () => Number(player.currentTime) || 0,
     play: () => player.play(),
     pause: () => player.pause(),
-    seekTo: async (time = 0) => {
-      try { player.currentTime = Math.max(0, Number(time) || 0); } catch { /* ignore */ }
-      await wait(80);
-    },
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
-    getPaintSource: () => ogvDecoderCanvas(player) || paintCanvas,
-    getTrack: () => {
-      if (captureTrack) return captureTrack;
-      const decoder = ogvDecoderCanvas(player);
-      if (decoder?.captureStream) {
-        try {
-          captureStream = decoder.captureStream(30);
-          captureTrack = captureStream.getVideoTracks()[0] || null;
-          if (captureTrack) return captureTrack;
-        } catch { /* fallback to paint canvas */ }
-      }
-      if (paintedFrames < 1) {
-        const from = ogvDecoderCanvas(player);
-        if (from) {
-          try { ctx.drawImage(from, 0, 0, paintCanvas.width, paintCanvas.height); } catch { /* ignore */ }
-        }
-      }
-      captureStream = paintCanvas.captureStream(30);
-      captureTrack = captureStream.getVideoTracks()[0] || null;
-      return captureTrack;
-    },
+    getPaintSource: () => player._canvas || player.querySelector('canvas') || paintCanvas,
+    getTrack: () => paintCanvas.captureStream(30).getVideoTracks()[0],
     stop: () => {
       painting = false;
-      captureStream?.getTracks().forEach((track) => track.stop());
-      captureStream = null;
-      captureTrack = null;
       try { player.pause(); } catch { /* ignore */ }
       player.remove();
       paintCanvas.remove();
@@ -466,9 +302,6 @@ export async function openNativeFilm(url) {
   const video = await loadExportVideo(url);
   video.muted = true;
   try { video.currentTime = 0; } catch { /* ignore */ }
-  let captureStream = null;
-  let captureTrack = null;
-  let canvasPipeline = null;
   return {
     duration: Number(video.duration) || 0,
     srcUrl: url,
@@ -480,40 +313,23 @@ export async function openNativeFilm(url) {
     }),
     getPaintSource: () => video,
     getTrack: () => {
-      if (captureTrack) return captureTrack;
       const capture = video.captureStream?.bind(video) || video.mozCaptureStream?.bind(video);
-      if (capture) {
-        captureStream = capture();
-        captureTrack = captureStream.getVideoTracks()[0] || null;
-        if (captureTrack) return captureTrack;
-      }
+      if (capture) return capture().getVideoTracks()[0];
       const width = Math.max(640, video.videoWidth || 1280);
       const height = Math.max(360, video.videoHeight || 720);
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext('2d', { alpha: false });
-      captureStream = canvas.captureStream(30);
-      let painting = true;
+      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+      const stream = canvas.captureStream(30);
       const paint = () => {
-        if (!painting) return;
         if (video.videoWidth) ctx.drawImage(video, 0, 0, width, height);
         if (!video.ended) requestAnimationFrame(paint);
       };
       paint();
-      canvasPipeline = {
-        stop: () => {
-          painting = false;
-          captureStream?.getTracks().forEach((track) => track.stop());
-        }
-      };
-      captureTrack = captureStream.getVideoTracks()[0] || null;
-      return captureTrack;
+      return stream.getVideoTracks()[0];
     },
-    stop: () => {
-      canvasPipeline?.stop();
-      try { video.pause(); } catch { /* ignore */ }
-    }
+    stop: () => video.pause()
   };
 }
 
@@ -570,25 +386,25 @@ export function startBufferAt(audioCtx, dest, buffer, when, gainValue) {
 
 export function duckDuringTakes(gainNode, t0, windows) {
   const param = gainNode.gain;
-  param.setValueAtTime(BED_ORIGINAL, t0);
+  param.setValueAtTime(BED_EXPORT, t0);
   windows.forEach((win) => {
     const start = t0 + win.offset;
     const end = start + win.duration;
-    param.setValueAtTime(BED_ORIGINAL, Math.max(t0, start - 0.08));
+    param.setValueAtTime(BED_EXPORT, Math.max(t0, start - 0.08));
     param.linearRampToValueAtTime(BED_DUCK, start + 0.05);
     param.setValueAtTime(BED_DUCK, Math.max(start + 0.05, end - 0.05));
-    param.linearRampToValueAtTime(BED_ORIGINAL, end + 0.12);
+    param.linearRampToValueAtTime(BED_EXPORT, end + 0.12);
   });
 }
 
 export function attachMediaBed(audioCtx, dest, srcUrl) {
   const audio = document.createElement('audio');
-  if (/^https?:/i.test(String(srcUrl || ''))) audio.crossOrigin = 'anonymous';
+  audio.crossOrigin = 'anonymous';
   audio.preload = 'auto';
   audio.src = srcUrl;
   document.body.appendChild(audio);
   const gain = audioCtx.createGain();
-  gain.gain.value = BED_ORIGINAL;
+  gain.gain.value = BED_EXPORT;
   const source = audioCtx.createMediaElementSource(audio);
   source.connect(gain);
   gain.connect(dest);
@@ -658,7 +474,7 @@ export async function buildWatermarkedVideoTrack(film) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
   let painting = true;
   const paint = () => {
     if (!painting) return;
@@ -763,17 +579,6 @@ export async function composeDubbedVideo(pack, onProgress) {
       }
     }
 
-    if (bed) bed.el.currentTime = 0;
-    try { await film.seekTo?.(0); } catch { /* ignore */ }
-    await film.play()?.catch?.(() => undefined);
-    if (bed) await bed.el.play().catch(() => undefined);
-    const ready = await waitForFilmReady(film);
-    if (!ready) {
-      throw new Error(getLang() === 'en'
-        ? 'The scene video did not start. Reload the page and try again.'
-        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
-    }
-
     const watermarked = shouldWatermarkExport();
     const videoTrack = watermarked
       ? (videoPipeline = await buildWatermarkedVideoTrack(film)).track
@@ -802,7 +607,15 @@ export async function composeDubbedVideo(pack, onProgress) {
       recorder.onstop = resolve;
     });
 
-    await wait(120);
+    if (bed) bed.el.currentTime = 0;
+    await film.play()?.catch?.(() => undefined);
+    if (bed) await bed.el.play().catch(() => undefined);
+    const ready = await waitForFilmReady(film);
+    if (!ready) {
+      throw new Error(getLang() === 'en'
+        ? 'The scene video did not start. Reload the page and try again.'
+        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
+    }
     recorder.start(isIOS() ? 100 : 250);
     recordingStarted = true;
     const t0 = audioCtx.currentTime + 0.05;
@@ -875,7 +688,6 @@ export async function loadFfmpeg() {
 }
 
 export async function convertToMp4(blob) {
-  if (!exportTargetIsMp4()) return blob;
   const mobile = isPhone();
   const work = (async () => {
     setExportProgress(92, 'Carregando conversor MP4');

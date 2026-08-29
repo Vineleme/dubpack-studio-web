@@ -12,14 +12,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=120" />
+    <link rel="stylesheet" href="./styles.css?v=121" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
 
     <div id="authGate" class="auth-gate is-hidden">
       <form id="authForm" class="auth-card" novalidate>
-        <button id="authCloseBtn" class="auth-close" type="button" aria-label="Fechar">✕</button>
         <div class="auth-brand">
           <strong>Dub<span>Pack</span> Studio</strong>
           <em data-i18n="brand.tagline">Sua voz no filme da cena. Grave, finalize e compartilhe.</em>
@@ -63,15 +62,6 @@
         </ol>
         <p data-i18n="help.footer">Takes ficam neste navegador. Recarregar a página restaura o último pack, se o armazenamento local permitir.</p>
         <button id="helpCloseBtn" class="primary" type="button" data-i18n="help.close">Entendi</button>
-      </div>
-    </div>
-    <div id="adModal" class="help-modal is-hidden" role="dialog" aria-labelledby="adTitle" aria-modal="true">
-      <div class="help-card ad-card">
-        <h2 id="adTitle" data-i18n="export.ad.title">Assista para exportar</h2>
-        <p id="adBody" data-i18n="export.ad.body">No plano grátis, um anúncio rápido libera mais um export hoje. Seu vídeo sai com a marca DubPack Studio.</p>
-        <div class="ad-slot" aria-hidden="true">Anúncio</div>
-        <button id="adContinueBtn" class="primary" type="button" data-i18n="export.ad.continue">Continuar exportação</button>
-        <button id="adCancelBtn" class="ghost wide" type="button" data-i18n="export.ad.cancel">Agora não</button>
       </div>
     </div>
 
@@ -119,7 +109,7 @@
 
         <section class="pro-card">
           <span data-i18n="pro.card.title">DubPack PRO</span>
-          <p data-i18n="pro.card.body">Sem anúncio · sem marca d'água · 200 créditos/mês · packs maiores.</p>
+          <p data-i18n="pro.card.body">R$ 9,90/mês · 200 créditos mensais. Uma assinatura simples para quem volta sempre ao Studio.</p>
           <button id="proBtn" class="primary" type="button" data-i18n="pro.btn">Ver plano PRO</button>
         </section>
       </aside>
@@ -218,7 +208,6 @@
                     <span id="subtitle">A fala aparece aqui.</span>
                   </div>
                   <button id="referenceBtn" class="secondary" type="button" data-i18n="record.reference">▶ Referência</button>
-                  <button id="skipSceneBtn" class="ghost skip-scene" type="button" data-i18n="record.skip">Pular fala</button>
                   <button id="recordBtn" class="mic stop-ready" type="button" aria-label="Gravar">🎙</button>
                   <div class="record-timer">
                     <small id="micHint" data-i18n="record.mic">Toque para começar</small>
@@ -261,13 +250,9 @@
             <div id="finalVideoEmpty" class="empty-frame" data-i18n="dub.empty">Grave as falas e gere o vídeo para assistir sua dublagem completa.</div>
           </div>
           <p id="exportStatus" class="hint-copy" data-i18n="dub.status.none">Nenhum vídeo gerado ainda.</p>
-          <div id="exportProgressWrap" class="export-progress is-hidden" aria-live="polite">
-            <div class="export-progress-row">
-              <span class="export-progress-spinner" aria-hidden="true"></span>
-              <div class="export-progress-track"><b id="exportProgressBar"></b></div>
-              <strong id="exportProgressLabel">0%</strong>
-            </div>
-            <p id="exportProgressHint" class="export-progress-hint"></p>
+          <div id="exportProgressWrap" class="export-progress is-hidden">
+            <div class="export-progress-track"><b id="exportProgressBar"></b></div>
+            <strong id="exportProgressLabel">0%</strong>
           </div>
           <button id="generateMp4Btn" class="primary wide" type="button" data-i18n="record.finish">Finalizar dublagem</button>
           <button id="downloadMp4Btn" class="primary wide is-hidden" type="button" data-i18n="dub.download.webm">Baixar WebM</button>
@@ -297,7 +282,7 @@
 
         <section id="creditsTab" class="tab-view info-card">
           <h2 data-i18n="credits.title">Créditos</h2>
-          <p data-i18n="credits.intro">Grave à vontade. Créditos entram só quando você gera o vídeo final.</p>
+          <p data-i18n="credits.intro">Grave à vontade. Créditos entram só na exportação do vídeo.</p>
           <p><span data-i18n="credits.balance">Saldo atual:</span> <strong id="creditsBalance">1 crédito</strong></p>
 
           <section id="shopCart" class="shop-cart cart-panel" data-cart-panel>
@@ -333,10 +318,6 @@
           <h2 data-i18n="community.title">Comunidade</h2>
           <p data-i18n="community.body">Os packs de dublagem ficam no GameBanana. Baixe um ZIP, importe aqui e compartilhe seu resultado com outros dubladores.</p>
           <a class="primary wide community-link" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="community.cta">Abrir GameBanana</a>
-          <div class="community-tip">
-            <strong data-i18n="community.tip.title">Dica do Studio</strong>
-            <p data-i18n="community.tip.body">Pack grande demais? No computador, abra o ZIP, separe as falas em partes menores e importe um ZIP de cada vez. No celular, importe packs já enxutos.</p>
-          </div>
           <p class="hint-copy" data-i18n="community.note">Feed social dentro do Studio vem numa próxima versão. Por enquanto o ponto de encontro é o GameBanana.</p>
         </section>
       </section>
@@ -384,10 +365,10 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=120"></script>
-    <script src="./payments.config.js?v=120"></script>
-    <script src="./i18n.js?v=120"></script>
-    <script src="./payments.js?v=120"></script>
-    <script type="module" src="./js/boot.js?v=120"></script>
+    <script src="./vendor/fflate.min.js?v=121"></script>
+    <script src="./payments.config.js?v=121"></script>
+    <script src="./i18n.js?v=121"></script>
+    <script src="./payments.js?v=121"></script>
+    <script type="module" src="./js/boot.js?v=121"></script>
   </body>
 </html>

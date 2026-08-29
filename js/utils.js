@@ -257,7 +257,7 @@ export function extractTakeNumber(name) {
 
 export function findSharedVideo(videos) {
   const fileName = (entry) => entry.name.split('/').pop() || '';
-  const playable = ['mp4', 'webm', 'm4v', 'ogv'];
+  const playable = ['mp4', 'webm', 'm4v'];
   const named = videos.filter((entry) => /dub[_-]?video/i.test(fileName(entry)));
   return named.find((entry) => playable.includes(entry.ext))
     || videos.find((entry) => playable.includes(entry.ext) && /full[_-]?video|^video$/i.test(normalizeBaseName(entry.name)))

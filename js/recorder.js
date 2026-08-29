@@ -3,7 +3,7 @@ import { isLoggedIn, requireAuth } from './auth.js';
 import { currentPack, currentScene, selectScene } from './pack.js';
 import { scheduleSave } from './persist.js';
 import { animateProgress, stopActivePlayback, stopProjectPreview, unlockAudio } from './playback.js';
-import { isIOS, isPhone, measureBlobPeak, packIsComplete, packRecordedCount, pickRecorderMime, rememberUrl, toast, voiceLevelFromPeak, wait } from './utils.js';
+import { isIOS, isPhone, measureBlobPeak, pickRecorderMime, rememberUrl, toast, voiceLevelFromPeak, wait } from './utils.js';
 
 export async function startTakeFlow() {
   if (!isLoggedIn()) {
@@ -161,7 +161,6 @@ export function recordActiveScene() {
     const profile = await profileTakeAudio(blob).catch(() => ({}));
     const voicePeak = Math.max(livePeak, decodedPeak, profile.peak || 0);
     if (pack.takes[scene.id]?.url) URL.revokeObjectURL(pack.takes[scene.id].url);
-    if (pack.skipped) delete pack.skipped[scene.id];
     const url = rememberUrl(URL.createObjectURL(blob), blob);
     pack.takes[scene.id] = {
       url,
@@ -186,11 +185,9 @@ export function recordActiveScene() {
       toast('Take gravado. Volume bom para a dublagem.');
     }
     setVoiceMeter(voicePeak, false);
-    const finished = packIsComplete(pack);
+    const finished = pack.scenes.every((item) => pack.takes[item.id]);
     if (finished) {
-      toast('Tudo gravado. Toque em Finalizar dublagem.');
-    } else if (packRecordedCount(pack) > 0) {
-      toast('Take gravado. Pode pular outras falas ou finalizar com o que tem.');
+      toast('Pack concluído. Toque em Finalizar dublagem.');
     }
   };
 
