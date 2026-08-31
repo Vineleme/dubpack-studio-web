@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=134" />
+    <link rel="stylesheet" href="./styles.css?v=135" />
   </head>
   <body class="in-studio">
     <div id="appToast" class="app-toast" hidden role="status"></div>
@@ -48,6 +48,7 @@
         <button id="authForgotBtn" class="auth-forgot" type="button" data-i18n="auth.forgot">Esqueci a senha</button>
         <button id="authSubmitBtn" class="primary wide" type="button" data-i18n="auth.submit.login">Entrar</button>
         <button id="authSwitchBtn" class="ghost wide" type="button" data-i18n="auth.switch.signup">Criar conta nova</button>
+        <p class="auth-partnership" data-i18n-html="auth.partnership">Parcerias: <a href="mailto:contact@dubpackstudio.com">contact@dubpackstudio.com</a></p>
       </form>
     </div>
     <div id="helpModal" class="help-modal is-hidden" role="dialog" aria-labelledby="helpTitle" aria-modal="true">
@@ -348,14 +349,17 @@
         </section>
       </aside>
     </main>
-    <footer class="site-footer" data-i18n="footer">DubPack Studio © 2026 · Feito para dubladores apaixonados</footer>
+    <footer class="site-footer">
+      <p data-i18n="footer">DubPack Studio © 2026 · Feito para dubladores apaixonados</p>
+      <p data-i18n-html="footer.partnership">Parcerias: <a href="mailto:contact@dubpackstudio.com">contact@dubpackstudio.com</a></p>
+    </footer>
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=134"></script>
-    <script src="./payments.config.js?v=134"></script>
-    <script src="./i18n.js?v=134"></script>
-    <script src="./payments.js?v=134"></script>
-    <script src="./app.js?v=134"></script>
+    <script src="./vendor/fflate.min.js?v=135"></script>
+    <script src="./payments.config.js?v=135"></script>
+    <script src="./i18n.js?v=135"></script>
+    <script src="./payments.js?v=135"></script>
+    <script src="./app.js?v=135"></script>
   </body>
 </html>

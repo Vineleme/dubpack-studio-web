@@ -2405,6 +2405,26 @@ body.needs-auth .dashboard {
   font-size: 12px;
 }
 
+.site-footer p {
+  margin: 0;
+}
+
+.site-footer p + p {
+  margin-top: 6px;
+}
+
+.site-footer a,
+.auth-partnership a {
+  color: #c9c6e0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.site-footer a:hover,
+.auth-partnership a:hover {
+  color: #fff;
+}
+
 #downloadMp4Btn {
   display: inline-flex;
   align-items: center;
@@ -2596,6 +2616,13 @@ body.needs-auth .dashboard {
 .auth-forgot.is-alert {
   color: #f52e83;
   font-size: 16px;
+}
+.auth-partnership {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: #8c89a3;
+  line-height: 1.4;
 }
 #logoutBtn { margin-top: 10px; }
 body:not(.in-studio) .site-footer { display: none; }
