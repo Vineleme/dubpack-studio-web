@@ -322,3 +322,93 @@ exports.stripeWebhook = onRequest({
     return res.status(500).send('webhook-failed');
   }
 });
+
+const OWNER_EMAILS = new Set([
+  'viniciusleme@gmail.com',
+  'vinicius.leme@gmail.com',
+  'vineleme@gmail.com',
+  'vineleme@icloud.com',
+  'viniciusleme@icloud.com'
+]);
+
+async function requireAccountEmail(req) {
+  const header = String(req.get('authorization') || '');
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (!token) {
+    const error = new Error('unauthenticated');
+    error.status = 401;
+    throw error;
+  }
+  const decoded = await admin.auth().verifyIdToken(token);
+  const email = normalizeEmail(decoded.email);
+  if (!email) {
+    const error = new Error('unauthenticated');
+    error.status = 401;
+    throw error;
+  }
+  return email;
+}
+
+async function adjustCredits(email, delta, source) {
+  const accountRef = db.collection('accounts').doc(email);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(accountRef);
+    const current = snap.data() || { credits: 1, pro: null };
+    const credits = Math.max(0, Number(current.credits) || 0);
+    if (delta < 0 && credits < Math.abs(delta)) {
+      const error = new Error('no-credits');
+      error.status = 402;
+      throw error;
+    }
+    const next = {
+      ...current,
+      credits: credits + delta,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastSource: source
+    };
+    tx.set(accountRef, next, { merge: true });
+    return next;
+  });
+}
+
+exports.spendCredit = onRequest({ cors: false }, async (req, res) => {
+  withCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
+  try {
+    const email = await requireAccountEmail(req);
+    if (OWNER_EMAILS.has(email)) {
+      return res.json({ ok: true, spent: false, owner: true, credits: 0 });
+    }
+    const account = await adjustCredits(email, -1, 'export');
+    return res.json({
+      ok: true,
+      spent: true,
+      credits: Number(account.credits) || 0,
+      pro: Boolean(account.pro?.active)
+    });
+  } catch (error) {
+    if (error.status === 401) return res.status(401).json({ error: 'unauthenticated' });
+    if (error.message === 'no-credits') return res.status(402).json({ error: 'no-credits' });
+    console.error(error);
+    return res.status(500).json({ error: 'spend-failed' });
+  }
+});
+
+exports.refundCredit = onRequest({ cors: false }, async (req, res) => {
+  withCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
+  try {
+    const email = await requireAccountEmail(req);
+    if (OWNER_EMAILS.has(email)) {
+      return res.json({ ok: true, credits: 0, owner: true });
+    }
+    const account = await adjustCredits(email, 1, 'export-refund');
+    return res.json({ ok: true, credits: Number(account.credits) || 0 });
+  } catch (error) {
+    if (error.status === 401) return res.status(401).json({ error: 'unauthenticated' });
+    console.error(error);
+    return res.status(500).json({ error: 'refund-failed' });
+  }
+});

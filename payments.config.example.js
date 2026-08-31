@@ -11,7 +11,9 @@ window.DUBPACK_PAYMENTS = {
   functions: {
     createCheckout: '',
     verifyCheckout: '',
-    syncAccount: ''
+    syncAccount: '',
+    spendCredit: '',
+    refundCredit: ''
   },
   stripePublishableKey: 'pk_test_REPLACE_ME'
 };

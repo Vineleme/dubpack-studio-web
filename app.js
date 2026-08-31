@@ -326,7 +326,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '132';
+  const swVersion = '133';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -3045,6 +3045,7 @@ async function requestFinalMp4() {
     setTab('record');
     return;
   }
+  await syncAccountFromServer();
   if (!canExportVideo()) {
     toast(isPro()
       ? 'Créditos do mês acabaram. Compre extras ou aguarde a renovação PRO.'
@@ -3068,7 +3069,18 @@ async function requestFinalMp4() {
   if (els.generateMp4Btn) els.generateMp4Btn.disabled = true;
   els.exportVideoBtn.disabled = true;
   if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = true;
+  let reserved = null;
   try {
+    reserved = await takeExportCredit();
+    if (!reserved.ok) {
+      toast(reserved.error === 'no-credits'
+        ? (isPro()
+          ? 'Créditos do mês acabaram. Compre extras ou aguarde a renovação PRO.'
+          : 'Sem créditos. Assine o PRO ou compre um pacote para gerar o MP4.')
+        : 'Não consegui confirmar o crédito. Tente de novo logado.');
+      setTab('credits');
+      return;
+    }
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
     if (isIOS() && !composed.type.includes('mp4')) {
@@ -3086,7 +3098,7 @@ async function requestFinalMp4() {
     pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
     pack.watermarked = watermarked;
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
-    consumeExportCredit();
+    if (Number.isFinite(Number(reserved?.credits))) setCredits(Number(reserved.credits));
     showFinalVideo(pack);
     scheduleSave();
     const isMp4 = pack.finalExt === 'mp4';
@@ -3109,6 +3121,7 @@ async function requestFinalMp4() {
       if (play) play.catch(() => toast('Toque no play para ouvir sua dublagem.'));
     }
   } catch (error) {
+    if (reserved?.spent) await refundExportCredit().catch(() => undefined);
     const message = error.message || 'Não foi possível gerar o vídeo.';
     toast(message);
     if (els.exportStatus) els.exportStatus.textContent = message;
@@ -3439,6 +3452,36 @@ function canExportVideo() {
 function consumeExportCredit() {
   if (isOwner()) return;
   setCredits(getCredits() - 1);
+}
+
+async function authHeaders() {
+  const token = await firebaseAuth?.currentUser?.getIdToken?.();
+  if (!token) throw new Error('unauthenticated');
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`
+  };
+}
+
+async function takeExportCredit() {
+  if (isOwner()) return { ok: true, spent: false, credits: getCredits() };
+  const url = getPaymentEndpoint('spendCredit');
+  if (!url) return { ok: false, error: 'pending' };
+  const response = await fetch(url, { method: 'POST', headers: await authHeaders() });
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 402) return { ok: false, error: 'no-credits' };
+  if (!response.ok) throw new Error(data.error || 'spend-failed');
+  if (Number.isFinite(Number(data.credits))) setCredits(Number(data.credits));
+  return { ok: true, spent: Boolean(data.spent), credits: Number(data.credits) };
+}
+
+async function refundExportCredit() {
+  if (isOwner()) return;
+  const url = getPaymentEndpoint('refundCredit');
+  if (!url) return;
+  const response = await fetch(url, { method: 'POST', headers: await authHeaders() });
+  const data = await response.json().catch(() => ({}));
+  if (response.ok && Number.isFinite(Number(data.credits))) setCredits(Number(data.credits));
 }
 
 function roundRectPath(ctx, x, y, w, h, r) {
