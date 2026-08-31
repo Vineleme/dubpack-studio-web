@@ -1,4 +1,4 @@
-const CACHE = 'dubpack-studio-web-v135';
+const CACHE = 'dubpack-studio-web-v136';
 const PRECACHE = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const PRECACHE = [
   './manifest.webmanifest',
   './assets/dubpack-logo.jpg',
   './assets/dubpack-logo-brand.jpg',
+  './assets/dubpack-logo-official.png',
   './assets/studio-mic-neon.png',
   './vendor/fflate.min.js'
 ];

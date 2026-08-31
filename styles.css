@@ -50,7 +50,7 @@ button, label, a { border: 0; text-decoration: none; }
 }
 
 .side-logo img {
-  width: min(168px, 100%);
+  width: min(180px, 100%);
   height: auto;
   border-radius: 0;
   object-fit: contain;
