@@ -527,11 +527,44 @@ body.needs-auth .dashboard {
   text-align: center;
 }
 
-.pack-empty h3 { margin: 0 0 8px; }
+.pack-empty h3 { margin: 0 0 16px; }
 .pack-empty p { max-width: 52ch; margin: 0 auto 22px; }
 .pack-empty code {
   color: #ffd21e;
   font-size: 0.92em;
+}
+.start-steps {
+  list-style: none;
+  margin: 0 auto 22px;
+  padding: 0;
+  max-width: 42ch;
+  text-align: left;
+  color: #c9c6e0;
+  line-height: 1.55;
+  display: grid;
+  gap: 10px;
+}
+.start-steps a {
+  color: #ff8ac4;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pack-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+}
+.pack-empty-actions .primary,
+.pack-empty-actions .secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  cursor: pointer;
+  text-decoration: none;
 }
 .pack-empty .primary {
   display: inline-flex;
@@ -1901,6 +1934,20 @@ body.needs-auth .dashboard {
   padding-left: 18px;
   color: #b7b5ce;
   line-height: 1.5;
+}
+
+.help-card a {
+  color: #ff8ac4;
+  text-underline-offset: 2px;
+}
+
+.help-card .help-gamebanana {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 12px;
+  text-decoration: none;
 }
 
 .help-card .primary { width: 100%; margin-top: 8px; }

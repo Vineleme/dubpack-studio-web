@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=139" />
+    <link rel="stylesheet" href="./styles.css?v=140" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -81,15 +81,14 @@
     </div>
     <div id="helpModal" class="help-modal is-hidden" role="dialog" aria-labelledby="helpTitle" aria-modal="true">
       <div class="help-card">
-        <h2 id="helpTitle" data-i18n="help.title">Como dublar</h2>
-        <ol>
-          <li data-i18n="help.1">Importe um pack .zip com os áudios das falas (e vídeo ou imagens, se houver).</li>
-          <li data-i18n="help.2">Toque em Referência para ouvir o original. No iPhone, desligue o modo silencioso (chave lateral) se não ouvir.</li>
-          <li data-i18n="help.3">Toque no microfone: countdown de 3 segundos, depois grave no tempo da fala. Fone ajuda, mas não é obrigatório.</li>
-          <li data-i18n="help.4">Toque de novo no microfone para cancelar o countdown ou encerrar a gravação.</li>
-          <li data-i18n="help.5">Avance de fala, ouça o take e toque em Finalizar dublagem quando terminar. Packs ficam 2 dias — ou apague quando quiser no ✕ do card.</li>
+        <h2 id="helpTitle" data-i18n="help.title">Como começar</h2>
+        <ol class="help-steps">
+          <li data-i18n-html="help.1">Baixe um pack no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.</li>
+          <li data-i18n="help.2">Importe o ZIP em Meus Packs.</li>
+          <li data-i18n="help.3">Ouça a referência, grave no microfone e finalize a dublagem.</li>
         </ol>
-        <p data-i18n="help.footer">Takes ficam neste navegador. Recarregar a página restaura o último pack, se o armazenamento local permitir.</p>
+        <p data-i18n="help.footer">Créditos entram só na exportação do vídeo. Packs ficam 2 dias neste aparelho.</p>
+        <a class="secondary wide help-gamebanana" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="help.gamebanana">Abrir GameBanana</a>
         <button id="helpCloseBtn" class="primary" type="button" data-i18n="help.close">Entendi</button>
       </div>
     </div>
@@ -179,12 +178,19 @@
           </div>
 
           <div id="packEmpty" class="pack-empty">
-            <h3 data-i18n="packs.empty.title">Nenhum pack ainda</h3>
-            <p data-i18n="packs.empty.body">Traga um ZIP com as falas em mp3, wav, ogg ou m4a. Se o pack tiver vídeo (incluindo <code>dub_video</code> no estilo Choicer) ou imagens, eles aparecem no palco.</p>
-            <label class="primary">
-              <span data-i18n="packs.import">Importar ZIP</span>
-              <input id="packInputEmpty" type="file" accept=".zip,application/zip" hidden />
-            </label>
+            <h3 data-i18n="packs.empty.title">Comece em 3 passos</h3>
+            <ol class="start-steps">
+              <li data-i18n-html="packs.step.1"><strong>1.</strong> Baixe um pack no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.</li>
+              <li data-i18n-html="packs.step.2"><strong>2.</strong> Importe o ZIP aqui.</li>
+              <li data-i18n-html="packs.step.3"><strong>3.</strong> Ouça → grave → finalize.</li>
+            </ol>
+            <div class="pack-empty-actions">
+              <a class="secondary" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="packs.gamebanana">Baixar pack</a>
+              <label class="primary">
+                <span data-i18n="packs.import">Importar ZIP</span>
+                <input id="packInputEmpty" type="file" accept=".zip,application/zip" hidden />
+              </label>
+            </div>
           </div>
 
           <div class="pack-rail">
@@ -384,10 +390,10 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=139"></script>
-    <script src="./payments.config.js?v=139"></script>
-    <script src="./i18n.js?v=139"></script>
-    <script src="./payments.js?v=139"></script>
-    <script src="./app.js?v=139"></script>
+    <script src="./vendor/fflate.min.js?v=140"></script>
+    <script src="./payments.config.js?v=140"></script>
+    <script src="./i18n.js?v=140"></script>
+    <script src="./payments.js?v=140"></script>
+    <script src="./app.js?v=140"></script>
   </body>
 </html>
