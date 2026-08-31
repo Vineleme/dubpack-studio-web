@@ -183,7 +183,25 @@ const I18N = {
     'cart.owner': 'Sua conta já tem acesso total.',
     'cart.checkout.split': 'Finalize o PRO e as recargas em compras separadas.',
     'plan.owner': 'O meu plano',
-    'plan.pro.days': '{days} dias restantes'
+    'plan.pro.days': '{days} dias restantes',
+    'studio.now': 'Now dubbing',
+    'studio.nav': 'Studio',
+    'studio.nopack': 'No pack loaded',
+    'studio.nosignal': 'No signal',
+    'studio.import': 'Importar ZIP do pack',
+    'studio.hear': 'Ouvir clip',
+    'studio.record': 'Gravar  R',
+    'studio.play': 'Ouvir take',
+    'studio.next': 'Próximo clip',
+    'studio.watch': 'Assistir dublagem',
+    'studio.clip': 'On clip',
+    'studio.wave.original': 'Original',
+    'studio.wave.take': 'Seu take',
+    'studio.hero.title': 'Faça sua dublagem — no navegador',
+    'studio.hero.body': 'Importe um pack, grave cada fala na sua voz e assista o vídeo final. Comece no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.',
+    'studio.early': 'Cedo',
+    'studio.ontime': 'No tempo',
+    'studio.late': 'Tarde'
   },
   en: {
     'lang.label': 'Language',
@@ -367,7 +385,25 @@ const I18N = {
     'cart.owner': 'Your account already has full access.',
     'cart.checkout.split': 'Complete PRO and top-ups as separate purchases.',
     'plan.owner': 'My plan',
-    'plan.pro.days': '{days} days left'
+    'plan.pro.days': '{days} days left',
+    'studio.now': 'Now dubbing',
+    'studio.nav': 'Studio',
+    'studio.nopack': 'No pack loaded',
+    'studio.nosignal': 'No signal',
+    'studio.import': 'Import a pack ZIP',
+    'studio.hear': 'Hear clip',
+    'studio.record': 'Start recording  R',
+    'studio.play': 'Play recording',
+    'studio.next': 'Next clip',
+    'studio.watch': 'Watch dub',
+    'studio.clip': 'On clip',
+    'studio.wave.original': 'Original',
+    'studio.wave.take': 'Your take',
+    'studio.hero.title': 'Make your own dub — in the browser',
+    'studio.hero.body': 'Load a pack, record each line in your voice, then watch the finished dub. Start on <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.',
+    'studio.early': 'Early',
+    'studio.ontime': 'On time',
+    'studio.late': 'Late'
   }
 };
 

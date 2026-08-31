@@ -193,6 +193,7 @@ const state = {
 const els = {
   packInput: document.querySelector('#packInput'),
   packInputEmpty: document.querySelector('#packInputEmpty'),
+  packSelect: document.querySelector('#packSelect'),
   packGrid: document.querySelector('#packGrid'),
   packRailNext: document.querySelector('#packRailNext'),
   packEmpty: document.querySelector('#packEmpty'),
@@ -213,6 +214,9 @@ const els = {
   projectTitle: document.querySelector('#projectTitle'),
   projectMeta: document.querySelector('#projectMeta'),
   counter: document.querySelector('#counter'),
+  clipPad: document.querySelector('#clipPad'),
+  clipPadTotal: document.querySelector('#clipPadTotal'),
+  tapeLamp: document.querySelector('#tapeLamp'),
   character: document.querySelector('#character'),
   subtitle: document.querySelector('#subtitle'),
   timerValue: document.querySelector('#timerValue'),
@@ -327,7 +331,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '134';
+  const swVersion = '142';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -364,6 +368,17 @@ function bindUi() {
   });
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
+  els.packSelect?.addEventListener('change', () => {
+    if (els.packSelect.value) openPack(els.packSelect.value);
+  });
+  document.querySelector('#helpIntroBtn')?.addEventListener('click', () => els.helpModal?.classList.remove('is-hidden'));
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'r' && event.key !== 'R') return;
+    const tag = event.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable) return;
+    event.preventDefault();
+    els.recordBtn?.click();
+  });
   document.querySelectorAll('label.text-link, .pack-empty label.primary').forEach((label) => {
     label.addEventListener('click', (event) => {
       if (isLoggedIn()) return;
@@ -1218,14 +1233,23 @@ function applyTab(tab) {
     toast('Importe um pack para gravar.');
     tab = 'packs';
   }
+  const studioMode = tab === 'packs' || tab === 'record';
+  document.querySelector('#studioFloor')?.classList.toggle('is-hidden', !studioMode);
+  document.querySelector('#studioIntro')?.classList.toggle('is-compact', Boolean(currentPack()));
+  document.body.classList.toggle('has-pack', Boolean(currentPack()));
   document.querySelectorAll('.tab-view').forEach((view) => view.classList.remove('active'));
-  document.querySelector(`#${tab}Tab`)?.classList.add('active');
+  if (studioMode) {
+    document.querySelector('#packsTab')?.classList.add('active');
+  } else {
+    document.querySelector(`#${tab}Tab`)?.classList.add('active');
+  }
   document.querySelectorAll('[data-tab]').forEach((button) => {
-    button.classList.toggle('active', button.dataset.tab === tab);
+    const isStudio = button.dataset.tab === 'packs' || button.dataset.tab === 'record';
+    button.classList.toggle('active', button.dataset.tab === tab || (studioMode && isStudio && button.dataset.tab === 'packs'));
   });
   document.querySelector('.dashboard')?.classList.toggle('final-mode', tab === 'dub');
-  if (tab !== 'record') abortCapture();
-  if (tab === 'record' && !state.previewing) selectScene(state.activeIndex);
+  if (!studioMode) abortCapture();
+  if (studioMode && currentPack() && !state.previewing) selectScene(state.activeIndex);
   if (tab === 'dub') {
     showFinalVideo(currentPack());
   }
@@ -1234,7 +1258,7 @@ function applyTab(tab) {
     renderCreditShop();
     refreshAccountUi();
   }
-  if (tab === 'packs') renderActivity();
+  if (studioMode) renderActivity();
   if (tab === 'profile' || tab === 'credits') {
     document.querySelector('.content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1254,6 +1278,13 @@ function selectScene(index, { keepCapture = false } = {}) {
 
   els.topCounter.textContent = counter;
   els.counter.textContent = counter;
+  if (els.clipPad) els.clipPad.textContent = String(state.activeIndex + 1).padStart(2, '0');
+  if (els.clipPadTotal) els.clipPadTotal.textContent = String(pack.scenes.length);
+  if (els.tapeLamp) {
+    els.tapeLamp.textContent = take ? 'Take' : 'Ready';
+    els.tapeLamp.classList.toggle('is-rec', Boolean(take));
+  }
+  document.body.classList.add('has-pack');
   els.projectTitle.textContent = pack.name;
   els.projectMeta.textContent = take ? `${counter} · gravado` : `${counter} · original`;
   if (els.sidePackTitle) els.sidePackTitle.textContent = pack.name;
@@ -1279,16 +1310,17 @@ function selectScene(index, { keepCapture = false } = {}) {
   els.nextBtn.disabled = !(canGoNext || canFinish);
   els.nextSceneBtn.disabled = !(canGoNext || canFinish);
   els.prevSceneBtn.disabled = !canGoPrev;
-  els.nextBtn.textContent = canFinish ? 'Finalizar dublagem' : 'Próxima cena →';
-  els.nextSceneBtn.textContent = canFinish ? 'Finalizar dublagem' : 'Próxima cena →';
+  els.nextBtn.textContent = canFinish ? t('studio.watch') : t('studio.next');
+  els.nextSceneBtn.textContent = canFinish ? t('studio.watch') : t('studio.next');
   els.nextBtn.classList.toggle('pulse-next', (Boolean(take) && canGoNext) || canFinish);
   els.nextSceneBtn.classList.toggle('pulse-next', (Boolean(take) && canGoNext) || canFinish);
   els.previewBtn.disabled = !take;
   els.listenTakeBtn.disabled = !take;
-  els.listenTakeBtn.classList.toggle('is-hidden', !take);
-  els.previewHint.textContent = take
-    ? 'Ouça seu take com o fundo da cena'
-    : 'Grave este take para ouvir aqui';
+  if (els.previewHint) {
+    els.previewHint.textContent = take
+      ? 'Ouça seu take com o fundo da cena'
+      : 'Grave este take para ouvir aqui';
+  }
   if (els.takeResult) els.takeResult.style.display = take ? 'flex' : 'none';
   if (els.takeAudio) els.takeAudio.src = take?.url ?? '';
   updateFinishCta(pack);
@@ -1326,11 +1358,11 @@ function finishCtaLabel(pack) {
 function updateFinishCta(pack) {
   const done = packIsComplete(pack);
   const label = finishCtaLabel(pack);
-  els.exportVideoBtn?.classList.toggle('is-hidden', !done);
+  els.exportVideoBtn?.classList.remove('is-hidden');
   els.exportVideoBtn?.classList.toggle('pulse-next', done && !pack?.finalUrl);
   if (els.exportVideoBtn) {
-    els.exportVideoBtn.disabled = false;
-    els.exportVideoBtn.textContent = label;
+    els.exportVideoBtn.disabled = !done;
+    els.exportVideoBtn.textContent = done ? label : t('studio.watch');
   }
   if (els.generateMp4Btn) {
     els.generateMp4Btn.classList.toggle('is-hidden', !done);
@@ -1882,13 +1914,51 @@ function showSceneStill(scene) {
 
 function paintEmptyScene(scene) {
   const empty = els.emptyFrame;
-  empty.replaceChildren();
-  const kicker = document.createElement('small');
-  kicker.textContent = 'Cena desta fala';
-  const title = document.createElement('strong');
-  title.textContent = scene.character || 'Pack';
-  empty.append(kicker, title);
+  const idle = document.querySelector('#emptyIdle');
+  const sceneBox = document.querySelector('#emptyScene');
+  if (idle) idle.hidden = true;
+  if (sceneBox) {
+    sceneBox.hidden = false;
+    sceneBox.replaceChildren();
+    const kicker = document.createElement('small');
+    kicker.textContent = 'Cena desta fala';
+    const title = document.createElement('strong');
+    title.textContent = scene.character || 'Pack';
+    sceneBox.append(kicker, title);
+  } else {
+    empty.replaceChildren();
+    const kicker = document.createElement('small');
+    kicker.textContent = 'Cena desta fala';
+    const title = document.createElement('strong');
+    title.textContent = scene.character || 'Pack';
+    empty.append(kicker, title);
+  }
   empty.style.display = 'grid';
+}
+
+function restoreEmptyMonitor() {
+  const empty = els.emptyFrame;
+  const idle = document.querySelector('#emptyIdle');
+  const sceneBox = document.querySelector('#emptyScene');
+  if (els.sceneVideo) {
+    els.sceneVideo.pause();
+    els.sceneVideo.style.display = 'none';
+  }
+  if (els.sceneImage) els.sceneImage.style.display = 'none';
+  if (idle) idle.hidden = false;
+  if (sceneBox) {
+    sceneBox.hidden = true;
+    sceneBox.replaceChildren();
+  }
+  if (empty) empty.style.display = 'grid';
+  if (els.clipPad) els.clipPad.textContent = '00';
+  if (els.clipPadTotal) els.clipPadTotal.textContent = '0';
+  if (els.tapeLamp) {
+    els.tapeLamp.textContent = 'No tape';
+    els.tapeLamp.classList.remove('is-rec');
+  }
+  document.body.classList.remove('has-pack');
+  document.querySelector('#studioIntro')?.classList.remove('is-compact');
 }
 
 function playTimedAudio(url, duration, volume = 1) {
@@ -2071,10 +2141,30 @@ function packCover(pack) {
   return { type: 'empty' };
 }
 
+function renderPackSelect() {
+  const sel = els.packSelect;
+  if (!sel) return;
+  const current = state.activePackId || '';
+  sel.replaceChildren();
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = t('studio.nopack');
+  sel.append(empty);
+  state.packs.forEach((pack) => {
+    const opt = document.createElement('option');
+    opt.value = pack.id;
+    opt.textContent = pack.name;
+    sel.append(opt);
+  });
+  sel.value = state.packs.some((pack) => pack.id === current) ? current : '';
+}
+
 function renderPackGrid() {
   const packs = state.packs;
   els.packEmpty.classList.toggle('is-hidden', state.packs.length > 0);
   els.packGrid.replaceChildren();
+  renderPackSelect();
+  if (!currentPack()) restoreEmptyMonitor();
   const tones = ['', 'tone-orange', 'tone-violet'];
   packs.forEach((pack, index) => {
     const recorded = pack.scenes.filter((scene) => pack.takes[scene.id]).length;
@@ -2181,6 +2271,7 @@ function deletePack(id) {
       selectScene(0);
       setTab('record');
     } else {
+      restoreEmptyMonitor();
       setTab('packs');
     }
   }
