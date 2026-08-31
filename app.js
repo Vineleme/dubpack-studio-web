@@ -293,6 +293,7 @@ const els = {
   appToast: document.querySelector('#appToast'),
   helpModal: document.querySelector('#helpModal'),
   helpBtn: document.querySelector('#helpBtn'),
+  howToPlayBtn: document.querySelector('#howToPlayBtn'),
   helpCloseBtn: document.querySelector('#helpCloseBtn'),
   proBtn: document.querySelector('#proBtn'),
   waveformBars: [...document.querySelectorAll('.hero-waveform i')],
@@ -399,6 +400,7 @@ function bindUi() {
     button.addEventListener('click', () => changeLang(button.dataset.lang));
   });
   els.helpBtn?.addEventListener('click', () => els.helpModal?.classList.remove('is-hidden'));
+  els.howToPlayBtn?.addEventListener('click', () => els.helpModal?.classList.remove('is-hidden'));
   els.helpCloseBtn?.addEventListener('click', () => els.helpModal?.classList.add('is-hidden'));
   els.helpModal?.addEventListener('click', (event) => {
     if (event.target === els.helpModal) els.helpModal.classList.add('is-hidden');
