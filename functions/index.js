@@ -20,6 +20,8 @@ const PACKS = {
 };
 
 const ALLOWED_ORIGINS = new Set([
+  'https://dubpackstudio.com',
+  'https://www.dubpackstudio.com',
   'https://vineleme.github.io',
   'http://localhost:3000',
   'http://localhost:4173',
@@ -43,7 +45,7 @@ function sessionEmail(session) {
 
 function withCors(req, res) {
   const origin = String(req.get('origin') || '');
-  if (origin && (ALLOWED_ORIGINS.has(origin) || origin.includes('github.io') || origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+  if (origin && (ALLOWED_ORIGINS.has(origin) || origin.includes('dubpackstudio.com') || origin.includes('github.io') || origin.includes('localhost') || origin.includes('127.0.0.1'))) {
     res.set('Access-Control-Allow-Origin', origin);
   }
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -51,7 +53,7 @@ function withCors(req, res) {
 }
 
 function successUrl(returnUrl) {
-  const base = String(returnUrl || '').trim() || 'https://vineleme.github.io/dubpack-studio-web/';
+  const base = String(returnUrl || '').trim() || 'https://dubpackstudio.com/';
   const joiner = base.includes('?') ? '&' : '?';
   return `${base}${joiner}checkout=success&session_id={CHECKOUT_SESSION_ID}`;
 }

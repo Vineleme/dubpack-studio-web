@@ -326,7 +326,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '133';
+  const swVersion = '134';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -867,7 +867,7 @@ function authErrorMessage(error) {
     return 'E-mail/senha ainda não está ligado no Firebase. Ative em Authentication.';
   }
   if (code === 'auth/unauthorized-domain') {
-    return 'Domínio não autorizado no Firebase. Adicione vineleme.github.io em Authentication → Settings.';
+    return 'Domínio não autorizado no Firebase. Adicione dubpackstudio.com em Authentication → Settings.';
   }
   return error?.message || 'Não foi possível entrar agora.';
 }
