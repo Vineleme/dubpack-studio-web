@@ -326,7 +326,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '131';
+  const swVersion = '132';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -446,7 +446,7 @@ async function bootApp() {
     getUser: () => state.user,
     requireAuth
   });
-  handleCheckoutReturn();
+  captureCheckoutReturn();
   if (!firebaseAuth) {
     toast('Firebase não carregou. Recarregue a página.');
     return;
@@ -462,6 +462,7 @@ async function bootApp() {
       }
     }
     if (!restored) refreshAccountUi();
+    await applyPendingCheckout();
   } finally {
     authBootDone = true;
   }
@@ -843,7 +844,7 @@ async function finishLogin(account, options = {}) {
   window.DubpackCart?.renderCart();
   renderActivity();
   showFinalVideo(currentPack());
-  await syncAccountFromServer();
+  await applyPendingCheckout();
 }
 
 function setAuthBusy(on) {
@@ -2850,55 +2851,71 @@ async function syncAccountFromServer() {
 async function verifyStripeCheckout(sessionId) {
   const url = getPaymentEndpoint('verifyCheckout');
   if (!url || !state.user?.email) {
-    toast(t('cart.checkout.pending'));
-    return;
+    throw new Error('not-ready');
   }
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId,
-        email: state.user.email
-      })
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId,
+      email: state.user.email
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'verify-failed');
+  if (Number.isFinite(Number(data.credits))) setCredits(Number(data.credits));
+  if (data.pro) {
+    const now = Date.now();
+    writeProState({
+      active: true,
+      subscribedAt: now,
+      periodEnd: now + PRO_PERIOD_MS,
+      lastCreditMonth: new Date().toISOString().slice(0, 7)
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'verify-failed');
-    if (Number.isFinite(Number(data.credits))) setCredits(Number(data.credits));
-    if (data.pro) {
-      const now = Date.now();
-      writeProState({
-        active: true,
-        subscribedAt: now,
-        periodEnd: now + PRO_PERIOD_MS,
-        lastCreditMonth: new Date().toISOString().slice(0, 7)
-      });
-    }
-    window.DubpackCart?.clearCart();
-    refreshAccountUi();
-    toast(t('cart.checkout.success'));
-  } catch (error) {
-    console.error(error);
-    toast(t('cart.checkout.verify'));
   }
+  window.DubpackCart?.clearCart();
+  refreshAccountUi();
 }
 
-function handleCheckoutReturn() {
+const CHECKOUT_SESSION_KEY = 'dubpack-checkout-session';
+
+function captureCheckoutReturn() {
   const params = new URLSearchParams(window.location.search);
   const status = params.get('checkout');
   const sessionId = params.get('session_id');
-  if (!status) return;
   if (status === 'success' && sessionId) {
-    void verifyStripeCheckout(sessionId);
-  } else if (status === 'success') {
-    toast(t('cart.checkout.success'));
-  } else if (status === 'cancel') {
+    sessionStorage.setItem(CHECKOUT_SESSION_KEY, sessionId);
+  }
+  if (status === 'cancel') {
+    sessionStorage.removeItem(CHECKOUT_SESSION_KEY);
     toast(t('cart.checkout.cancel'));
   }
+  if (!status) return;
   params.delete('checkout');
   params.delete('session_id');
   const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`;
   window.history.replaceState({}, '', next);
+}
+
+async function applyPendingCheckout() {
+  const sessionId = sessionStorage.getItem(CHECKOUT_SESSION_KEY);
+  if (sessionId && state.user?.email) {
+    toast(t('cart.checkout.verify'));
+    let lastError = null;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      try {
+        await verifyStripeCheckout(sessionId);
+        sessionStorage.removeItem(CHECKOUT_SESSION_KEY);
+        toast(t('cart.checkout.success'));
+        return;
+      } catch (error) {
+        lastError = error;
+        await wait(700);
+      }
+    }
+    console.error(lastError);
+  }
+  await syncAccountFromServer();
 }
 
 function renderActivity() {

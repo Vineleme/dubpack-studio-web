@@ -33,6 +33,14 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function sessionEmail(session) {
+  return normalizeEmail(
+    session?.customer_details?.email
+    || session?.customer_email
+    || session?.metadata?.email
+  );
+}
+
 function withCors(req, res) {
   const origin = String(req.get('origin') || '');
   if (origin && (ALLOWED_ORIGINS.has(origin) || origin.includes('github.io') || origin.includes('localhost') || origin.includes('127.0.0.1'))) {
@@ -216,7 +224,8 @@ exports.verifyCheckout = onRequest({
     if (session.payment_status !== 'paid' && session.status !== 'complete') {
       return res.status(409).json({ error: 'not-paid' });
     }
-    if (normalizeEmail(session.customer_email || session.metadata?.email) !== normalizeEmail(email)) {
+    const paidEmail = sessionEmail(session);
+    if (paidEmail && paidEmail !== normalizeEmail(email)) {
       return res.status(403).json({ error: 'email-mismatch' });
     }
 
@@ -284,7 +293,8 @@ exports.stripeWebhook = onRequest({
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
-      const email = normalizeEmail(session.customer_email || session.metadata?.email);
+      const email = sessionEmail(session);
+      if (!email) return res.status(200).json({ received: true, skipped: 'missing-email' });
       const kind = session.metadata?.kind || 'pack';
       const credits = Number(session.metadata?.credits) || 0;
       await grantPurchase(email, {
