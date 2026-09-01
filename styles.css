@@ -2609,6 +2609,53 @@ body.needs-auth .dashboard {
   width: min(420px, 100%);
   justify-content: center;
 }
+.cena-banner {
+  display: grid;
+  gap: 8px;
+  margin: 0 auto 18px;
+  padding: 14px 16px;
+  max-width: 720px;
+  text-align: left;
+  border-radius: 16px;
+  border: 1px solid rgba(245, 46, 131, 0.35);
+  background: rgba(245, 46, 131, 0.12);
+}
+.cena-banner.is-hidden { display: none; }
+.cena-banner strong { font-size: 15px; }
+.cena-banner p { margin: 0; color: #d8d6ef; font-size: 14px; }
+.ready-actions {
+  display: grid;
+  gap: 12px;
+  width: min(720px, 100%);
+  margin: 0 auto 8px;
+}
+.ready-actions.is-hidden { display: none; }
+.ready-actions h3 { margin: 0; font-size: 22px; }
+.ready-lead { margin: 0; color: #c9c6e0; }
+.ready-formats,
+.ready-share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.ready-format {
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(9,8,23,0.55);
+  color: #fff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ready-format.is-active {
+  border-color: #f52e83;
+  background: rgba(245, 46, 131, 0.22);
+}
+.final-video-wrap.is-vertical {
+  aspect-ratio: 9 / 16;
+  width: min(360px, 100%);
+}
 .final-video-wrap {
   position: relative;
   width: min(960px, 100%);

@@ -414,3 +414,34 @@ exports.refundCredit = onRequest({ cors: false }, async (req, res) => {
     return res.status(500).json({ error: 'refund-failed' });
   }
 });
+
+const FUNNEL_EVENTS = new Set([
+  'visitor',
+  'started_dub',
+  'completed_dub',
+  'export',
+  'share',
+  'signup',
+  'pro_conversion'
+]);
+
+exports.logFunnel = onRequest({ cors: false }, async (req, res) => {
+  withCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
+  try {
+    const event = String(req.body?.event || '').trim();
+    if (!FUNNEL_EVENTS.has(event)) return res.status(400).json({ error: 'bad-event' });
+    const sessionId = String(req.body?.sessionId || '').slice(0, 80);
+    await db.collection('funnelEvents').add({
+      event,
+      sessionId,
+      lang: String(req.body?.lang || '').slice(0, 8),
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'funnel-failed' });
+  }
+});

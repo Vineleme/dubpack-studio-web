@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=144" />
+    <link rel="stylesheet" href="./styles.css?v=145" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -52,7 +52,7 @@
           <em data-i18n="brand.tagline">Sua voz no filme da cena. Grave, finalize e compartilhe.</em>
         </div>
         <h1 id="authTitle" data-i18n="auth.title.login">Entrar</h1>
-        <p id="authLead" data-i18n="auth.lead.login">Entre para começar a dublar agora.</p>
+        <p id="authLead" data-i18n="auth.lead.login">Entre para assinar o PRO ou guardar a conta. Dublar e exportar o básico não precisa de login.</p>
         <label id="authNameWrap" class="is-hidden"><span data-i18n="auth.name">Nome</span>
           <input id="authName" type="text" autocomplete="nickname" data-i18n-placeholder="auth.name.placeholder" placeholder="Como você quer ser chamado?" />
         </label>
@@ -87,7 +87,7 @@
           <li data-i18n="help.2">Importe o ZIP em Meus Packs.</li>
           <li data-i18n="help.3">Ouça a referência, grave no microfone e finalize a dublagem.</li>
         </ol>
-        <p data-i18n="help.footer">Créditos entram só na exportação do vídeo. Packs ficam 2 dias neste aparelho.</p>
+        <p data-i18n="help.footer">Dublar e exportar o básico é grátis. Packs ficam 2 dias neste aparelho.</p>
         <a class="secondary wide help-gamebanana" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="help.gamebanana">Abrir GameBanana</a>
         <button id="helpCloseBtn" class="primary" type="button" data-i18n="help.close">Entendi</button>
       </div>
@@ -150,6 +150,11 @@
       </header>
 
       <section id="studioIntro" class="cv-intro">
+        <div id="cenaBanner" class="cena-banner is-hidden" role="status">
+          <strong id="cenaBannerTitle" data-i18n="cena.banner.title">Dublar esta cena</strong>
+          <p id="cenaBannerBody"></p>
+          <button id="cenaImportBtn" class="cv-chip" type="button" data-i18n="studio.import">Import a pack ZIP</button>
+        </div>
         <h1 data-i18n="studio.hero.title">Faça sua dublagem — no navegador</h1>
         <p id="topbarHint" data-i18n-html="studio.hero.body">Importe um pack, grave cada fala na sua voz e assista o vídeo final. Comece no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.</p>
         <div class="cv-intro-actions">
@@ -290,6 +295,19 @@
         <section id="dubTab" class="tab-view info-card final-video-page">
           <h2 data-i18n="dub.title">Vídeo final</h2>
           <p data-i18n="dub.body">Sua dublagem completa, com o filme original e as vozes que você gravou. Assista aqui e baixe para guardar ou compartilhar.</p>
+          <div id="readyActions" class="ready-actions is-hidden">
+            <h3 data-i18n="ready.title">Sua dublagem está pronta</h3>
+            <p class="ready-lead" data-i18n="ready.lead">Escolha o formato, baixe ou envie o link da cena para outra pessoa dublar no Studio.</p>
+            <div class="ready-formats" role="group" aria-label="Formatos">
+              <button id="exportOriginalBtn" class="ready-format is-active" type="button" data-export-layout="original" data-i18n="ready.format.original">Vídeo original · 16:9</button>
+              <button id="exportVerticalBtn" class="ready-format" type="button" data-export-layout="vertical" data-i18n="ready.format.vertical">TikTok / Reels / Shorts · 9:16</button>
+            </div>
+            <div class="ready-share">
+              <button id="copySceneLinkBtn" class="secondary" type="button" data-i18n="ready.copy">Copiar link da cena</button>
+              <button id="shareSceneBtn" class="secondary" type="button" data-i18n="ready.share">Compartilhar</button>
+              <button id="redubBtn" class="ghost" type="button" data-i18n="ready.redub">Dublar de novo</button>
+            </div>
+          </div>
           <div id="finalVideoWrap" class="final-video-wrap">
             <video id="finalVideo" controls playsinline></video>
             <video id="exportFilm" muted playsinline></video>
@@ -320,7 +338,7 @@
               <p id="profileMeta">Faça login para dublar</p>
             </div>
           </div>
-          <p id="profileCreditsLine">Dublar é grátis — gravar, regravar e ouvir não consome crédito.</p>
+          <p id="profileCreditsLine">Dublar e exportar o básico é grátis. Créditos ficam para IA e nuvem.</p>
           <button id="profileLoginBtn" class="primary wide" type="button" data-i18n="auth.submit.login">Entrar</button>
           <button class="primary wide" type="button" data-tab="credits" data-i18n="profile.plans">Comprar créditos</button>
           <button id="logoutBtn" class="secondary wide is-hidden" type="button" data-i18n="profile.logout">Sair da conta</button>
@@ -328,11 +346,11 @@
 
         <section id="creditsTab" class="tab-view info-card">
           <h2 data-i18n="credits.title">Créditos</h2>
-          <p data-i18n="credits.intro">Grave à vontade. Créditos entram só na exportação do vídeo.</p>
+          <p data-i18n="credits.intro">Grave e exporte o básico de graça. PRO tira a marca d’água e sobe a qualidade. Créditos pagam IA e nuvem depois.</p>
           <p><span data-i18n="credits.balance">Saldo atual:</span> <strong id="creditsBalance">1 crédito</strong></p>
           <section class="pro-card">
             <span data-i18n="pro.card.title">DubPack PRO</span>
-            <p data-i18n="pro.card.body">R$ 9,90/mês · 200 créditos mensais. Uma assinatura simples para quem volta sempre ao Studio.</p>
+            <p data-i18n="pro.card.body">R$ 9,90/mês · exportação sem marca d’água, qualidade mais alta e créditos para IA/nuvem.</p>
             <button id="proBtn" class="primary" type="button" data-i18n="pro.btn">Ver plano PRO</button>
           </section>
           <section id="shopCart" class="shop-cart cart-panel" data-cart-panel>
@@ -432,10 +450,10 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=144"></script>
-    <script src="./payments.config.js?v=144"></script>
-    <script src="./i18n.js?v=144"></script>
-    <script src="./payments.js?v=144"></script>
-    <script src="./app.js?v=144"></script>
+    <script src="./vendor/fflate.min.js?v=145"></script>
+    <script src="./payments.config.js?v=145"></script>
+    <script src="./i18n.js?v=145"></script>
+    <script src="./payments.js?v=145"></script>
+    <script src="./app.js?v=145"></script>
   </body>
 </html>

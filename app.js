@@ -190,7 +190,9 @@ const state = {
   user: null,
   authMode: 'login',
   tipIndex: 0,
-  tipTimer: 0
+  tipTimer: 0,
+  exportLayout: 'original',
+  pendingCena: null
 };
 
 const els = {
@@ -336,7 +338,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '144';
+  const swVersion = '145';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -405,18 +407,10 @@ function bindUi() {
     label.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (!isLoggedIn()) {
-        requireAuth();
-        return;
-      }
       openImportModal();
     });
   });
   els.userChip?.addEventListener('click', () => {
-    if (!isLoggedIn()) {
-      requireAuth();
-      return;
-    }
     applyTab('profile');
   });
   els.profileNavBtn?.addEventListener('click', () => setTab('profile'));
@@ -432,10 +426,18 @@ function bindUi() {
   els.listenTakeBtn?.addEventListener('click', playCurrentTake);
   els.previewBtnAlt?.addEventListener('click', playProjectPreview);
   els.stopPreviewBtn?.addEventListener('click', stopProjectPreview);
-  els.exportVideoBtn?.addEventListener('click', requestFinalMp4);
-  els.exportVideoBtnSide?.addEventListener('click', requestFinalMp4);
-  els.generateMp4Btn?.addEventListener('click', requestFinalMp4);
+  els.exportVideoBtn?.addEventListener('click', () => void requestFinalMp4());
+  els.exportVideoBtnSide?.addEventListener('click', () => void requestFinalMp4());
+  els.generateMp4Btn?.addEventListener('click', () => void requestFinalMp4());
   els.downloadMp4Btn?.addEventListener('click', () => void downloadFinalMp4());
+  document.querySelector('#exportOriginalBtn')?.addEventListener('click', () => void requestFinalMp4('original'));
+  document.querySelector('#exportVerticalBtn')?.addEventListener('click', () => void requestFinalMp4('vertical'));
+  document.querySelector('#copySceneLinkBtn')?.addEventListener('click', () => void copySceneLink());
+  document.querySelector('#shareSceneBtn')?.addEventListener('click', () => void shareSceneLink());
+  document.querySelector('#redubBtn')?.addEventListener('click', () => {
+    setTab('record');
+  });
+  document.querySelector('#cenaImportBtn')?.addEventListener('click', openImportModal);
   document.querySelectorAll('[data-lang]').forEach((button) => {
     button.addEventListener('click', () => changeLang(button.dataset.lang));
   });
@@ -482,6 +484,8 @@ async function bootApp() {
   initAuthRememberUi();
   revealStudio();
   refreshAccountUi();
+  capturePendingCena();
+  applyPendingCena();
   window.DubpackCart?.initCart({
     toast,
     t,
@@ -505,6 +509,12 @@ async function bootApp() {
     }
     if (!restored) refreshAccountUi();
     await applyPendingCheckout();
+    if (!isLoggedIn()) {
+      try { await restoreSession(); } catch { /* guest session optional */ }
+    }
+    capturePendingCena();
+    applyPendingCena();
+    trackFunnel('visitor');
   } finally {
     authBootDone = true;
   }
@@ -724,10 +734,6 @@ function suggestSignupName() {
 }
 
 function openProfileTab() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   if (!state.user && firebaseAuth?.currentUser) {
     void finishLogin(accountFromFirebase(firebaseAuth.currentUser), { toast: false }).then(() => applyTab('profile'));
     return;
@@ -886,7 +892,9 @@ async function finishLogin(account, options = {}) {
   window.DubpackCart?.renderCart();
   renderActivity();
   showFinalVideo(currentPack());
+  applyPendingCena();
   await applyPendingCheckout();
+  if (options.signup) trackFunnel('signup');
 }
 
 function setAuthBusy(on) {
@@ -964,7 +972,7 @@ async function submitAuth(event) {
       const owner = OWNER_EMAILS.includes(email);
       if (!owner) localStorage.setItem(`dubpack-credits:${email}`, '1');
       clearAuthError();
-      await finishLogin(accountFromFirebase(cred.user));
+      await finishLogin(accountFromFirebase(cred.user), { signup: true });
       return;
     }
 
@@ -1068,7 +1076,7 @@ function pruneExpiredPacks() {
 
 function sessionStoreKey() {
   const email = normalizeEmail(state.user?.email);
-  return email ? `user:${email}` : 'current';
+  return email ? `user:${email}` : 'guest';
 }
 
 async function importPack(event) {
@@ -1078,10 +1086,6 @@ async function importPack(event) {
 }
 
 function openImportModal() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   document.querySelector('#importModal')?.classList.remove('is-hidden');
   document.querySelector('#importProgressWrap')?.classList.add('is-hidden');
 }
@@ -1102,10 +1106,6 @@ function setImportProgress(current, total, label) {
 }
 
 async function importPackFile(file) {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   if (!file) return;
   openImportModal();
   setImportProgress(0, 1, t('studio.import.reading.zip'));
@@ -1129,6 +1129,7 @@ async function importPackFile(file) {
     setTab('record');
     scheduleSave();
     warmSceneAudio(pack.scenes);
+    applyPendingCena();
     const count = pack.scenes.length;
     setImportProgress(count, count, t('studio.import.done'));
     toast(`${count} ${count === 1 ? 'fala' : 'falas'} em “${pack.name}”.`);
@@ -1501,10 +1502,6 @@ async function playBlobThroughContext(blob, volume) {
 }
 
 function playReference() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   const scene = currentScene();
   if (!scene?.audioUrl) {
     toast('Importe um pack para ouvir a referência.');
@@ -1524,16 +1521,13 @@ function iosAudioHint() {
 }
 
 async function startTakeFlow() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   void unlockAudio();
   const scene = currentScene();
   if (!scene) {
     toast('Importe um pack para gravar.');
     return;
   }
+  trackFunnel('started_dub');
   if (state.previewing) stopProjectPreview();
   if (state.countdownTimer || state.countdownStartTimer) {
     abortCapture();
@@ -1778,6 +1772,7 @@ function recordActiveScene() {
     setVoiceMeter(voicePeak, false);
     const finished = pack.scenes.every((item) => pack.takes[item.id]);
     if (finished) {
+      trackFunnel('completed_dub');
       toast('Pack concluído. Toque em Finalizar dublagem.');
     }
   };
@@ -1824,10 +1819,6 @@ function recordActiveScene() {
 }
 
 async function playProjectPreview() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   const pack = currentPack();
   if (!pack?.scenes.length) {
     toast('Importe um pack primeiro.');
@@ -1871,10 +1862,6 @@ function stopProjectPreview() {
 }
 
 function playCurrentTake() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   const pack = currentPack();
   const scene = currentScene();
   const take = scene ? pack?.takes[scene.id] : null;
@@ -2190,10 +2177,6 @@ function animateProgress(duration) {
 }
 
 function downloadTake() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   const pack = currentPack();
   const scene = currentScene();
   const take = scene ? pack?.takes[scene.id] : null;
@@ -3131,12 +3114,172 @@ async function verifyStripeCheckout(sessionId) {
       periodEnd: now + PRO_PERIOD_MS,
       lastCreditMonth: new Date().toISOString().slice(0, 7)
     });
+    trackFunnel('pro_conversion');
   }
   window.DubpackCart?.clearCart();
   refreshAccountUi();
 }
 
 const CHECKOUT_SESSION_KEY = 'dubpack-checkout-session';
+const FUNNEL_SESSION_KEY = 'dubpack-funnel-session';
+const FUNNEL_SEEN_KEY = 'dubpack-funnel-seen';
+
+function funnelSessionId() {
+  try {
+    let id = sessionStorage.getItem(FUNNEL_SESSION_KEY);
+    if (!id) {
+      id = crypto.randomUUID ? crypto.randomUUID() : `s-${Date.now()}`;
+      sessionStorage.setItem(FUNNEL_SESSION_KEY, id);
+    }
+    return id;
+  } catch {
+    return 'anon';
+  }
+}
+
+function trackFunnel(event) {
+  const name = String(event || '');
+  if (!name) return;
+  try {
+    const seen = JSON.parse(sessionStorage.getItem(FUNNEL_SEEN_KEY) || '{}');
+    if (seen[name] && (name === 'visitor' || name === 'started_dub' || name === 'signup')) return;
+    seen[name] = (Number(seen[name]) || 0) + 1;
+    sessionStorage.setItem(FUNNEL_SEEN_KEY, JSON.stringify(seen));
+    const totals = JSON.parse(localStorage.getItem('dubpack-funnel') || '{}');
+    totals[name] = (Number(totals[name]) || 0) + 1;
+    localStorage.setItem('dubpack-funnel', JSON.stringify(totals));
+  } catch {
+    // ignore
+  }
+  const url = getPaymentEndpoint('logFunnel');
+  if (!url) return;
+  const body = JSON.stringify({ event: name, sessionId: funnelSessionId(), lang: getLang() });
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: true
+  }).catch(() => undefined);
+}
+
+function encodeCenaPayload(pack, index) {
+  const scene = decorateScene(pack.scenes[index] || pack.scenes[0]);
+  const json = JSON.stringify({
+    n: pack.name,
+    i: Number(index) || 0,
+    c: scene?.character || '',
+    t: String(scene?.subtitle || '').slice(0, 90)
+  });
+  return btoa(unescape(encodeURIComponent(json))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function decodeCenaPayload(raw) {
+  try {
+    const padded = String(raw || '').replace(/-/g, '+').replace(/_/g, '/');
+    const pad = padded + '='.repeat((4 - (padded.length % 4)) % 4);
+    return JSON.parse(decodeURIComponent(escape(atob(pad))));
+  } catch {
+    return null;
+  }
+}
+
+function sceneLinkUrl(pack, index = 0) {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('checkout');
+  url.searchParams.delete('session_id');
+  if (!pack) return url.toString();
+  url.searchParams.set('cena', encodeCenaPayload(pack, index));
+  return url.toString();
+}
+
+async function copySceneLink() {
+  const pack = currentPack();
+  if (!pack) {
+    toast(t('cena.need.pack'));
+    return;
+  }
+  const link = sceneLinkUrl(pack, 0);
+  try {
+    await navigator.clipboard.writeText(link);
+    toast(t('ready.copied'));
+    trackFunnel('share');
+  } catch {
+    toast(link);
+  }
+}
+
+async function shareSceneLink() {
+  const pack = currentPack();
+  if (!pack) {
+    toast(t('cena.need.pack'));
+    return;
+  }
+  const link = sceneLinkUrl(pack, 0);
+  trackFunnel('share');
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'DubPack Studio', text: pack.name, url: link });
+      return;
+    } catch {
+      // canceled
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    toast(t('ready.copied'));
+  } catch {
+    toast(link);
+  }
+}
+
+function capturePendingCena() {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('cena');
+  if (!raw) return;
+  const payload = decodeCenaPayload(raw);
+  if (payload?.n) state.pendingCena = payload;
+}
+
+function findPackForCena(payload) {
+  const wanted = normalizeBaseName(payload.n);
+  return state.packs.find((pack) => normalizeBaseName(pack.name) === wanted)
+    || state.packs.find((pack) => {
+      const have = normalizeBaseName(pack.name);
+      return have.includes(wanted) || wanted.includes(have);
+    });
+}
+
+function paintCenaBanner() {
+  const banner = document.querySelector('#cenaBanner');
+  const body = document.querySelector('#cenaBannerBody');
+  const payload = state.pendingCena;
+  if (!banner) return;
+  if (!payload) {
+    banner.classList.add('is-hidden');
+    return;
+  }
+  banner.classList.remove('is-hidden');
+  const n = (Number(payload.i) || 0) + 1;
+  if (body) {
+    body.textContent = findPackForCena(payload)
+      ? t('cena.banner.ready', { pack: findPackForCena(payload).name, n })
+      : t('cena.banner.body', { pack: payload.n, n, character: payload.c || '—' });
+  }
+}
+
+function applyPendingCena() {
+  const payload = state.pendingCena;
+  paintCenaBanner();
+  if (!payload) return false;
+  const pack = findPackForCena(payload);
+  if (!pack) return false;
+  state.activePackId = pack.id;
+  const index = Math.max(0, Math.min(Number(payload.i) || 0, pack.scenes.length - 1));
+  selectScene(index);
+  setTab('record');
+  paintCenaBanner();
+  return true;
+}
 
 function captureCheckoutReturn() {
   const params = new URLSearchParams(window.location.search);
@@ -3232,6 +3375,11 @@ function renderActivity() {
 function showFinalVideo(pack) {
   const has = Boolean(pack?.finalUrl);
   const isMp4 = pack?.finalExt === 'mp4' || pack?.finalBlob?.type?.includes('mp4');
+  const layout = pack?.exportLayout || state.exportLayout || 'original';
+  document.querySelector('#readyActions')?.classList.toggle('is-hidden', !has);
+  document.querySelector('#exportOriginalBtn')?.classList.toggle('is-active', layout !== 'vertical');
+  document.querySelector('#exportVerticalBtn')?.classList.toggle('is-active', layout === 'vertical');
+  els.finalVideoWrap?.classList.toggle('is-vertical', layout === 'vertical');
   if (els.finalVideo) {
     els.finalVideo.loop = false;
     els.finalVideo.muted = false;
@@ -3257,10 +3405,6 @@ function showFinalVideo(pack) {
 }
 
 async function downloadFinalMp4() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
   const pack = currentPack();
   if (!pack?.finalBlob && !pack?.finalUrl) return;
   let blob = pack.finalBlob;
@@ -3288,11 +3432,8 @@ function preloadFfmpeg() {
   return loadFfmpeg().catch(() => undefined);
 }
 
-async function requestFinalMp4() {
-  if (!isLoggedIn()) {
-    requireAuth();
-    return;
-  }
+async function requestFinalMp4(layout) {
+  if (layout === 'original' || layout === 'vertical') state.exportLayout = layout;
   const pack = currentPack();
   if (!pack?.scenes.length) {
     toast('Importe um pack e grave as falas primeiro.');
@@ -3304,21 +3445,15 @@ async function requestFinalMp4() {
     setTab('record');
     return;
   }
-  await syncAccountFromServer();
-  if (!canExportVideo()) {
-    toast(isPro()
-      ? 'Créditos do mês acabaram. Compre extras ou aguarde a renovação PRO.'
-      : 'Sem créditos. Assine o PRO ou compre um pacote para gerar o MP4.');
-    setTab('credits');
-    return;
-  }
   if (state.exporting) {
     toast('Já estou montando o MP4.');
     return;
   }
   const watermarked = shouldWatermarkExport();
   if (watermarked) {
-    toast(`Plano gratuito com 1 crédito: o MP4 sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
+    toast(getLang() === 'en'
+      ? `Free export includes a ${EXPORT_WATERMARK_LABEL} watermark. PRO removes it.`
+      : `Exportação grátis sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
   }
   stopProjectPreview();
   abortCapture();
@@ -3328,18 +3463,7 @@ async function requestFinalMp4() {
   if (els.generateMp4Btn) els.generateMp4Btn.disabled = true;
   els.exportVideoBtn.disabled = true;
   if (els.exportVideoBtnSide) els.exportVideoBtnSide.disabled = true;
-  let reserved = null;
   try {
-    reserved = await takeExportCredit();
-    if (!reserved.ok) {
-      toast(reserved.error === 'no-credits'
-        ? (isPro()
-          ? 'Créditos do mês acabaram. Compre extras ou aguarde a renovação PRO.'
-          : 'Sem créditos. Assine o PRO ou compre um pacote para gerar o MP4.')
-        : 'Não consegui confirmar o crédito. Tente de novo logado.');
-      setTab('credits');
-      return;
-    }
     const composed = await composeDubbedVideo(pack, setExportProgress);
     let output = composed;
     if (isIOS() && !composed.type.includes('mp4')) {
@@ -3356,10 +3480,11 @@ async function requestFinalMp4() {
     pack.finalBlob = output;
     pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
     pack.watermarked = watermarked;
+    pack.exportLayout = state.exportLayout;
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
-    if (Number.isFinite(Number(reserved?.credits))) setCredits(Number(reserved.credits));
     showFinalVideo(pack);
     scheduleSave();
+    trackFunnel('export');
     const isMp4 = pack.finalExt === 'mp4';
     toast(watermarked
       ? (isMp4
@@ -3380,7 +3505,6 @@ async function requestFinalMp4() {
       if (play) play.catch(() => toast('Toque no play para ouvir sua dublagem.'));
     }
   } catch (error) {
-    if (reserved?.spent) await refundExportCredit().catch(() => undefined);
     const message = error.message || 'Não foi possível gerar o vídeo.';
     toast(message);
     if (els.exportStatus) els.exportStatus.textContent = message;
@@ -3410,7 +3534,8 @@ function pickVideoMime() {
 }
 
 function exportVideoBitrate() {
-  return isPhone() ? 1_800_000 : 3_500_000;
+  if (isPro() || isOwner()) return isPhone() ? 3_500_000 : 8_000_000;
+  return isPhone() ? 1_200_000 : 2_200_000;
 }
 
 function loadImage(src) {
@@ -3701,11 +3826,11 @@ function coverDraw(ctx, media, width, height) {
 }
 
 function shouldWatermarkExport() {
-  return !isOwner() && !isPro() && getCredits() <= 1;
+  return !isOwner() && !isPro();
 }
 
 function canExportVideo() {
-  return isOwner() || getCredits() >= 1;
+  return true;
 }
 
 function consumeExportCredit() {
@@ -3787,7 +3912,9 @@ function drawExportWatermark(ctx, width, height) {
   ctx.restore();
 }
 
-async function buildWatermarkedVideoTrack(film) {
+async function buildComposedVideoTrack(film) {
+  const vertical = state.exportLayout === 'vertical';
+  const watermarked = shouldWatermarkExport();
   let width = 1280;
   let height = 720;
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -3801,6 +3928,11 @@ async function buildWatermarkedVideoTrack(film) {
     }
     await wait(40);
   }
+  if (vertical) {
+    const hd = isPro() || isOwner();
+    width = hd ? 1080 : 720;
+    height = hd ? 1920 : 1280;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -3813,7 +3945,7 @@ async function buildWatermarkedVideoTrack(film) {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, width, height);
       coverDraw(ctx, source, width, height);
-      drawExportWatermark(ctx, width, height);
+      if (watermarked) drawExportWatermark(ctx, width, height);
     }
     requestAnimationFrame(paint);
   };
@@ -3910,11 +4042,12 @@ async function composeDubbedVideo(pack, onProgress) {
     }
 
     const watermarked = shouldWatermarkExport();
-    const videoTrack = watermarked
-      ? (videoPipeline = await buildWatermarkedVideoTrack(film)).track
+    const needsCompose = watermarked || state.exportLayout === 'vertical';
+    const videoTrack = needsCompose
+      ? (videoPipeline = await buildComposedVideoTrack(film)).track
       : film.getTrack();
     if (!videoTrack) throw new Error('Não deu para capturar o filme da cena.');
-    if (watermarked) onProgress?.(24, 'Gravando a marca d\'água no vídeo');
+    if (needsCompose) onProgress?.(24, state.exportLayout === 'vertical' ? 'Montando o formato 9:16' : 'Gravando a marca d\'água no vídeo');
 
     const mixed = new MediaStream([
       videoTrack,
@@ -4128,7 +4261,6 @@ function openDb() {
 }
 
 async function persistSession() {
-  if (!state.user?.email) return;
   const payload = {
     activePackId: state.activePackId,
     activeIndex: state.activeIndex,
@@ -4140,6 +4272,7 @@ async function persistSession() {
       finalBlob: pack.finalBlob || null,
       finalExt: pack.finalExt || '',
       watermarked: Boolean(pack.watermarked),
+      exportLayout: pack.exportLayout || 'original',
       takes: Object.fromEntries(await Promise.all(Object.entries(pack.takes).map(async ([id, take]) => {
         const blob = take.blob || await fetch(take.url).then((response) => response.blob());
         return [id, {
@@ -4185,6 +4318,7 @@ async function restoreSession() {
   if (!savedSession?.packs?.length) {
     renderPackGrid();
     updateScoreCard();
+    applyPendingCena();
     return;
   }
 
@@ -4205,11 +4339,13 @@ async function restoreSession() {
           pack.finalBlob = saved.finalBlob;
           pack.finalExt = 'mp4';
           pack.watermarked = Boolean(saved.watermarked);
+          pack.exportLayout = saved.exportLayout || 'original';
           pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
         } else if (savedType.includes('webm') || savedExt.includes('webm')) {
           pack.finalBlob = saved.finalBlob;
           pack.finalExt = 'webm';
           pack.watermarked = Boolean(saved.watermarked);
+          pack.exportLayout = saved.exportLayout || 'original';
           pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
         }
       }
@@ -4228,6 +4364,7 @@ async function restoreSession() {
     selectScene(state.activeIndex);
     warmSceneAudio(currentPack().scenes);
   }
+  applyPendingCena();
 }
 
 function findSceneArt(choicer, index, images, objectUrl, audioEntry) {

@@ -13,7 +13,8 @@ window.DUBPACK_PAYMENTS = {
     verifyCheckout: '',
     syncAccount: '',
     spendCredit: '',
-    refundCredit: ''
+    refundCredit: '',
+    logFunnel: ''
   },
   stripePublishableKey: 'pk_test_REPLACE_ME'
 };
