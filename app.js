@@ -209,6 +209,7 @@ const els = {
   countdownBadge: document.querySelector('#countdownBadge'),
   videoProgress: document.querySelector('#videoProgress'),
   elapsedLabel: document.querySelector('#elapsedLabel'),
+  cueLabel: document.querySelector('#cueLabel'),
   durationLabel: document.querySelector('#durationLabel'),
   topCounter: document.querySelector('#topCounter'),
   projectTitle: document.querySelector('#projectTitle'),
@@ -331,7 +332,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '142';
+  const swVersion = '143';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -368,6 +369,23 @@ function bindUi() {
   });
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
+  document.querySelector('#openImportBtn')?.addEventListener('click', openImportModal);
+  document.querySelector('#importCloseBtn')?.addEventListener('click', closeImportModal);
+  document.querySelector('#importModal')?.addEventListener('click', (event) => {
+    if (event.target.id === 'importModal') closeImportModal();
+  });
+  const drop = document.querySelector('#importDrop');
+  drop?.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    drop.classList.add('is-over');
+  });
+  drop?.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+  drop?.addEventListener('drop', (event) => {
+    event.preventDefault();
+    drop.classList.remove('is-over');
+    const file = event.dataTransfer?.files?.[0];
+    if (file) void importPackFile(file);
+  });
   els.packSelect?.addEventListener('change', () => {
     if (els.packSelect.value) openPack(els.packSelect.value);
   });
@@ -381,10 +399,13 @@ function bindUi() {
   });
   document.querySelectorAll('label.text-link, .pack-empty label.primary').forEach((label) => {
     label.addEventListener('click', (event) => {
-      if (isLoggedIn()) return;
       event.preventDefault();
       event.stopPropagation();
-      requireAuth();
+      if (!isLoggedIn()) {
+        requireAuth();
+        return;
+      }
+      openImportModal();
     });
   });
   els.userChip?.addEventListener('click', () => {
@@ -1047,14 +1068,43 @@ function sessionStoreKey() {
 }
 
 async function importPack(event) {
+  const file = event.target?.files?.[0];
+  if (event.target) event.target.value = '';
+  if (file) await importPackFile(file);
+}
+
+function openImportModal() {
   if (!isLoggedIn()) {
-    event.target.value = '';
     requireAuth();
     return;
   }
-  const file = event.target.files?.[0];
-  event.target.value = '';
+  document.querySelector('#importModal')?.classList.remove('is-hidden');
+  document.querySelector('#importProgressWrap')?.classList.add('is-hidden');
+}
+
+function closeImportModal() {
+  document.querySelector('#importModal')?.classList.add('is-hidden');
+}
+
+function setImportProgress(current, total, label) {
+  const wrap = document.querySelector('#importProgressWrap');
+  const bar = document.querySelector('#importProgressBar');
+  const text = document.querySelector('#importProgressText');
+  if (!wrap) return;
+  wrap.classList.remove('is-hidden');
+  const ratio = total ? current / total : 0;
+  if (bar) bar.style.width = `${Math.round(ratio * 100)}%`;
+  if (text) text.textContent = label || `${t('studio.import.reading')} ${current}/${total}`;
+}
+
+async function importPackFile(file) {
+  if (!isLoggedIn()) {
+    requireAuth();
+    return;
+  }
   if (!file) return;
+  openImportModal();
+  setImportProgress(0, 1, t('studio.import.reading.zip'));
   toast('Abrindo o ZIP…');
   await wait(20);
 
@@ -1064,6 +1114,7 @@ async function importPack(event) {
       throw new Error('Isso não é um ZIP. Importe o pack em .zip.');
     }
     const packName = file.name.replace(/\.zip$/i, '');
+    setImportProgress(1, 4, t('studio.import.unpack'));
     const pack = await buildPack(packName, zipBytes);
     upsertPack(pack);
     state.activePackId = pack.id;
@@ -1075,7 +1126,9 @@ async function importPack(event) {
     scheduleSave();
     warmSceneAudio(pack.scenes);
     const count = pack.scenes.length;
+    setImportProgress(count, count, t('studio.import.done'));
     toast(`${count} ${count === 1 ? 'fala' : 'falas'} em “${pack.name}”.`);
+    setTimeout(closeImportModal, 400);
   } catch (error) {
     toast(error.message || 'Não foi possível abrir este ZIP.');
   }
@@ -1131,6 +1184,7 @@ async function buildPack(name, zipBytes) {
     throw new Error('Não achei os arquivos de áudio descritos no pack.');
   }
 
+  let loaded = 0;
   const scenes = await Promise.all(sourceAudio.map(async ({ entry, line }, index) => {
     const baseName = entry.name.split('/').pop()?.replace(/\.[^.]+$/, '') ?? `Fala ${index + 1}`;
     const audioUrl = objectUrl(entry);
@@ -1152,7 +1206,7 @@ async function buildPack(name, zipBytes) {
     const matchedVideo = visualUrlFor(entry, index, videos, objectUrl);
     const sharedUrl = sharedVideo ? objectUrl(sharedVideo) : '';
     const firstVideo = videos[0] ? objectUrl(videos[0]) : '';
-    return {
+    const scene = {
       id: `${index}-${baseName}`,
       title: baseName,
       character,
@@ -1164,6 +1218,9 @@ async function buildPack(name, zipBytes) {
       videoUrl: matchedVideo || sharedUrl || firstVideo,
       videoOffset: Number(stamp ?? line?.start ?? line?.offset ?? 0)
     };
+    loaded += 1;
+    setImportProgress(loaded, sourceAudio.length);
+    return scene;
   }));
 
   const sharedTimeline = scenes.length > 1 && scenes.every((scene) => scene.videoUrl && scene.videoUrl === scenes[0].videoUrl);
@@ -1297,6 +1354,7 @@ function selectScene(index, { keepCapture = false } = {}) {
   els.overlayText.textContent = scene.subtitle;
   els.durationLabel.textContent = scene.durationLabel;
   els.elapsedLabel.textContent = '00:00';
+  if (els.cueLabel) els.cueLabel.textContent = '00:00';
   els.timerValue.textContent = scene.duration.toFixed(1);
   els.micHint.textContent = take ? 'Toque no microfone para regravar' : 'Toque no microfone para começar';
   if (take?.peak != null) setVoiceMeter(take.peak, false);
@@ -1344,6 +1402,7 @@ function selectScene(index, { keepCapture = false } = {}) {
 
   renderTakeRail();
   updateScoreCard();
+  updatePackDock();
   els.topbarHint.textContent = `${pack.name} · ${pack.scenes.filter((item) => pack.takes[item.id]).length}/${pack.scenes.length} gravadas`;
 }
 
@@ -2041,6 +2100,7 @@ function animateProgress(duration) {
     const progress = Math.min(1, (Date.now() - startedAt) / (duration * 1000));
     els.videoProgress.style.width = `${progress * 100}%`;
     els.elapsedLabel.textContent = formatSeconds(progress * duration);
+    if (els.cueLabel) els.cueLabel.textContent = formatSeconds(progress * duration);
     if (els.wavePlayhead) els.wavePlayhead.style.left = `${progress * 100}%`;
     if (progress >= 1) clearInterval(state.progressTimer);
   }, 80);
@@ -2225,6 +2285,7 @@ function renderPackGrid() {
     els.packRailNext.hidden = packs.length < 3;
   }
   renderActivity();
+  updatePackDock();
 }
 
 function openPack(id) {
@@ -2511,6 +2572,28 @@ function stopMeter() {
   state.recordStream = null;
   state.audioContext?.close().catch(() => undefined);
   state.audioContext = null;
+}
+
+function updatePackDock() {
+  const pack = currentPack();
+  const recorded = pack ? pack.scenes.filter((scene) => pack.takes[scene.id]).length : 0;
+  const total = pack?.scenes.length || 0;
+  const label = document.querySelector('#packProgressLabel');
+  const bar = document.querySelector('#packProgressBar');
+  const lamp = document.querySelector('#packStatusLamp');
+  const name = document.querySelector('#packStatusPack');
+  if (label) label.textContent = `${recorded} / ${total}`;
+  if (bar) bar.style.width = total ? `${Math.round((recorded / total) * 100)}%` : '0%';
+  if (name) name.textContent = pack?.name || '—';
+  if (lamp) {
+    lamp.textContent = !pack
+      ? t('studio.dock.idle')
+      : recorded === 0
+        ? t('studio.dock.idle')
+        : recorded === total
+          ? t('studio.dock.done')
+          : t('studio.dock.progress');
+  }
 }
 
 function updateScoreCard() {

@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=142" />
+    <link rel="stylesheet" href="./styles.css?v=143" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -92,6 +92,25 @@
         <button id="helpCloseBtn" class="primary" type="button" data-i18n="help.close">Entendi</button>
       </div>
     </div>
+    <div id="importModal" class="import-modal is-hidden" role="dialog" aria-labelledby="importTitle" aria-modal="true">
+      <div class="import-card">
+        <button id="importCloseBtn" class="import-close" type="button" aria-label="Fechar">✕</button>
+        <h2 id="importTitle" data-i18n="studio.import.title">Import a pack ZIP</h2>
+        <p data-i18n-html="studio.import.lead">Escolha um pack no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a> e mantenha o arquivo ZIP.</p>
+        <div id="importDrop" class="import-drop">
+          <span class="import-reel" aria-hidden="true"></span>
+          <strong data-i18n="studio.import.drop">Solte o ZIP aqui</strong>
+        </div>
+        <label class="import-choose">
+          <span data-i18n="studio.import.choose">Escolher ZIP</span>
+          <input id="packInputEmpty" type="file" accept=".zip,application/zip" hidden />
+        </label>
+        <div id="importProgressWrap" class="import-progress is-hidden">
+          <span id="importProgressText">Reading audio clips</span>
+          <i><b id="importProgressBar"></b></i>
+        </div>
+      </div>
+    </div>
 
     <main id="studioApp" class="dashboard cv-shell">
       <header class="cv-masthead">
@@ -134,8 +153,8 @@
         <h1 data-i18n="studio.hero.title">Faça sua dublagem — no navegador</h1>
         <p id="topbarHint" data-i18n-html="studio.hero.body">Importe um pack, grave cada fala na sua voz e assista o vídeo final. Comece no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.</p>
         <div class="cv-intro-actions">
-          <button id="helpIntroBtn" class="secondary" type="button" data-i18n="nav.howto">Como jogar</button>
-          <a class="secondary" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="packs.gamebanana">Baixar pack</a>
+          <button id="helpIntroBtn" class="cv-chip" type="button" data-i18n="nav.howto">Como jogar</button>
+          <a class="cv-chip cv-chip-alt" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="packs.gamebanana">Baixar pack</a>
         </div>
       </section>
 
@@ -144,7 +163,9 @@
           <div class="cv-stage">
             <section class="cv-monitor" aria-label="Dub monitor">
               <div class="cv-bezel">
-                <p class="cv-monitor-name">DubPack Vision · DP-G4</p>
+                <span class="cv-screw cv-screw-tl" aria-hidden="true"></span>
+                <span class="cv-screw cv-screw-tr" aria-hidden="true"></span>
+                <p class="cv-monitor-name">DubPack Vision · DP-G4 · Dub Monitor</p>
                 <div class="video-shell">
                   <video id="sceneVideo" playsinline muted preload="auto"></video>
                   <img id="sceneImage" alt="" />
@@ -152,37 +173,40 @@
                     <div id="emptyIdle" class="empty-idle">
                       <small data-i18n="studio.nosignal">No signal</small>
                       <strong data-i18n="studio.nopack">No pack loaded</strong>
-                      <label class="cv-import primary">
-                        <span data-i18n="studio.import">Import a pack ZIP</span>
-                        <input id="packInputEmpty" type="file" accept=".zip,application/zip" hidden />
-                      </label>
+                      <button id="openImportBtn" class="cv-import primary" type="button" data-i18n="studio.import">Import a pack ZIP</button>
                     </div>
                     <div id="emptyScene" class="empty-scene" hidden></div>
                   </div>
+                  <div class="cv-cue"><i></i> Cue <b id="cueLabel">00:00</b></div>
                   <div id="countdownBadge" class="countdown-badge">3</div>
                   <div id="recordingOverlay" class="recording-overlay inline">
                     <strong id="overlayCharacter">Personagem</strong>
                     <span id="overlayText">Leia a fala no tempo certo.</span>
                   </div>
                   <div class="cv-caption">
-                    <span id="frameCharacter">Personagem</span>
+                    <span id="frameCharacter" class="cv-char-chip">Personagem</span>
                     <p id="frameSubtitle">A legenda aparece aqui.</p>
                   </div>
                 </div>
                 <div class="cv-monitor-meta">
-                  <span>Frame <b id="elapsedLabel">00:00</b></span>
+                  <span>Frame hold <b id="elapsedLabel">00:00</b></span>
                   <i class="cv-progress"><b id="videoProgress"></b></i>
                   <span>Master <b id="durationLabel">00:00</b></span>
                   <span id="tapeLamp" class="cv-lamp">No tape</span>
                 </div>
+                <span class="cv-screw cv-screw-bl" aria-hidden="true"></span>
+                <span class="cv-screw cv-screw-br" aria-hidden="true"></span>
               </div>
             </section>
 
             <section class="cv-wave" aria-label="Audio waveform">
-              <div class="cv-wave-legend">
-                <span class="is-ref" data-i18n="studio.wave.original">Original</span>
-                <span class="is-take" data-i18n="studio.wave.take">Your take</span>
-              </div>
+              <header class="cv-wave-head">
+                <strong data-i18n="studio.wave.title">Overlap waveform</strong>
+                <div class="cv-wave-legend">
+                  <span class="is-ref" data-i18n="studio.wave.original">Original</span>
+                  <span class="is-take" data-i18n="studio.wave.take">Your take</span>
+                </div>
+              </header>
               <div class="hero-waveform">
                 <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
                 <b id="wavePlayhead"></b>
@@ -246,6 +270,17 @@
             <button id="packRailNext" class="pack-rail-next" type="button" aria-label="Ver mais packs">›</button>
           </div>
         </section>
+
+        <footer class="cv-dock">
+          <button class="cv-pill" type="button" data-tab="profile" data-i18n="studio.dock.recordings">Recordings</button>
+          <div class="cv-status">
+            <span id="packProgressLabel">0 / 0</span>
+            <i class="cv-status-track"><b id="packProgressBar"></b></i>
+            <span id="packStatusLamp" data-i18n="studio.dock.idle">Not started</span>
+            <em id="packStatusPack">—</em>
+          </div>
+          <button class="cv-pill" type="button" data-tab="packs" data-i18n="studio.dock.packs">Packs</button>
+        </footer>
       </div>
 
       <section id="recordTab" class="tab-view" hidden></section>
@@ -396,10 +431,10 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=142"></script>
-    <script src="./payments.config.js?v=142"></script>
-    <script src="./i18n.js?v=142"></script>
-    <script src="./payments.js?v=142"></script>
-    <script src="./app.js?v=142"></script>
+    <script src="./vendor/fflate.min.js?v=143"></script>
+    <script src="./payments.config.js?v=143"></script>
+    <script src="./i18n.js?v=143"></script>
+    <script src="./payments.js?v=143"></script>
+    <script src="./app.js?v=143"></script>
   </body>
 </html>
