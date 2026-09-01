@@ -184,14 +184,12 @@ body {
   border: 1px solid #000;
   box-shadow: inset 0 0 40px rgba(0,0,0,0.85);
 }
-.cv-bezel .video-shell video,
-.cv-bezel .video-shell img,
-.cv-bezel .video-shell .empty-frame {
-  inset: 8px;
-  width: calc(100% - 16px);
-  height: calc(100% - 16px);
-  border-radius: 4px;
+.scene-ogv-host {
+  position: absolute;
+  z-index: 2;
+  overflow: hidden;
 }
+.scene-ogv-host[hidden] { display: none !important; }
 .cv-bezel .empty-frame {
   display: grid;
   place-items: center;
@@ -1909,7 +1907,8 @@ body.needs-auth .dashboard {
 
 .video-shell video,
 .video-shell img,
-.video-shell .empty-frame {
+.video-shell .empty-frame,
+.video-shell .scene-ogv-host {
   position: absolute;
   inset: 14px;
   width: calc(100% - 28px);

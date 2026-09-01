@@ -172,6 +172,9 @@ const state = {
   progressTimer: null,
   playbackTimer: null,
   videoTimer: null,
+  clipVideoPlaying: false,
+  sceneOgv: null,
+  sceneOgvSrc: '',
   activeAudio: null,
   activeAudios: [],
   playbackCtx: null,
@@ -198,6 +201,7 @@ const els = {
   packRailNext: document.querySelector('#packRailNext'),
   packEmpty: document.querySelector('#packEmpty'),
   sceneVideo: document.querySelector('#sceneVideo'),
+  sceneOgvHost: document.querySelector('#sceneOgvHost'),
   sceneImage: document.querySelector('#sceneImage'),
   emptyFrame: document.querySelector('#emptyFrame'),
   frameCharacter: document.querySelector('#frameCharacter'),
@@ -332,7 +336,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '143';
+  const swVersion = '144';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -1549,6 +1553,9 @@ async function startTakeFlow() {
 
   stopActivePlayback();
   if (els.sceneVideo) els.sceneVideo.pause();
+  stopClipVideo();
+  const sceneStill = currentScene();
+  if (sceneStill) showSceneStill(sceneStill);
   clearInterval(state.countdownTimer);
   clearTimeout(state.countdownStartTimer);
   clearInterval(state.recordingTimer);
@@ -1781,9 +1788,9 @@ function recordActiveScene() {
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
   els.recordBtn.setAttribute('aria-label', 'Parar');
-  els.micHint.textContent = 'Fale agora · o filme fica parado nesta fala';
+  els.micHint.textContent = 'Fale agora · a cena se move com você';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
-  els.sceneVideo?.pause();
+  playSceneMedia(scene, recMs / 1000);
   animateProgress(recMs / 1000);
 
   state.recordingTimer = setInterval(() => {
@@ -1894,81 +1901,156 @@ function bindSceneVisual(scene) {
   const image = els.sceneImage;
   const empty = els.emptyFrame;
   if (!video || !image || !empty) return;
+  stopClipVideo();
 
-  if (scene.imageUrl) {
-    video.pause();
-    video.style.display = 'none';
+  if (scene.videoUrl) {
+    if (image) image.style.display = 'none';
     empty.style.display = 'none';
-    empty.replaceChildren();
+    void prepareSceneVideo(scene).then(() => showSceneStill(scene));
+    return;
+  }
+
+  unmountSceneOgv();
+  video.pause();
+  video.style.display = 'none';
+  if (scene.imageUrl) {
     image.style.display = 'block';
     if (image.src !== scene.imageUrl) image.src = scene.imageUrl;
     return;
   }
 
-  if (scene.videoUrl) {
-    image.style.display = 'none';
-    empty.style.display = 'none';
-    empty.replaceChildren();
-    video.style.display = 'block';
-    video.muted = true;
-    video.playsInline = true;
-    if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
-    showSceneStill(scene);
-    return;
-  }
-
-  video.pause();
   if (video.src) video.removeAttribute('src');
-  video.style.display = 'none';
   image.style.display = 'none';
   paintEmptyScene(scene);
 }
 
-function playSceneMedia(scene, duration) {
-  if (scene.imageUrl && els.sceneImage) {
-    els.sceneImage.style.display = 'block';
-    if (els.sceneVideo) els.sceneVideo.style.display = 'none';
-    return;
+function sceneVideoLooksOgv(scene) {
+  const url = scene?.videoUrl || '';
+  const blob = state.blobByUrl.get(url);
+  return /ogg|ogv/i.test(blob?.type || '') || /\.ogv(\?|$)/i.test(url);
+}
+
+function clipPlayer() {
+  return state.sceneOgv || els.sceneVideo;
+}
+
+function stopClipVideo() {
+  state.clipVideoPlaying = false;
+  clearTimeout(state.videoTimer);
+  state.videoTimer = null;
+  try { state.sceneOgv?.pause?.(); } catch { /* ignore */ }
+  try { els.sceneVideo?.pause?.(); } catch { /* ignore */ }
+}
+
+function unmountSceneOgv() {
+  stopClipVideo();
+  if (state.sceneOgv) {
+    try { state.sceneOgv.src = ''; } catch { /* ignore */ }
+    state.sceneOgv.remove();
+    state.sceneOgv = null;
   }
-  if (!scene.videoUrl || !els.sceneVideo) return;
+  state.sceneOgvSrc = '';
+  if (els.sceneOgvHost) {
+    els.sceneOgvHost.hidden = true;
+    els.sceneOgvHost.replaceChildren();
+  }
+}
+
+async function prepareSceneVideo(scene) {
+  if (!scene?.videoUrl) return null;
+  if (sceneVideoLooksOgv(scene)) {
+    if (els.sceneVideo) els.sceneVideo.style.display = 'none';
+    if (state.sceneOgv && state.sceneOgvSrc === scene.videoUrl) {
+      if (els.sceneOgvHost) els.sceneOgvHost.hidden = false;
+      return state.sceneOgv;
+    }
+    unmountSceneOgv();
+    const Player = await ensureOgvPlayer();
+    const player = new Player({ wasm: true, webGL: true });
+    player.muted = true;
+    player.setAttribute('playsinline', '');
+    player.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000';
+    els.sceneOgvHost.hidden = false;
+    els.sceneOgvHost.appendChild(player);
+    player.src = scene.videoUrl;
+    state.sceneOgv = player;
+    state.sceneOgvSrc = scene.videoUrl;
+    await new Promise((resolve) => {
+      const done = () => resolve();
+      player.addEventListener('loadedmetadata', done, { once: true });
+      player.addEventListener('canplay', done, { once: true });
+      setTimeout(done, 1800);
+    });
+    return player;
+  }
+
+  unmountSceneOgv();
   const video = els.sceneVideo;
+  if (!video) return null;
   video.muted = true;
   video.playsInline = true;
   video.style.display = 'block';
+  if (video.src !== scene.videoUrl) video.src = scene.videoUrl;
+  return video;
+}
+
+async function playSceneMedia(scene, duration) {
+  if (!scene?.videoUrl) {
+    if (scene?.imageUrl && els.sceneImage) {
+      els.sceneImage.style.display = 'block';
+      if (els.sceneVideo) els.sceneVideo.style.display = 'none';
+      unmountSceneOgv();
+    }
+    return;
+  }
+  if (els.sceneImage) els.sceneImage.style.display = 'none';
+  if (els.emptyFrame) els.emptyFrame.style.display = 'none';
+  const player = await prepareSceneVideo(scene);
+  if (!player) return;
+  state.clipVideoPlaying = true;
   const start = Number(scene.videoOffset) || 0;
+  player.muted = true;
+  const kick = () => {
+    if (!state.clipVideoPlaying) return;
+    const playing = player.play?.();
+    if (playing?.catch) playing.catch(() => undefined);
+  };
   try {
-    video.currentTime = start;
+    if (Math.abs((Number(player.currentTime) || 0) - start) > 0.08) {
+      player.currentTime = start;
+    }
   } catch {
     // ignore
   }
-  video.play().catch(() => undefined);
+  kick();
   clearTimeout(state.videoTimer);
   state.videoTimer = setTimeout(() => {
-    video.pause();
+    stopClipVideo();
     showSceneStill(scene);
-  }, duration * 1000);
+  }, Math.max(200, (Number(duration) || 1) * 1000));
 }
 
 function showSceneStill(scene) {
-  const video = els.sceneVideo;
-  if (!video || !scene.videoUrl) return;
+  const player = clipPlayer();
+  if (!player || !scene?.videoUrl || state.clipVideoPlaying) return;
   const apply = () => {
-    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    if (state.clipVideoPlaying) return;
+    const duration = Number.isFinite(player.duration) ? player.duration : 0;
     const offset = Number(scene.videoOffset) || 0;
     const target = duration
       ? Math.min(Math.max(offset, 0), Math.max(0, duration - 0.08))
       : offset;
     try {
-      video.currentTime = target || 0.04;
+      player.currentTime = target || 0.04;
     } catch {
       // Alguns arquivos ainda não aceitam seek.
     }
   };
-  if (video.readyState >= 2) apply();
-  else video.addEventListener('loadeddata', apply, { once: true });
-  video.addEventListener('seeked', () => {
-    if (!state.previewing && !state.recorder) video.pause();
-  }, { once: true });
+  if ((player.readyState || 0) >= 2) apply();
+  else {
+    player.addEventListener?.('loadeddata', apply, { once: true });
+    player.addEventListener?.('loadedmetadata', apply, { once: true });
+  }
 }
 
 function paintEmptyScene(scene) {
@@ -2003,6 +2085,7 @@ function restoreEmptyMonitor() {
     els.sceneVideo.pause();
     els.sceneVideo.style.display = 'none';
   }
+  unmountSceneOgv();
   if (els.sceneImage) els.sceneImage.style.display = 'none';
   if (idle) idle.hidden = false;
   if (sceneBox) {
@@ -2415,7 +2498,7 @@ function abortCapture({ keepPreview = false } = {}) {
   els.recordBtn?.classList.remove('recording');
   els.recordBtn?.setAttribute('aria-label', 'Gravar');
   stopActivePlayback();
-  if (els.sceneVideo) els.sceneVideo.pause();
+  if (!keepPreview) stopClipVideo();
   if (state.recorder?.state === 'recording') {
     state.ignoreRecorderStop = true;
     try {
