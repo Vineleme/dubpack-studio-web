@@ -192,7 +192,8 @@ const state = {
   tipIndex: 0,
   tipTimer: 0,
   exportLayout: 'original',
-  pendingCena: null
+  pendingCena: null,
+  waveGen: 0
 };
 
 const els = {
@@ -217,6 +218,7 @@ const els = {
   elapsedLabel: document.querySelector('#elapsedLabel'),
   cueLabel: document.querySelector('#cueLabel'),
   durationLabel: document.querySelector('#durationLabel'),
+  waveCanvas: document.querySelector('#waveCanvas'),
   topCounter: document.querySelector('#topCounter'),
   projectTitle: document.querySelector('#projectTitle'),
   projectMeta: document.querySelector('#projectMeta'),
@@ -338,7 +340,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '145';
+  const swVersion = '146';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -415,9 +417,16 @@ function bindUi() {
   });
   els.profileNavBtn?.addEventListener('click', () => setTab('profile'));
   els.prevBtn?.addEventListener('click', () => setTab('packs'));
-  els.prevSceneBtn?.addEventListener('click', () => selectScene(state.activeIndex - 1));
+  els.prevSceneBtn?.addEventListener('click', goPrevScene);
   els.nextSceneBtn?.addEventListener('click', goNextScene);
   els.nextBtn?.addEventListener('click', goNextScene);
+  document.querySelector('#rolesBtn')?.addEventListener('click', () => openRolesModal());
+  document.querySelector('#rolesCloseBtn')?.addEventListener('click', closeRolesModal);
+  document.querySelector('#rolesAllBtn')?.addEventListener('click', selectAllRoles);
+  document.querySelector('#rolesApplyBtn')?.addEventListener('click', applyRolesModal);
+  document.querySelector('#rolesModal')?.addEventListener('click', (event) => {
+    if (event.target.id === 'rolesModal') closeRolesModal();
+  });
   els.referenceBtn?.addEventListener('click', playReference);
   els.referenceBtnBottom?.addEventListener('click', playReference);
   els.recordBtn?.addEventListener('click', startTakeFlow);
@@ -467,6 +476,11 @@ function bindUi() {
   });
   window.addEventListener('pagehide', () => {
     if (!state.exporting) abortCapture();
+  });
+  window.addEventListener('resize', () => {
+    const pack = currentPack();
+    const scene = currentScene();
+    if (scene) void paintOverlapWave(scene, pack?.takes[scene.id]);
   });
 
   document.addEventListener('click', (event) => {
@@ -1244,6 +1258,7 @@ async function buildPack(name, zipBytes) {
     zipBytes,
     scenes,
     takes: {},
+    dubRoles: [],
     importedAt: Date.now(),
     filmUrl: sharedVideo ? objectUrl(sharedVideo) : '',
     backingUrl: backing ? objectUrl(backing) : ''
@@ -1393,6 +1408,7 @@ function selectScene(index, { keepCapture = false } = {}) {
       : 'Grave um take para medir duração contra a referência.';
   }
   updateTimingDesk(scene, take);
+  void paintOverlapWave(scene, take);
   if (take?.blob && take.onset == null) {
     profileTakeAudio(take.blob).then((profile) => {
       Object.assign(take, profile);
@@ -1411,8 +1427,136 @@ function selectScene(index, { keepCapture = false } = {}) {
   els.topbarHint.textContent = `${pack.name} · ${pack.scenes.filter((item) => pack.takes[item.id]).length}/${pack.scenes.length} gravadas`;
 }
 
+function packRoles(pack) {
+  const names = [];
+  (pack?.scenes || []).forEach((scene) => {
+    const name = String(decorateScene(scene)?.character || 'Personagem').trim() || 'Personagem';
+    if (!names.includes(name)) names.push(name);
+  });
+  return names;
+}
+
+function ensureDubRoles(pack) {
+  if (!pack) return [];
+  const available = packRoles(pack);
+  if (!Array.isArray(pack.dubRoles) || !pack.dubRoles.length) {
+    pack.dubRoles = [...available];
+  } else {
+    pack.dubRoles = pack.dubRoles.filter((name) => available.includes(name));
+    if (!pack.dubRoles.length) pack.dubRoles = [...available];
+  }
+  return pack.dubRoles;
+}
+
+function sceneIsAssigned(pack, scene) {
+  if (!pack || !scene) return false;
+  const roles = ensureDubRoles(pack);
+  const available = packRoles(pack);
+  if (roles.length >= available.length) return true;
+  return roles.includes(String(decorateScene(scene)?.character || 'Personagem').trim() || 'Personagem');
+}
+
+function assignedSceneIndexes(pack) {
+  if (!pack?.scenes?.length) return [];
+  return pack.scenes
+    .map((scene, index) => (sceneIsAssigned(pack, scene) ? index : -1))
+    .filter((index) => index >= 0);
+}
+
 function packIsComplete(pack) {
-  return Boolean(pack?.scenes.length && pack.scenes.every((scene) => pack.takes[scene.id]));
+  if (!pack?.scenes.length) return false;
+  return assignedSceneIndexes(pack).every((index) => pack.takes[pack.scenes[index].id]);
+}
+
+function goPrevScene() {
+  const pack = currentPack();
+  if (!pack?.scenes.length) return;
+  const assigned = assignedSceneIndexes(pack);
+  const prev = [...assigned].reverse().find((index) => index < state.activeIndex);
+  if (prev == null) return;
+  selectScene(prev);
+}
+
+function goNextScene() {
+  const pack = currentPack();
+  const scene = currentScene();
+  if (!pack || !scene) return;
+  if (sceneIsAssigned(pack, scene) && !pack.takes[scene.id]) {
+    els.recordBtn.classList.add('attention');
+    setTimeout(() => els.recordBtn.classList.remove('attention'), 900);
+  }
+  const assigned = assignedSceneIndexes(pack);
+  const next = assigned.find((index) => index > state.activeIndex);
+  if (next == null) {
+    if (packIsComplete(pack)) {
+      setTab('dub');
+      toast('Tudo gravado. Toque em Finalizar dublagem.');
+    } else {
+      toast('Ainda faltam falas das funções que você escolheu.');
+    }
+    return;
+  }
+  selectScene(next);
+}
+
+function closeRolesModal() {
+  document.querySelector('#rolesModal')?.classList.add('is-hidden');
+}
+
+function selectedRolesFromModal() {
+  return [...document.querySelectorAll('#rolesList input[type="checkbox"]:checked')].map((input) => input.value);
+}
+
+function selectAllRoles() {
+  document.querySelectorAll('#rolesList input[type="checkbox"]').forEach((input) => {
+    input.checked = true;
+  });
+}
+
+function openRolesModal() {
+  const pack = currentPack();
+  if (!pack?.scenes.length) {
+    toast('Importe um pack para escolher as funções.');
+    return;
+  }
+  const available = packRoles(pack);
+  const selected = new Set(ensureDubRoles(pack));
+  const list = document.querySelector('#rolesList');
+  if (!list) return;
+  list.replaceChildren();
+  available.forEach((name) => {
+    const count = pack.scenes.filter((scene) => (decorateScene(scene)?.character || 'Personagem') === name).length;
+    const row = document.createElement('label');
+    row.className = 'roles-row';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.value = name;
+    box.checked = selected.has(name);
+    const title = document.createElement('strong');
+    title.textContent = name;
+    const meta = document.createElement('span');
+    meta.textContent = t('roles.count', { n: count });
+    row.append(box, title, meta);
+    list.append(row);
+  });
+  document.querySelector('#rolesModal')?.classList.remove('is-hidden');
+}
+
+function applyRolesModal() {
+  const pack = currentPack();
+  if (!pack) return;
+  const picked = selectedRolesFromModal();
+  if (!picked.length) {
+    toast(t('roles.none'));
+    return;
+  }
+  pack.dubRoles = picked;
+  closeRolesModal();
+  const first = assignedSceneIndexes(pack)[0];
+  if (first != null) selectScene(first);
+  else selectScene(state.activeIndex);
+  scheduleSave();
+  toast(`${picked.length} ${picked.length === 1 ? 'função' : 'funções'} selecionada${picked.length === 1 ? '' : 's'}.`);
 }
 
 function finishCtaLabel(pack) {
@@ -1434,27 +1578,6 @@ function updateFinishCta(pack) {
     els.generateMp4Btn.textContent = label;
   }
   if (done && isIOS()) void preloadFfmpeg();
-}
-
-function goNextScene() {
-  const pack = currentPack();
-  const scene = currentScene();
-  if (!pack || !scene) return;
-  if (!pack.takes[scene.id]) {
-    els.recordBtn.classList.add('attention');
-    setTimeout(() => els.recordBtn.classList.remove('attention'), 900);
-  }
-  if (state.activeIndex >= pack.scenes.length - 1) {
-    const finished = pack.scenes.every((item) => pack.takes[item.id]);
-    if (finished) {
-      setTab('dub');
-      toast('Tudo gravado. Toque em Finalizar dublagem.');
-    } else {
-      toast('Última fala. Grave as que faltam para finalizar.');
-    }
-    return;
-  }
-  selectScene(state.activeIndex + 1);
 }
 
 function playClickAudio(layers, duration) {
@@ -2738,6 +2861,106 @@ function updateTimingDesk(scene, take) {
     const status = timingStatus(scene, take);
     const index = status === 'early' ? 0 : status === 'late' ? 2 : 1;
     els.timingLabels[index]?.classList.add('is-active');
+  }
+}
+
+const WAVE_BINS = 168;
+const wavePeakCache = new Map();
+
+function extractPeaks(buffer, bins = WAVE_BINS) {
+  const data = buffer.getChannelData(0);
+  const size = Math.max(1, Math.floor(data.length / bins));
+  const peaks = new Array(bins).fill(0);
+  for (let i = 0; i < bins; i += 1) {
+    let max = 0;
+    const start = i * size;
+    const end = Math.min(data.length, start + size);
+    for (let j = start; j < end; j += 12) max = Math.max(max, Math.abs(data[j]));
+    peaks[i] = max;
+  }
+  return peaks;
+}
+
+async function peaksFromUrl(url) {
+  if (!url) return [];
+  if (wavePeakCache.has(url)) return wavePeakCache.get(url);
+  const work = (async () => {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return [];
+    const ctx = new AudioCtx();
+    try {
+      const bytes = await fetch(url).then((response) => response.arrayBuffer());
+      const decoded = await ctx.decodeAudioData(bytes.slice(0));
+      return extractPeaks(decoded);
+    } catch {
+      return [];
+    } finally {
+      await ctx.close().catch(() => undefined);
+    }
+  })();
+  wavePeakCache.set(url, work);
+  return work;
+}
+
+async function peaksFromBlob(blob) {
+  if (!blob) return [];
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return [];
+  const ctx = new AudioCtx();
+  try {
+    const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+    return extractPeaks(decoded);
+  } catch {
+    return [];
+  } finally {
+    await ctx.close().catch(() => undefined);
+  }
+}
+
+function drawWaveLayer(ctx, peaks, color, width, height, alpha = 1) {
+  if (!peaks?.length) return;
+  const mid = height / 2;
+  const gap = width / peaks.length;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  peaks.forEach((peak, index) => {
+    const amp = Math.max(1.5, peak * (mid - 4));
+    const x = index * gap;
+    ctx.fillRect(x, mid - amp, Math.max(1.2, gap * 0.72), amp * 2);
+  });
+  ctx.restore();
+}
+
+function sizeWaveCanvas(canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const width = Math.max(1, Math.round(rect.width * dpr));
+  const height = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  return { width: canvas.width, height: canvas.height };
+}
+
+async function paintOverlapWave(scene, take) {
+  const canvas = els.waveCanvas;
+  if (!canvas) return;
+  const gen = ++state.waveGen;
+  const { width, height } = sizeWaveCanvas(canvas);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  for (let y = 12; y < height; y += 12) ctx.fillRect(0, y, width, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(0, height / 2, width, 1);
+  const refPeaks = scene?.audioUrl ? await peaksFromUrl(scene.audioUrl) : [];
+  if (gen !== state.waveGen) return;
+  drawWaveLayer(ctx, refPeaks, '#f36aa8', width, height, 0.92);
+  if (take?.blob || take?.url) {
+    const takePeaks = take.peaks || await (take.blob ? peaksFromBlob(take.blob) : peaksFromUrl(take.url));
+    if (takePeaks?.length) take.peaks = takePeaks;
+    if (gen !== state.waveGen) return;
+    drawWaveLayer(ctx, takePeaks, '#7ee7dc', width, height, 0.78);
   }
 }
 
@@ -4273,6 +4496,7 @@ async function persistSession() {
       finalExt: pack.finalExt || '',
       watermarked: Boolean(pack.watermarked),
       exportLayout: pack.exportLayout || 'original',
+      dubRoles: Array.isArray(pack.dubRoles) ? pack.dubRoles : [],
       takes: Object.fromEntries(await Promise.all(Object.entries(pack.takes).map(async ([id, take]) => {
         const blob = take.blob || await fetch(take.url).then((response) => response.blob());
         return [id, {
@@ -4327,6 +4551,7 @@ async function restoreSession() {
       const pack = await buildPack(saved.name, saved.zipBytes);
       pack.id = saved.id;
       pack.importedAt = saved.importedAt || Date.now();
+      pack.dubRoles = Array.isArray(saved.dubRoles) ? saved.dubRoles : [];
       pack.takes = {};
       Object.entries(saved.takes || {}).forEach(([id, take]) => {
         const url = rememberUrl(URL.createObjectURL(take.blob));

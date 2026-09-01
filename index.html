@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=145" />
+    <link rel="stylesheet" href="./styles.css?v=146" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -90,6 +90,18 @@
         <p data-i18n="help.footer">Dublar e exportar o básico é grátis. Packs ficam 2 dias neste aparelho.</p>
         <a class="secondary wide help-gamebanana" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="help.gamebanana">Abrir GameBanana</a>
         <button id="helpCloseBtn" class="primary" type="button" data-i18n="help.close">Entendi</button>
+      </div>
+    </div>
+    <div id="rolesModal" class="import-modal is-hidden" role="dialog" aria-labelledby="rolesTitle" aria-modal="true">
+      <div class="import-card roles-card">
+        <button id="rolesCloseBtn" class="import-close" type="button" aria-label="Fechar">✕</button>
+        <h2 id="rolesTitle" data-i18n="roles.title">Escolher funções</h2>
+        <p data-i18n="roles.lead">Marque quem você quer dublar. Os outros personagens ficam com a voz original.</p>
+        <div id="rolesList" class="roles-list"></div>
+        <div class="roles-actions">
+          <button id="rolesAllBtn" class="secondary" type="button" data-i18n="roles.all">Todos</button>
+          <button id="rolesApplyBtn" class="primary" type="button" data-i18n="roles.apply">Começar a dublar</button>
+        </div>
       </div>
     </div>
     <div id="importModal" class="import-modal is-hidden" role="dialog" aria-labelledby="importTitle" aria-modal="true">
@@ -213,11 +225,9 @@
                   <span class="is-take" data-i18n="studio.wave.take">Your take</span>
                 </div>
               </header>
-              <div class="hero-waveform">
-                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <div class="hero-waveform" id="waveStage">
+                <canvas id="waveCanvas" aria-hidden="true"></canvas>
                 <b id="wavePlayhead"></b>
-                <em id="timingRefBar" class="cv-wave-ref"></em>
-                <em id="timingTakeBar" class="cv-wave-take"></em>
               </div>
               <div class="cv-wave-foot">
                 <span id="waveStartLabel">1.6s</span>
@@ -243,6 +253,7 @@
             <button id="listenTakeBtn" class="cv-key" type="button" data-i18n="studio.play">Play recording</button>
             <button id="previewBtn" class="cv-key preview-mini" type="button" data-i18n="studio.play">Play recording</button>
             <button id="nextBtn" class="cv-key" type="button" data-i18n="studio.next">Next clip</button>
+            <button id="rolesBtn" class="cv-key" type="button" data-i18n="roles.btn">Escolher funções</button>
             <button id="exportVideoBtn" class="cv-key cv-key-watch" type="button" disabled data-i18n="studio.watch">Watch dub</button>
             <div class="cv-meter">
               <small id="micHint" data-i18n="record.mic">Toque para começar</small>
@@ -450,10 +461,10 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=145"></script>
-    <script src="./payments.config.js?v=145"></script>
-    <script src="./i18n.js?v=145"></script>
-    <script src="./payments.js?v=145"></script>
-    <script src="./app.js?v=145"></script>
+    <script src="./vendor/fflate.min.js?v=146"></script>
+    <script src="./payments.config.js?v=146"></script>
+    <script src="./i18n.js?v=146"></script>
+    <script src="./payments.js?v=146"></script>
+    <script src="./app.js?v=146"></script>
   </body>
 </html>
