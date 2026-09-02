@@ -20,16 +20,19 @@
   }
 
   function loadScript() {
-    if (state.scriptLoaded || state.scriptLoading) {
-      return state.scriptLoaded
-        ? Promise.resolve()
-        : new Promise((resolve) => {
-          const wait = () => {
-            if (state.scriptLoaded) resolve();
-            else setTimeout(wait, 40);
-          };
-          wait();
-        });
+    if (state.scriptLoaded) return Promise.resolve();
+    if (document.querySelector('script[src*="pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"]')) {
+      state.scriptLoaded = true;
+      return Promise.resolve();
+    }
+    if (state.scriptLoading) {
+      return new Promise((resolve) => {
+        const wait = () => {
+          if (state.scriptLoaded) resolve();
+          else setTimeout(wait, 40);
+        };
+        wait();
+      });
     }
     const clientId = String(config().clientId || '').trim();
     state.scriptLoading = true;
