@@ -235,7 +235,9 @@ const I18N = {
     'studio.hero.body': 'Importe um pack, grave cada fala na sua voz e assista o vídeo final. Comece no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.',
     'studio.early': 'Cedo',
     'studio.ontime': 'No tempo',
-    'studio.late': 'Tarde'
+    'studio.late': 'Tarde',
+    'ads.label': 'Anúncio',
+    'ads.remove': 'Remover com PRO'
   },
   en: {
     'lang.label': 'Language',
@@ -471,7 +473,9 @@ const I18N = {
     'studio.hero.body': 'Load a pack, record each line in your voice, then watch the finished dub. Start on <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.',
     'studio.early': 'Early',
     'studio.ontime': 'On time',
-    'studio.late': 'Late'
+    'studio.late': 'Late',
+    'ads.label': 'Ad',
+    'ads.remove': 'Remove with PRO'
   }
 };
 

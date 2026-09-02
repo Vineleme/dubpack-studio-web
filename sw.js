@@ -1,4 +1,4 @@
-const CACHE = 'dubpack-studio-web-v146';
+const CACHE = 'dubpack-studio-web-v147';
 const PRECACHE = [
   './',
   './index.html',

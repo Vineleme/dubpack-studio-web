@@ -3342,6 +3342,89 @@ body:not(.in-studio) .site-footer { display: none; }
 #packStatusLamp { color: var(--cv-teal); letter-spacing: 0.08em; text-transform: uppercase; }
 #packStatusPack { color: #8f8ca8; font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.studio-layout {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) 160px;
+  grid-template-areas:
+    "adleft studio adright"
+    "adleft adbottom adright";
+  align-items: start;
+  gap: 12px;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 12px 24px;
+}
+.studio-ad-left { grid-area: adleft; }
+#studioApp { grid-area: studio; }
+.studio-ad-right { grid-area: adright; }
+.studio-ad-bottom { grid-area: adbottom; }
+.studio-ad {
+  position: sticky;
+  top: 12px;
+}
+.studio-ad-bottom { position: static; }
+.studio-ad-box {
+  min-height: 520px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255,255,255,0.18);
+  background: rgba(8, 8, 12, 0.72);
+  color: #8f8ca8;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.studio-ad-box-wide { min-height: 220px; margin-bottom: 14px; }
+.studio-ad-box-leader {
+  min-height: 90px;
+  grid-auto-flow: column;
+  justify-content: center;
+  padding: 16px 20px;
+}
+.studio-ad-pro {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 12px;
+  font-weight: 800;
+  color: #7ee7dc;
+  background: transparent;
+  border: 1px solid rgba(126, 231, 220, 0.35);
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+body.hide-ads .studio-ad { display: none !important; }
+body.hide-ads .studio-layout {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "studio";
+  max-width: 1280px;
+}
+
+@media (max-width: 1180px) {
+  .studio-ad-left,
+  .studio-ad-right { display: none; }
+  .studio-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "studio"
+      "adbottom";
+  }
+}
+
+@media (max-width: 860px) {
+  .studio-ad-bottom { display: none; }
+  .studio-layout {
+    grid-template-areas: "studio";
+    padding: 0;
+  }
+}
+
 @media (max-width: 860px) {
   .cv-dock { grid-template-columns: 1fr 1fr; }
   .cv-status { grid-column: 1 / -1; grid-template-columns: 1fr; }
