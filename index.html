@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=151" />
+    <link rel="stylesheet" href="./styles.css?v=152" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -338,8 +338,14 @@
         <section id="createTab" class="tab-view create-pack-page">
           <div id="createLanding" class="create-hero">
             <div class="create-hero-copy">
-              <p class="create-eyebrow" data-i18n="create.eyebrow">Pack Maker · Input 01</p>
-              <h1 data-i18n="create.hero">Monte o seu dub pack.</h1>
+              <div class="create-brand-row">
+                <img class="create-brand-mark" src="./assets/dubpack-logo-official.png" alt="" width="48" height="48" />
+                <p class="create-eyebrow" data-i18n="create.eyebrow">Pack Maker · Input 01</p>
+              </div>
+              <h1>
+                <span data-i18n="create.hero.line1">Monte o seu</span>
+                <span class="create-hero-brand"><span class="create-hero-dub">Dub</span><span class="create-hero-pack">Pack</span>.</span>
+              </h1>
               <p class="create-hero-lead" data-i18n="create.lead">Carregue um vídeo do zero ou abra um ZIP de pack existente e continue editando — tudo no navegador, sem enviar nada para o servidor.</p>
               <div class="create-hero-actions">
                 <label class="create-cta create-cta-primary">
@@ -357,7 +363,8 @@
               <p class="create-legal" data-i18n="create.legal">Use só material que você tem direito de usar. O DubPack é só o estúdio; conteúdo e direitos são responsabilidade de quem cria o pack.</p>
             </div>
             <button id="createDrop" class="create-drop" type="button" aria-label="Soltar vídeo ou ZIP">
-              <span class="create-drop-icon" aria-hidden="true">🎞️</span>
+              <span class="create-drop-glow" aria-hidden="true"></span>
+              <span class="create-drop-icon" aria-hidden="true">✦</span>
               <strong data-i18n="create.drop">Solte MP4, WebM ou pack ZIP</strong>
               <small data-i18n="create.drop.tag">Mídia / Arquivo</small>
             </button>
@@ -625,12 +632,12 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=151"></script>
-    <script src="./payments.config.js?v=151"></script>
-    <script src="./ads.config.js?v=151"></script>
-    <script src="./i18n.js?v=151"></script>
-    <script src="./payments.js?v=151"></script>
-    <script src="./ads.js?v=151"></script>
-    <script src="./app.js?v=151"></script>
+    <script src="./vendor/fflate.min.js?v=152"></script>
+    <script src="./payments.config.js?v=152"></script>
+    <script src="./ads.config.js?v=152"></script>
+    <script src="./i18n.js?v=152"></script>
+    <script src="./payments.js?v=152"></script>
+    <script src="./ads.js?v=152"></script>
+    <script src="./app.js?v=152"></script>
   </body>
 </html>
