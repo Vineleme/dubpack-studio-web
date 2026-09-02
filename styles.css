@@ -3930,12 +3930,37 @@ body.hide-ads .studio-layout {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: start;
+  align-items: center;
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid rgba(255, 143, 196, 0.16);
   background: rgba(18, 8, 26, 0.7);
 }
+.create-line-main {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+.create-play-btn {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  background: var(--dp-grad);
+  box-shadow: 0 6px 18px rgba(245, 46, 131, 0.35);
+}
+.create-play-btn.is-playing {
+  background: #2a1420;
+  box-shadow: inset 0 0 0 1px rgba(255, 143, 196, 0.45);
+}
+.create-play-btn:hover { filter: brightness(1.06); }
 .create-line-item p {
   margin: 4px 0;
   color: #e8d7ea;
@@ -3946,7 +3971,7 @@ body.hide-ads .studio-layout {
   flex-direction: column;
   gap: 6px;
   align-items: stretch;
-  min-width: 96px;
+  min-width: 110px;
 }
 .create-actions {
   display: grid;

@@ -205,7 +205,8 @@ const state = {
     sceneStart: 0,
     sceneEnd: CREATE_SCENE_MAX_SEC,
     previewTimer: 0,
-    previewLineId: null
+    previewLineId: null,
+    previewOnTimeUpdate: null
   }
 };
 
@@ -353,7 +354,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '157';
+  const swVersion = '158';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -1415,13 +1416,18 @@ function renderCreateLines() {
     item.className = 'create-line-item';
     const playing = state.create.previewLineId === line.id;
     item.innerHTML = `
-      <div>
-        <strong>${index + 1}. ${escapeHtml(line.character)}</strong>
-        <p>${escapeHtml(line.text)}</p>
-        <small>${formatSeconds(line.start)} → ${formatSeconds(line.end)} · ${formatSeconds(line.end - line.start)}</small>
+      <div class="create-line-main">
+        <button type="button" class="create-play-btn ${playing ? 'is-playing' : ''}" data-create-play="${line.id}" aria-label="${playing ? t('create.stop') : t('create.play')}">
+          ${playing ? '⏹' : '▶'}
+        </button>
+        <div>
+          <strong>${index + 1}. ${escapeHtml(line.character)}</strong>
+          <p>${escapeHtml(line.text)}</p>
+          <small>${formatSeconds(line.start)} → ${formatSeconds(line.end)} · ${formatSeconds(line.end - line.start)}</small>
+        </div>
       </div>
       <div class="create-line-actions">
-        <button type="button" class="secondary" data-create-play="${line.id}">${playing ? t('create.stop') : t('create.play')}</button>
+        <button type="button" class="secondary create-play-text" data-create-play="${line.id}">${playing ? t('create.stop') : t('create.play')}</button>
         <button type="button" class="ghost" data-create-remove="${line.id}">${t('create.remove')}</button>
       </div>
     `;
@@ -1535,37 +1541,13 @@ function stopCreatePreview() {
     clearTimeout(state.create.previewTimer);
     state.create.previewTimer = 0;
   }
+  const video = document.querySelector('#createVideo');
+  if (video && state.create.previewOnTimeUpdate) {
+    video.removeEventListener('timeupdate', state.create.previewOnTimeUpdate);
+    state.create.previewOnTimeUpdate = null;
+  }
   state.create.previewLineId = null;
-  const video = document.querySelector('#createVideo');
   if (video && !video.paused) video.pause();
-}
-
-async function previewCreateLine(id) {
-  const line = state.create.lines.find((item) => item.id === id);
-  const video = document.querySelector('#createVideo');
-  if (!line || !video?.src) return;
-  if (state.create.previewLineId === id) {
-    stopCreatePreview();
-    renderCreateLines();
-    return;
-  }
-  stopCreatePreview();
-  state.create.previewLineId = id;
-  renderCreateLines();
-  try {
-    await seekMedia(video, line.start);
-    video.muted = false;
-    video.volume = 1;
-    await video.play();
-    const ms = Math.max(80, Math.ceil((line.end - line.start) * 1000));
-    state.create.previewTimer = setTimeout(() => {
-      stopCreatePreview();
-      renderCreateLines();
-    }, ms);
-  } catch {
-    stopCreatePreview();
-    renderCreateLines();
-  }
 }
 
 function sliceAudioBufferWindow(audioBuffer, startSec, endSec) {
@@ -1905,7 +1887,8 @@ function resetCreatePack() {
     sceneStart: 0,
     sceneEnd: CREATE_SCENE_MAX_SEC,
     previewTimer: 0,
-    previewLineId: null
+    previewLineId: null,
+    previewOnTimeUpdate: null
   };
   const video = document.querySelector('#createVideo');
   if (video) {
@@ -1970,18 +1953,81 @@ function silenceWavBytes(durationSec, sampleRate = 22050) {
 
 function seekMedia(media, time) {
   return new Promise((resolve) => {
-    const onSeeked = () => {
-      media.removeEventListener('seeked', onSeeked);
+    const target = Math.max(0, time);
+    if (!media || !Number.isFinite(target)) {
+      resolve();
+      return;
+    }
+    if (Math.abs((media.currentTime || 0) - target) < 0.04 && media.readyState >= 2) {
+      resolve();
+      return;
+    }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      media.removeEventListener('seeked', finish);
+      media.removeEventListener('loadeddata', finish);
+      clearTimeout(timer);
       resolve();
     };
-    media.addEventListener('seeked', onSeeked);
+    const timer = setTimeout(finish, 700);
+    media.addEventListener('seeked', finish);
+    media.addEventListener('loadeddata', finish);
     try {
-      media.currentTime = Math.max(0, time);
+      media.currentTime = target;
     } catch {
-      media.removeEventListener('seeked', onSeeked);
-      resolve();
+      finish();
     }
   });
+}
+
+async function previewCreateLine(id) {
+  const line = state.create.lines.find((item) => item.id === id);
+  const video = document.querySelector('#createVideo');
+  if (!line || !video?.src) {
+    toast(t('create.status.needVideo'));
+    return;
+  }
+  if (state.create.previewLineId === id) {
+    stopCreatePreview();
+    renderCreateLines();
+    return;
+  }
+
+  stopCreatePreview();
+  state.create.previewLineId = id;
+  renderCreateLines();
+
+  const onTimeUpdate = () => {
+    if (state.create.previewLineId !== id) return;
+    if (video.currentTime >= line.end - 0.03) {
+      stopCreatePreview();
+      renderCreateLines();
+    }
+  };
+  state.create.previewOnTimeUpdate = onTimeUpdate;
+
+  try {
+    video.muted = false;
+    video.volume = 1;
+    video.pause();
+    await seekMedia(video, line.start);
+    if (state.create.previewLineId !== id) return;
+    video.addEventListener('timeupdate', onTimeUpdate);
+    await video.play();
+    const ms = Math.max(250, Math.ceil((line.end - line.start) * 1000) + 120);
+    state.create.previewTimer = setTimeout(() => {
+      if (state.create.previewLineId === id) {
+        stopCreatePreview();
+        renderCreateLines();
+      }
+    }, ms);
+  } catch (error) {
+    stopCreatePreview();
+    renderCreateLines();
+    toast(error?.message || t('create.play.fail'));
+  }
 }
 
 async function extractLineAudio(videoEl, start, end) {
