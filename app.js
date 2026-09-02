@@ -353,7 +353,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '154';
+  const swVersion = '155';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -470,6 +470,7 @@ function bindUi() {
   document.querySelector('#createMarkSceneEndBtn')?.addEventListener('click', () => markCreateSceneBoundary('end'));
   document.querySelector('#createSceneStart')?.addEventListener('change', onCreateSceneInputsChanged);
   document.querySelector('#createSceneEnd')?.addEventListener('change', onCreateSceneInputsChanged);
+  bindCreateSceneScrub();
   document.querySelector('#createAddLineBtn')?.addEventListener('click', addCreateLine);
   document.querySelector('#createDownloadBtn')?.addEventListener('click', () => void exportCreatePack({ open: false }));
   document.querySelector('#createOpenBtn')?.addEventListener('click', () => void exportCreatePack({ open: true }));
@@ -1232,10 +1233,131 @@ function syncCreateSceneUi(toastIfClamped = false) {
       max: formatSeconds(CREATE_SCENE_MAX_SEC)
     });
   }
+  const startLabel = document.querySelector('#createScrubStartLabel');
+  const endLabel = document.querySelector('#createScrubEndLabel');
+  if (startLabel) startLabel.textContent = formatSeconds(start);
+  if (endLabel) endLabel.textContent = formatSeconds(end);
+  updateCreateSceneScrub();
   if (toastIfClamped && requestedLen > CREATE_SCENE_MAX_SEC + 0.01) {
     toast(t('create.scene.tooLong'));
     setCreateStatus(t('create.scene.tooLong'));
   }
+}
+
+function updateCreateSceneScrub() {
+  const duration = createVideoDuration() || Math.max(state.create.sceneEnd, CREATE_SCENE_MAX_SEC);
+  const { start, end } = getCreateSceneWindow();
+  const left = (start / duration) * 100;
+  const width = ((end - start) / duration) * 100;
+  const selection = document.querySelector('#createScrubSelection');
+  const handleStart = document.querySelector('#createScrubStart');
+  const handleEnd = document.querySelector('#createScrubEnd');
+  if (selection) {
+    selection.style.left = `${left}%`;
+    selection.style.width = `${Math.max(1.5, width)}%`;
+  }
+  if (handleStart) handleStart.style.left = `${left}%`;
+  if (handleEnd) handleEnd.style.left = `${(end / duration) * 100}%`;
+  updateCreateScrubPlayhead();
+}
+
+function updateCreateScrubPlayhead() {
+  const video = document.querySelector('#createVideo');
+  const playhead = document.querySelector('#createScrubPlayhead');
+  const duration = createVideoDuration();
+  if (!playhead || !duration) return;
+  const time = Number(video?.currentTime || 0);
+  playhead.style.left = `${Math.max(0, Math.min(100, (time / duration) * 100))}%`;
+}
+
+function bindCreateSceneScrub() {
+  const track = document.querySelector('#createScrubTrack');
+  if (!track || track.dataset.bound === '1') return;
+  track.dataset.bound = '1';
+  let mode = null;
+  let dragOffset = 0;
+
+  const timeFromClientX = (clientX) => {
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+    const duration = createVideoDuration() || CREATE_SCENE_MAX_SEC;
+    return ratio * duration;
+  };
+
+  const applyWindow = (start, end, { seek = false } = {}) => {
+    const duration = createVideoDuration() || CREATE_SCENE_MAX_SEC;
+    let nextStart = Math.max(0, Math.min(start, duration));
+    let nextEnd = Math.max(0, Math.min(end, duration));
+    if (nextEnd <= nextStart) nextEnd = Math.min(duration, nextStart + 0.5);
+    if (nextEnd - nextStart > CREATE_SCENE_MAX_SEC) {
+      if (mode === 'end' || mode === 'start') {
+        if (mode === 'start') nextEnd = nextStart + CREATE_SCENE_MAX_SEC;
+        else nextStart = nextEnd - CREATE_SCENE_MAX_SEC;
+      } else {
+        nextEnd = nextStart + CREATE_SCENE_MAX_SEC;
+      }
+      nextStart = Math.max(0, nextStart);
+      nextEnd = Math.min(duration, nextEnd);
+      if (nextEnd - nextStart > CREATE_SCENE_MAX_SEC) {
+        nextEnd = nextStart + CREATE_SCENE_MAX_SEC;
+      }
+    }
+    state.create.sceneStart = nextStart;
+    state.create.sceneEnd = nextEnd;
+    state.create.zipBytes = null;
+    const startInput = document.querySelector('#createSceneStart');
+    const endInput = document.querySelector('#createSceneEnd');
+    if (startInput) startInput.value = nextStart.toFixed(2);
+    if (endInput) endInput.value = nextEnd.toFixed(2);
+    syncCreateSceneUi(false);
+    if (seek) {
+      const video = document.querySelector('#createVideo');
+      if (video) video.currentTime = mode === 'end' ? nextEnd : nextStart;
+    }
+  };
+
+  const onPointerMove = (event) => {
+    if (!mode) return;
+    const time = timeFromClientX(event.clientX);
+    const { start, end } = getCreateSceneWindow();
+    if (mode === 'start') applyWindow(time, end, { seek: true });
+    else if (mode === 'end') applyWindow(start, time, { seek: true });
+    else if (mode === 'move') {
+      const span = end - start;
+      const nextStart = time - dragOffset;
+      applyWindow(nextStart, nextStart + span, { seek: false });
+    }
+  };
+
+  const onPointerUp = () => {
+    mode = null;
+    document.querySelector('#createScrubSelection')?.classList.remove('is-dragging');
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+  };
+
+  const startDrag = (nextMode, event) => {
+    if (!state.create.videoFile || state.create.busy) return;
+    event.preventDefault();
+    mode = nextMode;
+    if (nextMode === 'move') {
+      const time = timeFromClientX(event.clientX);
+      dragOffset = time - getCreateSceneWindow().start;
+      document.querySelector('#createScrubSelection')?.classList.add('is-dragging');
+    }
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  document.querySelector('#createScrubStart')?.addEventListener('pointerdown', (event) => startDrag('start', event));
+  document.querySelector('#createScrubEnd')?.addEventListener('pointerdown', (event) => startDrag('end', event));
+  document.querySelector('#createScrubSelection')?.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('.create-scrub-handle')) return;
+    startDrag('move', event);
+  });
+
+  document.querySelector('#createVideo')?.addEventListener('timeupdate', updateCreateScrubPlayhead);
+  document.querySelector('#createVideo')?.addEventListener('seeked', updateCreateScrubPlayhead);
 }
 
 function onCreateSceneInputsChanged() {
@@ -1490,59 +1612,133 @@ function mixAudioBufferMono(audioBuffer) {
   return mixed;
 }
 
+function onePoleHighpass(data, sampleRate, cutoffHz) {
+  const rc = 1 / (2 * Math.PI * cutoffHz);
+  const dt = 1 / sampleRate;
+  const alpha = rc / (rc + dt);
+  const out = new Float32Array(data.length);
+  let prevX = 0;
+  let prevY = 0;
+  for (let i = 0; i < data.length; i += 1) {
+    const x = data[i];
+    const y = alpha * (prevY + x - prevX);
+    out[i] = y;
+    prevX = x;
+    prevY = y;
+  }
+  return out;
+}
+
+function onePoleLowpass(data, sampleRate, cutoffHz) {
+  const rc = 1 / (2 * Math.PI * cutoffHz);
+  const dt = 1 / sampleRate;
+  const alpha = dt / (rc + dt);
+  const out = new Float32Array(data.length);
+  let prev = 0;
+  for (let i = 0; i < data.length; i += 1) {
+    prev += alpha * (data[i] - prev);
+    out[i] = prev;
+  }
+  return out;
+}
+
+function framePitchStrength(frame, sampleRate) {
+  const minLag = Math.max(2, Math.floor(sampleRate / 320));
+  const maxLag = Math.min(frame.length - 2, Math.floor(sampleRate / 75));
+  if (maxLag <= minLag) return 0;
+  let energy = 0;
+  for (let i = 0; i < frame.length; i += 1) energy += frame[i] * frame[i];
+  if (energy < 1e-8) return 0;
+  let best = 0;
+  for (let lag = minLag; lag <= maxLag; lag += 1) {
+    let corr = 0;
+    const limit = frame.length - lag;
+    for (let i = 0; i < limit; i += 1) corr += frame[i] * frame[i + lag];
+    best = Math.max(best, corr / energy);
+  }
+  return best;
+}
+
 function detectSpeechSegments(audioBuffer, {
-  frameMs = 30,
-  minSpeechSec = 0.35,
-  mergeGapSec = 0.28,
-  padSec = 0.12,
-  maxClips = 80
+  frameMs = 25,
+  minSpeechSec = 0.55,
+  mergeGapSec = 0.45,
+  padSec = 0.08,
+  maxClips = 16
 } = {}) {
   const sampleRate = audioBuffer.sampleRate;
-  const data = mixAudioBufferMono(audioBuffer);
+  const raw = mixAudioBufferMono(audioBuffer);
+  const speechBand = onePoleLowpass(onePoleHighpass(raw, sampleRate, 90), sampleRate, 3400);
   const frameSize = Math.max(1, Math.round(sampleRate * frameMs / 1000));
-  const energies = [];
-  for (let i = 0; i < data.length; i += frameSize) {
-    const end = Math.min(data.length, i + frameSize);
-    let sum = 0;
-    for (let j = i; j < end; j += 1) sum += data[j] * data[j];
-    energies.push(Math.sqrt(sum / Math.max(1, end - i)));
-  }
-  if (!energies.length) return [];
+  const hop = frameSize;
+  const scores = [];
 
-  const smoothed = energies.map((_, index) => {
-    let sum = 0;
-    let count = 0;
-    for (let k = index - 2; k <= index + 2; k += 1) {
-      if (k < 0 || k >= energies.length) continue;
-      sum += energies[k];
-      count += 1;
+  for (let i = 0; i < speechBand.length; i += hop) {
+    const end = Math.min(speechBand.length, i + frameSize);
+    const size = Math.max(1, end - i);
+    let speechEnergy = 0;
+    let fullEnergy = 0;
+    let zc = 0;
+    let prev = speechBand[i] || 0;
+    for (let j = i; j < end; j += 1) {
+      const s = speechBand[j];
+      const f = raw[j] || 0;
+      speechEnergy += s * s;
+      fullEnergy += f * f;
+      if ((prev >= 0 && s < 0) || (prev < 0 && s >= 0)) zc += 1;
+      prev = s;
     }
-    return sum / count;
-  });
+    const rms = Math.sqrt(speechEnergy / size);
+    const fullRms = Math.sqrt(fullEnergy / size) + 1e-9;
+    const bandRatio = rms / fullRms;
+    const zcr = zc / size;
+    const frame = speechBand.subarray(i, end);
+    const pitch = framePitchStrength(frame, sampleRate);
+    const voiceLike = (
+      rms > 0
+      && bandRatio >= 0.42
+      && zcr >= 0.015
+      && zcr <= 0.28
+      && (pitch >= 0.22 || (bandRatio >= 0.62 && zcr <= 0.2))
+    );
+    scores.push({ rms, pitch, voiceLike });
+  }
 
-  const sorted = [...smoothed].sort((a, b) => a - b);
-  const noise = sorted[Math.floor(sorted.length * 0.2)] || 0;
-  const peak = sorted[Math.floor(sorted.length * 0.9)] || 0;
-  const threshold = Math.max(noise * 1.8, noise + (peak - noise) * 0.26);
+  if (!scores.length) return [];
 
-  const voiced = smoothed.map((value) => value > threshold);
-  const raw = [];
+  const voicedRms = scores.filter((item) => item.voiceLike).map((item) => item.rms).sort((a, b) => a - b);
+  const allRms = scores.map((item) => item.rms).sort((a, b) => a - b);
+  const noise = allRms[Math.floor(allRms.length * 0.2)] || 0;
+  const voiceFloor = voicedRms.length
+    ? voicedRms[Math.floor(voicedRms.length * 0.25)]
+    : noise * 2;
+  const threshold = Math.max(noise * 2.4, voiceFloor * 0.85, 0.004);
+
+  const voiced = scores.map((item) => (
+    item.voiceLike && item.rms >= threshold && item.pitch >= 0.18
+  ));
+
+  const rawRanges = [];
   let start = null;
   for (let i = 0; i < voiced.length; i += 1) {
     if (voiced[i] && start == null) start = i;
     if (!voiced[i] && start != null) {
-      raw.push([start, i]);
+      rawRanges.push([start, i]);
       start = null;
     }
   }
-  if (start != null) raw.push([start, voiced.length]);
+  if (start != null) rawRanges.push([start, voiced.length]);
 
-  const frameDur = frameSize / sampleRate;
+  const frameDur = hop / sampleRate;
   const minFrames = Math.max(1, Math.ceil(minSpeechSec / frameDur));
   const mergeGapFrames = Math.max(1, Math.ceil(mergeGapSec / frameDur));
   const merged = [];
-  raw.forEach(([from, to]) => {
+  rawRanges.forEach(([from, to]) => {
     if (to - from < minFrames) return;
+    const slice = scores.slice(from, to);
+    const avgPitch = slice.reduce((sum, item) => sum + item.pitch, 0) / Math.max(1, slice.length);
+    const voicedRatio = slice.filter((item) => item.voiceLike).length / Math.max(1, slice.length);
+    if (avgPitch < 0.2 || voicedRatio < 0.55) return;
     if (!merged.length) {
       merged.push([from, to]);
       return;
@@ -1552,7 +1748,7 @@ function detectSpeechSegments(audioBuffer, {
     else merged.push([from, to]);
   });
 
-  const duration = Number(audioBuffer.duration) || (data.length / sampleRate);
+  const duration = Number(audioBuffer.duration) || (raw.length / sampleRate);
   return merged
     .slice(0, maxClips)
     .map(([from, to]) => ({
@@ -1580,10 +1776,10 @@ async function detectCreateSpeechLines() {
     const audioBuffer = await decodeCreateAudioBuffer();
     const windowBuffer = sliceAudioBufferWindow(audioBuffer, sceneStart, sceneEnd);
     const segments = detectSpeechSegments(windowBuffer, {
-      minSpeechSec: 0.4,
-      mergeGapSec: 0.35,
-      padSec: 0.1,
-      maxClips: 24
+      minSpeechSec: 0.55,
+      mergeGapSec: 0.5,
+      padSec: 0.08,
+      maxClips: 16
     });
     if (!segments.length) {
       setCreateStatus(t('create.detect.none'));
