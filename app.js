@@ -354,7 +354,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '158';
+  const swVersion = '159';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -1644,12 +1644,27 @@ function framePitchStrength(frame, sampleRate) {
   return best;
 }
 
+function mergeFrameRanges(ranges, gapFrames) {
+  const merged = [];
+  ranges.forEach(([from, to]) => {
+    if (!merged.length) {
+      merged.push([from, to]);
+      return;
+    }
+    const last = merged[merged.length - 1];
+    if (from - last[1] <= gapFrames) last[1] = to;
+    else merged.push([from, to]);
+  });
+  return merged;
+}
+
 function detectSpeechSegments(audioBuffer, {
   frameMs = 25,
-  minSpeechSec = 0.35,
-  mergeGapSec = 0.4,
-  padSec = 0.1,
-  maxClips = 18
+  minSpeechSec = 0.55,
+  mergeGapSec = 1.05,
+  phraseGapSec = 1.6,
+  padSec = 0.18,
+  maxClips = 14
 } = {}) {
   const sampleRate = audioBuffer.sampleRate;
   const raw = mixAudioBufferMono(audioBuffer);
@@ -1712,19 +1727,13 @@ function detectSpeechSegments(audioBuffer, {
   if (rangeStart != null) rawRanges.push([rangeStart, active.length]);
 
   const frameDur = hop / sampleRate;
+  // Keep tiny word blips so they can glue into a full phrase; drop them only after merge.
+  const seedMinFrames = Math.max(1, Math.ceil(0.12 / frameDur));
   const minFrames = Math.max(1, Math.ceil(minSpeechSec / frameDur));
   const mergeGapFrames = Math.max(1, Math.ceil(mergeGapSec / frameDur));
-  const merged = [];
-  rawRanges.forEach(([from, to]) => {
-    if (to - from < minFrames) return;
-    if (!merged.length) {
-      merged.push([from, to]);
-      return;
-    }
-    const last = merged[merged.length - 1];
-    if (from - last[1] <= mergeGapFrames) last[1] = to;
-    else merged.push([from, to]);
-  });
+  const phraseGapFrames = Math.max(mergeGapFrames, Math.ceil(phraseGapSec / frameDur));
+  const seeded = rawRanges.filter(([from, to]) => to - from >= seedMinFrames);
+  const merged = mergeFrameRanges(seeded, mergeGapFrames).filter(([from, to]) => to - from >= minFrames);
 
   // Pass 2: score each chunk — higher = more spoken-like, lower = soundtrack-like.
   const ranked = merged.map(([from, to]) => {
@@ -1773,10 +1782,29 @@ function detectSpeechSegments(audioBuffer, {
     chosen = ranked.slice(0, Math.min(6, maxClips));
   }
 
-  const duration = Number(audioBuffer.duration) || (raw.length / sampleRate);
-  return chosen
+  // Pass 3: stitch adjacent spoken chunks into complete dialogue turns.
+  const ordered = chosen
     .slice(0, maxClips)
-    .sort((a, b) => a.from - b.from)
+    .sort((a, b) => a.from - b.from);
+  const phrases = [];
+  ordered.forEach((item) => {
+    if (!phrases.length) {
+      phrases.push({ ...item });
+      return;
+    }
+    const last = phrases[phrases.length - 1];
+    if (item.from - last.to <= phraseGapFrames) {
+      last.to = item.to;
+      last.score = Math.max(last.score, item.score);
+      last.musicPenalty = Math.min(last.musicPenalty, item.musicPenalty);
+      return;
+    }
+    phrases.push({ ...item });
+  });
+
+  const duration = Number(audioBuffer.duration) || (raw.length / sampleRate);
+  return phrases
+    .slice(0, maxClips)
     .map(({ from, to }) => ({
       start: Math.max(0, from * frameDur - padSec),
       end: Math.min(duration, to * frameDur + padSec)
@@ -1802,10 +1830,11 @@ async function detectCreateSpeechLines() {
     const audioBuffer = await decodeCreateAudioBuffer();
     const windowBuffer = sliceAudioBufferWindow(audioBuffer, sceneStart, sceneEnd);
     const segments = detectSpeechSegments(windowBuffer, {
-      minSpeechSec: 0.35,
-      mergeGapSec: 0.4,
-      padSec: 0.1,
-      maxClips: 18
+      minSpeechSec: 0.55,
+      mergeGapSec: 1.05,
+      phraseGapSec: 1.6,
+      padSec: 0.18,
+      maxClips: 14
     });
     if (!segments.length) {
       setCreateStatus(t('create.detect.none'));
