@@ -3,7 +3,8 @@
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #121214;
   color: #fff;
-  --cv-teal: #3ee6d4;
+  --cv-teal: #5bff3a;
+  --cv-green: #5bff3a;
   --cv-pink: #ff8ab8;
 }
 
@@ -51,7 +52,7 @@ body {
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.cv-brand span { color: #7ee7dc; }
+.cv-brand span { color: #5bff3a; }
 
 .cv-now {
   display: grid;
@@ -97,7 +98,7 @@ body {
 }
 .cv-nav-link.active,
 .cv-nav-link:hover {
-  color: #7ee7dc;
+  color: #5bff3a;
   background: rgba(126, 231, 220, 0.08);
 }
 .cv-icon-btn { min-width: 36px; }
@@ -206,7 +207,7 @@ body {
 .empty-idle small {
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #7ee7dc;
+  color: #5bff3a;
   font-weight: 800;
 }
 .cv-import {
@@ -231,7 +232,7 @@ body {
 .cv-caption span,
 .cv-char-chip {
   display: inline-block;
-  color: #08110f;
+  color: #081108;
   background: var(--cv-teal);
   font-size: 11px;
   font-weight: 800;
@@ -350,7 +351,7 @@ body:not(.has-pack) .cv-caption { display: none; }
   pointer-events: none;
 }
 .cv-wave-ref { bottom: 22px; width: 100%; background: rgba(255,122,184,0.45); }
-.cv-wave-take { bottom: 12px; width: 0; background: #7ee7dc; }
+.cv-wave-take { bottom: 12px; width: 0; background: #5bff3a; }
 #wavePlayhead {
   position: absolute;
   top: 0;
@@ -395,7 +396,7 @@ body.has-pack .cv-wave .timing-labels { display: flex; }
 .cv-clip p {
   margin: 4px 0 0;
   font-variant-numeric: tabular-nums;
-  color: #7ee7dc;
+  color: #5bff3a;
   font-size: 28px;
   font-weight: 900;
 }
@@ -3196,7 +3197,7 @@ body:not(.in-studio) .site-footer { display: none; }
   color: #fff;
   cursor: pointer;
 }
-.roles-row input { accent-color: #7ee7dc; width: 18px; height: 18px; }
+.roles-row input { accent-color: #5bff3a; width: 18px; height: 18px; }
 .roles-row strong { flex: 1; }
 .roles-row span { color: #b7b5ce; font-size: 13px; }
 .roles-actions { display: flex; gap: 8px; }
@@ -3433,7 +3434,7 @@ body:not(.in-studio) .site-footer { display: none; }
   text-transform: none;
   font-size: 12px;
   font-weight: 800;
-  color: #7ee7dc;
+  color: #5bff3a;
   background: transparent;
   border: 1px solid rgba(126, 231, 220, 0.35);
   border-radius: 999px;

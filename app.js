@@ -357,7 +357,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '161';
+  const swVersion = '162';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -4227,7 +4227,7 @@ async function paintOverlapWave(scene, take) {
     const takePeaks = take.peaks || await (take.blob ? peaksFromBlob(take.blob) : peaksFromUrl(take.url));
     if (takePeaks?.length) take.peaks = takePeaks;
     if (gen !== state.waveGen) return;
-    drawWaveLayer(ctx, takePeaks, '#7ee7dc', width, height, 0.78);
+    drawWaveLayer(ctx, takePeaks, '#5bff3a', width, height, 0.78);
   }
 }
 
