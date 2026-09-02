@@ -209,7 +209,9 @@ const state = {
     previewOnTimeUpdate: null,
     vocalsFile: null,
     vocalsBytes: null,
-    vocalsName: ''
+    vocalsName: '',
+    linesConfirmed: false,
+    lang: 'pt'
   }
 };
 
@@ -357,7 +359,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '162';
+  const swVersion = '163';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -478,6 +480,13 @@ function bindUi() {
   document.querySelector('#createSceneEnd')?.addEventListener('change', onCreateSceneInputsChanged);
   bindCreateSceneScrub();
   document.querySelector('#createAddLineBtn')?.addEventListener('click', addCreateLine);
+  document.querySelector('#createConfirmLinesBtn')?.addEventListener('click', confirmCreateLines);
+  document.querySelector('#createEditLinesBtn')?.addEventListener('click', unconfirmCreateLines);
+  document.querySelector('#createLangToggle')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-create-lang]');
+    if (!btn) return;
+    setCreatePackLang(btn.dataset.createLang);
+  });
   document.querySelector('#createDownloadBtn')?.addEventListener('click', () => void exportCreatePack({ open: false }));
   document.querySelector('#createOpenBtn')?.addEventListener('click', () => void exportCreatePack({ open: true }));
   document.querySelector('#createResetBtn')?.addEventListener('click', resetCreatePack);
@@ -504,6 +513,11 @@ function bindUi() {
     const btn = event.target.closest('[data-create-remove]');
     if (!btn) return;
     removeCreateLine(btn.dataset.createRemove);
+  });
+  document.querySelector('#createLineList')?.addEventListener('input', (event) => {
+    const field = event.target.closest('[data-create-field]');
+    if (!field) return;
+    updateCreateLineField(field.dataset.createLine, field.dataset.createField, field.value);
   });
   document.querySelectorAll('[data-lang]').forEach((button) => {
     button.addEventListener('click', () => changeLang(button.dataset.lang));
@@ -1186,6 +1200,8 @@ function showCreateLanding(show) {
 function syncCreateActions() {
   const hasVideo = Boolean(state.create.videoFile);
   const hasLines = state.create.lines.length > 0;
+  const confirmed = Boolean(state.create.linesConfirmed);
+  const captionsReady = createCaptionsReady();
   const busy = state.create.busy;
   showCreateLanding(!hasVideo);
   document.querySelector('#createDetectBtn')?.toggleAttribute('disabled', !hasVideo || busy);
@@ -1194,14 +1210,81 @@ function syncCreateActions() {
   document.querySelector('#createSceneFromPlayheadBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkSceneStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkSceneEndBtn')?.toggleAttribute('disabled', !hasVideo || busy);
-  document.querySelector('#createDownloadBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
-  document.querySelector('#createOpenBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
-  document.querySelector('#createAddLineBtn')?.toggleAttribute('disabled', busy);
+  document.querySelector('#createDownloadBtn')?.toggleAttribute('disabled', !hasVideo || !captionsReady || busy);
+  document.querySelector('#createOpenBtn')?.toggleAttribute('disabled', !hasVideo || !captionsReady || busy);
+  document.querySelector('#createAddLineBtn')?.toggleAttribute('disabled', busy || confirmed);
+  document.querySelector('#createConfirmLinesBtn')?.toggleAttribute('disabled', !hasLines || busy);
   document.querySelector('#createVocalsInput')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createVocalsClearBtn')?.toggleAttribute('disabled', !state.create.vocalsBytes || busy);
   document.querySelector('label.create-file-btn')?.classList.toggle('is-disabled', !hasVideo || busy);
+  document.querySelector('#createLineForm')?.classList.toggle('is-hidden', confirmed);
   syncCreateVocalsUi();
+  syncCreateCaptionsUi();
   syncCreateSceneUi();
+}
+
+function createCaptionsReady() {
+  if (!state.create.linesConfirmed || !state.create.lines.length) return false;
+  return state.create.lines.every((line) => String(line.character || '').trim() && String(line.text || '').trim());
+}
+
+function syncCreateCaptionsUi() {
+  const hasLines = state.create.lines.length > 0;
+  const confirmed = Boolean(state.create.linesConfirmed);
+  document.querySelector('#createConfirmBox')?.classList.toggle('is-hidden', !hasLines || confirmed);
+  document.querySelector('#createCaptionsBox')?.classList.toggle('is-hidden', !hasLines || !confirmed);
+  document.querySelectorAll('#createLangToggle [data-create-lang]').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.createLang === state.create.lang);
+  });
+}
+
+function confirmCreateLines() {
+  if (!state.create.lines.length) {
+    setCreateStatus(t('create.status.needLines'));
+    toast(t('create.status.needLines'));
+    return;
+  }
+  state.create.linesConfirmed = true;
+  state.create.zipBytes = null;
+  // Clear auto placeholders so the user writes real captions.
+  state.create.lines = state.create.lines.map((line, index) => {
+    const placeholder = t('create.detect.line', { n: index + 1 });
+    const charPlaceholder = t('create.character.placeholder');
+    const text = String(line.text || '').trim();
+    const character = String(line.character || '').trim();
+    return {
+      ...line,
+      text: text && text !== placeholder ? text : '',
+      character: character && character !== charPlaceholder ? character : ''
+    };
+  });
+  renderCreateLines();
+  setCreateStatus(t('create.confirm.done'));
+  toast(t('create.confirm.done'));
+}
+
+function unconfirmCreateLines() {
+  state.create.linesConfirmed = false;
+  state.create.zipBytes = null;
+  renderCreateLines();
+  setCreateStatus(t('create.confirm.editDone'));
+}
+
+function setCreatePackLang(lang) {
+  const next = lang === 'en' ? 'en' : 'pt';
+  if (state.create.lang === next) return;
+  state.create.lang = next;
+  state.create.zipBytes = null;
+  syncCreateCaptionsUi();
+  setCreateStatus(t(next === 'en' ? 'create.lang.en' : 'create.lang.pt'));
+}
+
+function updateCreateLineField(id, field, value) {
+  const line = state.create.lines.find((item) => item.id === id);
+  if (!line || (field !== 'character' && field !== 'text')) return;
+  line[field] = value;
+  state.create.zipBytes = null;
+  syncCreateActions();
 }
 
 function createVideoDuration() {
@@ -1420,26 +1503,52 @@ function renderCreateLines() {
   const count = document.querySelector('#createLineCount');
   if (!list) return;
   list.replaceChildren();
+  const confirmed = Boolean(state.create.linesConfirmed);
   state.create.lines.forEach((line, index) => {
     const item = document.createElement('li');
-    item.className = 'create-line-item';
+    item.className = `create-line-item${confirmed ? ' is-captioning' : ''}`;
     const playing = state.create.previewLineId === line.id;
-    item.innerHTML = `
-      <div class="create-line-main">
-        <button type="button" class="create-play-btn ${playing ? 'is-playing' : ''}" data-create-play="${line.id}" aria-label="${playing ? t('create.stop') : t('create.play')}">
-          ${playing ? '⏹' : '▶'}
-        </button>
-        <div>
-          <strong>${index + 1}. ${escapeHtml(line.character)}</strong>
-          <p>${escapeHtml(line.text)}</p>
-          <small>${formatSeconds(line.start)} → ${formatSeconds(line.end)} · ${formatSeconds(line.end - line.start)}</small>
+    if (confirmed) {
+      item.innerHTML = `
+        <div class="create-line-main">
+          <button type="button" class="create-play-btn ${playing ? 'is-playing' : ''}" data-create-play="${line.id}" aria-label="${playing ? t('create.stop') : t('create.play')}">
+            ${playing ? '⏹' : '▶'}
+          </button>
+          <div class="create-line-caption-fields">
+            <span class="create-line-index">${index + 1}. ${formatSeconds(line.start)} → ${formatSeconds(line.end)}</span>
+            <label class="create-field">
+              <span>${t('create.character')}</span>
+              <input type="text" maxlength="60" data-create-line="${line.id}" data-create-field="character" value="${escapeHtml(line.character)}" placeholder="${escapeHtml(t('create.character.placeholder'))}" />
+            </label>
+            <label class="create-field create-field-wide">
+              <span>${t('create.text')}</span>
+              <textarea rows="2" maxlength="500" data-create-line="${line.id}" data-create-field="text" placeholder="${escapeHtml(t('create.text.placeholder'))}">${escapeHtml(line.text)}</textarea>
+            </label>
+          </div>
         </div>
-      </div>
-      <div class="create-line-actions">
-        <button type="button" class="secondary create-play-text" data-create-play="${line.id}">${playing ? t('create.stop') : t('create.play')}</button>
-        <button type="button" class="ghost" data-create-remove="${line.id}">${t('create.remove')}</button>
-      </div>
-    `;
+        <div class="create-line-actions">
+          <button type="button" class="secondary create-play-text" data-create-play="${line.id}">${playing ? t('create.stop') : t('create.play')}</button>
+          <button type="button" class="ghost" data-create-remove="${line.id}">${t('create.remove')}</button>
+        </div>
+      `;
+    } else {
+      item.innerHTML = `
+        <div class="create-line-main">
+          <button type="button" class="create-play-btn ${playing ? 'is-playing' : ''}" data-create-play="${line.id}" aria-label="${playing ? t('create.stop') : t('create.play')}">
+            ${playing ? '⏹' : '▶'}
+          </button>
+          <div>
+            <strong>${index + 1}. ${escapeHtml(line.character || t('create.character.placeholder'))}</strong>
+            <p>${escapeHtml(line.text || t('create.detect.line', { n: index + 1 }))}</p>
+            <small>${formatSeconds(line.start)} → ${formatSeconds(line.end)} · ${formatSeconds(line.end - line.start)}</small>
+          </div>
+        </div>
+        <div class="create-line-actions">
+          <button type="button" class="secondary create-play-text" data-create-play="${line.id}">${playing ? t('create.stop') : t('create.play')}</button>
+          <button type="button" class="ghost" data-create-remove="${line.id}">${t('create.remove')}</button>
+        </div>
+      `;
+    }
     list.appendChild(item);
   });
   if (empty) empty.hidden = state.create.lines.length > 0;
@@ -1492,6 +1601,7 @@ async function loadCreateVideo(file) {
   state.create.videoUrl = URL.createObjectURL(file);
   state.create.zipBytes = null;
   state.create.lines = [];
+  state.create.linesConfirmed = false;
   clearCreateVocals({ silent: true });
   const video = document.querySelector('#createVideo');
   if (video) {
@@ -2012,6 +2122,7 @@ async function detectCreateSpeechLines() {
       start: Number((sceneStart + segment.start).toFixed(2)),
       end: Number((sceneStart + segment.end).toFixed(2))
     }));
+    state.create.linesConfirmed = false;
     state.create.zipBytes = null;
     stopCreatePreview();
     renderCreateLines();
@@ -2065,6 +2176,7 @@ function removeCreateLine(id) {
   if (state.create.previewLineId === id) stopCreatePreview();
   state.create.lines = state.create.lines.filter((line) => line.id !== id);
   state.create.zipBytes = null;
+  if (!state.create.lines.length) state.create.linesConfirmed = false;
   renderCreateLines();
 }
 
@@ -2085,7 +2197,9 @@ function resetCreatePack() {
     previewOnTimeUpdate: null,
     vocalsFile: null,
     vocalsBytes: null,
-    vocalsName: ''
+    vocalsName: '',
+    linesConfirmed: false,
+    lang: 'pt'
   };
   const video = document.querySelector('#createVideo');
   if (video) {
@@ -2283,6 +2397,12 @@ async function buildCreatePackZip() {
   if (!state.create.lines.length) {
     throw new Error(t('create.status.needLines'));
   }
+  if (!state.create.linesConfirmed) {
+    throw new Error(t('create.status.needConfirm'));
+  }
+  if (!createCaptionsReady()) {
+    throw new Error(t('create.status.needCaptions'));
+  }
 
   const video = document.querySelector('#createVideo');
   if (!video?.src) throw new Error(t('create.status.needVideo'));
@@ -2312,6 +2432,7 @@ async function buildCreatePackZip() {
 
   const meta = {
     name: createPackName(),
+    lang: state.create.lang === 'en' ? 'en' : 'pt',
     lines: linesMeta
   };
   files['pack.json'] = new TextEncoder().encode(JSON.stringify(meta, null, 2));
@@ -2328,6 +2449,16 @@ async function exportCreatePack({ open = false } = {}) {
   if (!state.create.lines.length) {
     setCreateStatus(t('create.status.needLines'));
     toast(t('create.status.needLines'));
+    return;
+  }
+  if (!state.create.linesConfirmed) {
+    setCreateStatus(t('create.status.needConfirm'));
+    toast(t('create.status.needConfirm'));
+    return;
+  }
+  if (!createCaptionsReady()) {
+    setCreateStatus(t('create.status.needCaptions'));
+    toast(t('create.status.needCaptions'));
     return;
   }
 

@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=162" />
+    <link rel="stylesheet" href="./styles.css?v=163" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -451,7 +451,7 @@
               <p class="hint-copy" data-i18n="create.detect.hint">Detectar falas junta o diálogo e parte trechos longos (~8s). Com voz limpa do UVR, fica bem mais preciso.</p>
             </div>
 
-            <div class="create-line-form">
+            <div id="createLineForm" class="create-line-form">
               <label class="create-field">
                 <span data-i18n="create.character">Personagem</span>
                 <input id="createCharacter" type="text" maxlength="60" placeholder="Personagem" data-i18n-placeholder="create.character.placeholder" />
@@ -479,6 +479,23 @@
             </div>
             <ul id="createLineList" class="create-line-list"></ul>
             <p id="createLinesEmpty" class="hint-copy" data-i18n="create.lines.empty">Ainda não há falas. Marque o tempo no vídeo e adicione.</p>
+
+            <div id="createConfirmBox" class="create-confirm-box is-hidden">
+              <p class="hint-copy" data-i18n="create.confirm.hint">Ouça cada fala. Quando a lista estiver boa, confirme pra escrever as legendas.</p>
+              <button id="createConfirmLinesBtn" class="create-confirm-btn" type="button" data-i18n="create.confirm">Confirmar falas</button>
+            </div>
+
+            <div id="createCaptionsBox" class="create-captions-box is-hidden">
+              <div class="create-scene-head">
+                <strong data-i18n="create.captions.title">Legendas do pack</strong>
+                <button id="createEditLinesBtn" class="ghost" type="button" data-i18n="create.confirm.edit">Voltar às falas</button>
+              </div>
+              <p class="hint-copy" data-i18n="create.captions.hint">Escolha o idioma do pack e escreva o texto de cada fala. Sem IA — tudo manual.</p>
+              <div id="createLangToggle" class="create-lang-toggle" role="group" aria-label="Idioma do pack">
+                <button type="button" data-create-lang="pt" class="is-active">Português</button>
+                <button type="button" data-create-lang="en">English</button>
+              </div>
+            </div>
 
             <div class="create-actions">
               <button id="createDownloadBtn" class="primary wide" type="button" data-i18n="create.download" disabled>Baixar ZIP do pack</button>
@@ -687,12 +704,12 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=162"></script>
-    <script src="./payments.config.js?v=162"></script>
-    <script src="./ads.config.js?v=162"></script>
-    <script src="./i18n.js?v=162"></script>
-    <script src="./payments.js?v=162"></script>
-    <script src="./ads.js?v=162"></script>
-    <script src="./app.js?v=162"></script>
+    <script src="./vendor/fflate.min.js?v=163"></script>
+    <script src="./payments.config.js?v=163"></script>
+    <script src="./ads.config.js?v=163"></script>
+    <script src="./i18n.js?v=163"></script>
+    <script src="./payments.js?v=163"></script>
+    <script src="./ads.js?v=163"></script>
+    <script src="./app.js?v=163"></script>
   </body>
 </html>

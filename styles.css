@@ -3994,6 +3994,78 @@ body.hide-ads .studio-layout {
   align-items: stretch;
   min-width: 110px;
 }
+.create-confirm-box,
+.create-captions-box {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(91, 255, 58, 0.22);
+  background: rgba(18, 40, 16, 0.45);
+}
+.create-confirm-box.is-hidden,
+.create-captions-box.is-hidden,
+.create-line-form.is-hidden {
+  display: none;
+}
+.create-confirm-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #081108;
+  background: #5bff3a;
+  box-shadow: 0 0 0 1px rgba(91, 255, 58, 0.35), 0 8px 24px rgba(91, 255, 58, 0.2);
+}
+.create-confirm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.create-confirm-btn:not(:disabled):hover { filter: brightness(1.05); }
+.create-lang-toggle {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.create-lang-toggle button {
+  border: 1px solid rgba(255, 143, 196, 0.28);
+  background: rgba(18, 8, 26, 0.85);
+  color: #f3e7f4;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.create-lang-toggle button.is-active {
+  border-color: #5bff3a;
+  color: #081108;
+  background: #5bff3a;
+}
+.create-line-item.is-captioning {
+  align-items: flex-start;
+}
+.create-line-caption-fields {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.create-line-index {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #ffd0e4;
+}
+.create-line-caption-fields .create-field span {
+  font-size: 11px;
+}
+.create-line-caption-fields input,
+.create-line-caption-fields textarea {
+  width: 100%;
+}
 .create-actions {
   display: grid;
   gap: 10px;
