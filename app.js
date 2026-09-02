@@ -348,7 +348,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '150';
+  const swVersion = '151';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -456,12 +456,27 @@ function bindUi() {
   });
   document.querySelector('#cenaImportBtn')?.addEventListener('click', openImportModal);
   document.querySelector('#createVideoInput')?.addEventListener('change', onCreateVideoPicked);
+  document.querySelector('#createZipInput')?.addEventListener('change', onCreateZipPicked);
   document.querySelector('#createMarkStartBtn')?.addEventListener('click', () => markCreateTime('start'));
   document.querySelector('#createMarkEndBtn')?.addEventListener('click', () => markCreateTime('end'));
   document.querySelector('#createAddLineBtn')?.addEventListener('click', addCreateLine);
   document.querySelector('#createDownloadBtn')?.addEventListener('click', () => void exportCreatePack({ open: false }));
   document.querySelector('#createOpenBtn')?.addEventListener('click', () => void exportCreatePack({ open: true }));
   document.querySelector('#createResetBtn')?.addEventListener('click', resetCreatePack);
+  document.querySelector('#createNewProjectBtn')?.addEventListener('click', resetCreatePack);
+  const createDrop = document.querySelector('#createDrop');
+  createDrop?.addEventListener('click', () => document.querySelector('#createVideoInput')?.click());
+  createDrop?.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    createDrop.classList.add('is-over');
+  });
+  createDrop?.addEventListener('dragleave', () => createDrop.classList.remove('is-over'));
+  createDrop?.addEventListener('drop', (event) => {
+    event.preventDefault();
+    createDrop.classList.remove('is-over');
+    const file = event.dataTransfer?.files?.[0];
+    if (file) void handleCreateIncomingFile(file);
+  });
   document.querySelector('#createLineList')?.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-create-remove]');
     if (!btn) return;
@@ -1140,10 +1155,16 @@ function createPackName() {
   return raw || 'meu-pack';
 }
 
+function showCreateLanding(show) {
+  document.querySelector('#createLanding')?.classList.toggle('is-hidden', !show);
+  document.querySelector('#createWorkspace')?.classList.toggle('is-hidden', show);
+}
+
 function syncCreateActions() {
   const hasVideo = Boolean(state.create.videoFile);
   const hasLines = state.create.lines.length > 0;
   const busy = state.create.busy;
+  showCreateLanding(!hasVideo);
   document.querySelector('#createMarkStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkEndBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createDownloadBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
@@ -1186,12 +1207,39 @@ function escapeHtml(value) {
 async function onCreateVideoPicked(event) {
   const file = event.target.files?.[0];
   if (event.target) event.target.value = '';
+  if (file) await handleCreateIncomingFile(file);
+}
+
+async function onCreateZipPicked(event) {
+  const file = event.target.files?.[0];
+  if (event.target) event.target.value = '';
+  if (file) await handleCreateIncomingFile(file);
+}
+
+async function handleCreateIncomingFile(file) {
   if (!file) return;
+  const name = String(file.name || '').toLowerCase();
+  const isZip = name.endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed';
+  const isVideo = VIDEO_EXTS.some((ext) => name.endsWith(`.${ext}`)) || String(file.type || '').startsWith('video/');
+  if (isZip) {
+    await importPackFile(file);
+    return;
+  }
+  if (isVideo) {
+    await loadCreateVideo(file);
+    return;
+  }
+  setCreateStatus(t('create.status.badFile'));
+  toast(t('create.status.badFile'));
+}
+
+async function loadCreateVideo(file) {
   if (state.create.videoUrl) URL.revokeObjectURL(state.create.videoUrl);
   state.create.videoFile = file;
   state.create.videoBytes = new Uint8Array(await file.arrayBuffer());
   state.create.videoUrl = URL.createObjectURL(file);
   state.create.zipBytes = null;
+  state.create.lines = [];
   const video = document.querySelector('#createVideo');
   if (video) {
     video.src = state.create.videoUrl;
@@ -1205,6 +1253,8 @@ async function onCreateVideoPicked(event) {
       if (video.readyState >= 1) done();
     });
   }
+  const title = document.querySelector('#createWorkspaceTitle');
+  if (title) title.textContent = file.name.replace(/\.[^.]+$/, '');
   const meta = document.querySelector('#createVideoMeta');
   if (meta) {
     meta.textContent = t('create.video.ready', {
@@ -1212,12 +1262,14 @@ async function onCreateVideoPicked(event) {
       duration: formatSeconds(video?.duration || 0)
     });
   }
-  if (!document.querySelector('#createPackName')?.value?.trim()) {
-    const nameInput = document.querySelector('#createPackName');
-    if (nameInput) nameInput.value = file.name.replace(/\.[^.]+$/, '');
+  const nameInput = document.querySelector('#createPackName');
+  if (nameInput && !nameInput.value.trim()) {
+    nameInput.value = file.name.replace(/\.[^.]+$/, '');
   }
+  renderCreateLines();
   syncCreateActions();
   setCreateStatus('');
+  setTab('create');
 }
 
 function markCreateTime(which) {
@@ -1293,10 +1345,13 @@ function resetCreatePack() {
   if (start) start.value = '0';
   const end = document.querySelector('#createEnd');
   if (end) end.value = '1';
+  const title = document.querySelector('#createWorkspaceTitle');
+  if (title) title.textContent = '—';
   const meta = document.querySelector('#createVideoMeta');
   if (meta) meta.textContent = t('create.video.empty');
   renderCreateLines();
-  setCreateStatus('');
+  syncCreateActions();
+  setCreateStatus(t('create.status.ready'));
 }
 
 function encodeWavFromPCM(samples, sampleRate) {

@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=150" />
+    <link rel="stylesheet" href="./styles.css?v=151" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -335,64 +335,95 @@
       <section id="recordTab" class="tab-view" hidden></section>
 
       <section class="content cv-pages">
-        <section id="createTab" class="tab-view info-card create-pack-page">
-          <h2 data-i18n="create.title">Criar pack</h2>
-          <p data-i18n="create.lead">Monte o pack no navegador e baixe o ZIP. Nada é enviado nem hospedado no DubPack — o arquivo fica só com você.</p>
-          <p class="create-legal hint-copy" data-i18n="create.legal">Use só material que você tem direito de usar. O DubPack é só o estúdio; conteúdo e direitos são responsabilidade de quem cria o pack.</p>
-
-          <label class="create-field">
-            <span data-i18n="create.name">Nome do pack</span>
-            <input id="createPackName" type="text" maxlength="80" placeholder="Minha cena" data-i18n-placeholder="create.name.placeholder" />
-          </label>
-
-          <div class="create-video-block">
-            <div class="create-video-actions">
-              <label class="primary create-file-btn">
-                <span data-i18n="create.video">Escolher vídeo</span>
-                <input id="createVideoInput" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.m4v" hidden />
-              </label>
-              <button id="createMarkStartBtn" class="secondary" type="button" data-i18n="create.markStart" disabled>Marcar início</button>
-              <button id="createMarkEndBtn" class="secondary" type="button" data-i18n="create.markEnd" disabled>Marcar fim</button>
+        <section id="createTab" class="tab-view create-pack-page">
+          <div id="createLanding" class="create-hero">
+            <div class="create-hero-copy">
+              <p class="create-eyebrow" data-i18n="create.eyebrow">Pack Maker · Input 01</p>
+              <h1 data-i18n="create.hero">Monte o seu dub pack.</h1>
+              <p class="create-hero-lead" data-i18n="create.lead">Carregue um vídeo do zero ou abra um ZIP de pack existente e continue editando — tudo no navegador, sem enviar nada para o servidor.</p>
+              <div class="create-hero-actions">
+                <label class="create-cta create-cta-primary">
+                  <span aria-hidden="true">↑</span>
+                  <span data-i18n="create.video">Escolher vídeo MP4 ou WebM</span>
+                  <input id="createVideoInput" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.m4v,.ogv" hidden />
+                </label>
+                <label class="create-cta create-cta-secondary">
+                  <span aria-hidden="true">▣</span>
+                  <span data-i18n="create.openZip">Abrir pack ZIP</span>
+                  <input id="createZipInput" type="file" accept=".zip,application/zip" hidden />
+                </label>
+              </div>
+              <p class="create-limits" data-i18n="create.limits">Vídeo até 500 MB · ZIP até 1 GB · processado localmente</p>
+              <p class="create-legal" data-i18n="create.legal">Use só material que você tem direito de usar. O DubPack é só o estúdio; conteúdo e direitos são responsabilidade de quem cria o pack.</p>
             </div>
-            <video id="createVideo" class="create-video" controls playsinline preload="metadata"></video>
-            <p id="createVideoMeta" class="hint-copy" data-i18n="create.video.empty">Nenhum vídeo carregado.</p>
+            <button id="createDrop" class="create-drop" type="button" aria-label="Soltar vídeo ou ZIP">
+              <span class="create-drop-icon" aria-hidden="true">🎞️</span>
+              <strong data-i18n="create.drop">Solte MP4, WebM ou pack ZIP</strong>
+              <small data-i18n="create.drop.tag">Mídia / Arquivo</small>
+            </button>
           </div>
 
-          <div class="create-line-form">
+          <div id="createWorkspace" class="create-workspace is-hidden">
+            <div class="create-workspace-bar">
+              <div>
+                <p class="create-eyebrow" data-i18n="create.eyebrow.edit">Pack Maker · Timeline</p>
+                <strong id="createWorkspaceTitle">—</strong>
+              </div>
+              <div class="create-workspace-actions">
+                <button id="createNewProjectBtn" class="ghost" type="button" data-i18n="create.new">Novo projeto</button>
+                <button id="createResetBtn" class="ghost" type="button" data-i18n="create.reset">Limpar</button>
+              </div>
+            </div>
+
             <label class="create-field">
-              <span data-i18n="create.character">Personagem</span>
-              <input id="createCharacter" type="text" maxlength="60" placeholder="Personagem" data-i18n-placeholder="create.character.placeholder" />
+              <span data-i18n="create.name">Nome do pack</span>
+              <input id="createPackName" type="text" maxlength="80" placeholder="Minha cena" data-i18n-placeholder="create.name.placeholder" />
             </label>
-            <label class="create-field create-field-wide">
-              <span data-i18n="create.text">Fala / legenda</span>
-              <textarea id="createText" rows="2" maxlength="500" placeholder="Texto da fala" data-i18n-placeholder="create.text.placeholder"></textarea>
-            </label>
-            <div class="create-times">
-              <label class="create-field">
-                <span data-i18n="create.start">Início (s)</span>
-                <input id="createStart" type="number" min="0" step="0.01" value="0" />
-              </label>
-              <label class="create-field">
-                <span data-i18n="create.end">Fim (s)</span>
-                <input id="createEnd" type="number" min="0" step="0.01" value="1" />
-              </label>
+
+            <div class="create-video-block">
+              <div class="create-video-actions">
+                <button id="createMarkStartBtn" class="secondary" type="button" data-i18n="create.markStart" disabled>Marcar início</button>
+                <button id="createMarkEndBtn" class="secondary" type="button" data-i18n="create.markEnd" disabled>Marcar fim</button>
+              </div>
+              <video id="createVideo" class="create-video" controls playsinline preload="metadata"></video>
+              <p id="createVideoMeta" class="hint-copy" data-i18n="create.video.empty">Nenhum vídeo carregado.</p>
             </div>
-            <button id="createAddLineBtn" class="secondary" type="button" data-i18n="create.add">Adicionar fala</button>
-          </div>
 
-          <div class="section-head">
-            <h3 data-i18n="create.lines">Falas do pack</h3>
-            <span id="createLineCount" class="hint-copy">0</span>
-          </div>
-          <ul id="createLineList" class="create-line-list"></ul>
-          <p id="createLinesEmpty" class="hint-copy" data-i18n="create.lines.empty">Ainda não há falas. Marque o tempo no vídeo e adicione.</p>
+            <div class="create-line-form">
+              <label class="create-field">
+                <span data-i18n="create.character">Personagem</span>
+                <input id="createCharacter" type="text" maxlength="60" placeholder="Personagem" data-i18n-placeholder="create.character.placeholder" />
+              </label>
+              <label class="create-field create-field-wide">
+                <span data-i18n="create.text">Fala / legenda</span>
+                <textarea id="createText" rows="2" maxlength="500" placeholder="Texto da fala" data-i18n-placeholder="create.text.placeholder"></textarea>
+              </label>
+              <div class="create-times">
+                <label class="create-field">
+                  <span data-i18n="create.start">Início (s)</span>
+                  <input id="createStart" type="number" min="0" step="0.01" value="0" />
+                </label>
+                <label class="create-field">
+                  <span data-i18n="create.end">Fim (s)</span>
+                  <input id="createEnd" type="number" min="0" step="0.01" value="1" />
+                </label>
+              </div>
+              <button id="createAddLineBtn" class="secondary" type="button" data-i18n="create.add">Adicionar fala</button>
+            </div>
 
-          <div class="create-actions">
-            <button id="createDownloadBtn" class="primary wide" type="button" data-i18n="create.download" disabled>Baixar ZIP do pack</button>
-            <button id="createOpenBtn" class="secondary wide" type="button" data-i18n="create.open" disabled>Abrir no Studio</button>
-            <button id="createResetBtn" class="ghost wide" type="button" data-i18n="create.reset">Limpar</button>
+            <div class="section-head">
+              <h3 data-i18n="create.lines">Falas do pack</h3>
+              <span id="createLineCount" class="hint-copy">0</span>
+            </div>
+            <ul id="createLineList" class="create-line-list"></ul>
+            <p id="createLinesEmpty" class="hint-copy" data-i18n="create.lines.empty">Ainda não há falas. Marque o tempo no vídeo e adicione.</p>
+
+            <div class="create-actions">
+              <button id="createDownloadBtn" class="primary wide" type="button" data-i18n="create.download" disabled>Baixar ZIP do pack</button>
+              <button id="createOpenBtn" class="secondary wide" type="button" data-i18n="create.open" disabled>Abrir no Studio</button>
+            </div>
+            <p id="createStatus" class="hint-copy" aria-live="polite"></p>
           </div>
-          <p id="createStatus" class="hint-copy" aria-live="polite"></p>
         </section>
 
         <section id="dubTab" class="tab-view info-card final-video-page">
@@ -594,12 +625,12 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="./vendor/fflate.min.js?v=150"></script>
-    <script src="./payments.config.js?v=150"></script>
-    <script src="./ads.config.js?v=150"></script>
-    <script src="./i18n.js?v=150"></script>
-    <script src="./payments.js?v=150"></script>
-    <script src="./ads.js?v=150"></script>
-    <script src="./app.js?v=150"></script>
+    <script src="./vendor/fflate.min.js?v=151"></script>
+    <script src="./payments.config.js?v=151"></script>
+    <script src="./ads.config.js?v=151"></script>
+    <script src="./i18n.js?v=151"></script>
+    <script src="./payments.js?v=151"></script>
+    <script src="./ads.js?v=151"></script>
+    <script src="./app.js?v=151"></script>
   </body>
 </html>
