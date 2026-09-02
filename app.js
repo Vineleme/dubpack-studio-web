@@ -348,7 +348,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '152';
+  const swVersion = '153';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -457,6 +457,7 @@ function bindUi() {
   document.querySelector('#cenaImportBtn')?.addEventListener('click', openImportModal);
   document.querySelector('#createVideoInput')?.addEventListener('change', onCreateVideoPicked);
   document.querySelector('#createZipInput')?.addEventListener('change', onCreateZipPicked);
+  document.querySelector('#createDetectBtn')?.addEventListener('click', () => void detectCreateSpeechLines());
   document.querySelector('#createMarkStartBtn')?.addEventListener('click', () => markCreateTime('start'));
   document.querySelector('#createMarkEndBtn')?.addEventListener('click', () => markCreateTime('end'));
   document.querySelector('#createAddLineBtn')?.addEventListener('click', addCreateLine);
@@ -1165,6 +1166,7 @@ function syncCreateActions() {
   const hasLines = state.create.lines.length > 0;
   const busy = state.create.busy;
   showCreateLanding(!hasVideo);
+  document.querySelector('#createDetectBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkEndBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createDownloadBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
@@ -1281,6 +1283,149 @@ function markCreateTime(which) {
   const value = Number(video.currentTime || 0);
   const input = document.querySelector(which === 'end' ? '#createEnd' : '#createStart');
   if (input) input.value = value.toFixed(2);
+}
+
+async function decodeCreateAudioBuffer() {
+  if (!state.create.videoBytes?.length) {
+    throw new Error(t('create.status.needVideo'));
+  }
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    const copy = state.create.videoBytes.buffer.slice(
+      state.create.videoBytes.byteOffset,
+      state.create.videoBytes.byteOffset + state.create.videoBytes.byteLength
+    );
+    return await ctx.decodeAudioData(copy);
+  } catch {
+    await ctx.close().catch(() => undefined);
+    throw new Error(t('create.detect.fail'));
+  } finally {
+    if (ctx.state !== 'closed') await ctx.close().catch(() => undefined);
+  }
+}
+
+function mixAudioBufferMono(audioBuffer) {
+  const length = audioBuffer.length;
+  if (audioBuffer.numberOfChannels === 1) return audioBuffer.getChannelData(0);
+  const mixed = new Float32Array(length);
+  const channels = audioBuffer.numberOfChannels;
+  for (let c = 0; c < channels; c += 1) {
+    const data = audioBuffer.getChannelData(c);
+    for (let i = 0; i < length; i += 1) mixed[i] += data[i] / channels;
+  }
+  return mixed;
+}
+
+function detectSpeechSegments(audioBuffer, {
+  frameMs = 30,
+  minSpeechSec = 0.35,
+  mergeGapSec = 0.28,
+  padSec = 0.12,
+  maxClips = 80
+} = {}) {
+  const sampleRate = audioBuffer.sampleRate;
+  const data = mixAudioBufferMono(audioBuffer);
+  const frameSize = Math.max(1, Math.round(sampleRate * frameMs / 1000));
+  const energies = [];
+  for (let i = 0; i < data.length; i += frameSize) {
+    const end = Math.min(data.length, i + frameSize);
+    let sum = 0;
+    for (let j = i; j < end; j += 1) sum += data[j] * data[j];
+    energies.push(Math.sqrt(sum / Math.max(1, end - i)));
+  }
+  if (!energies.length) return [];
+
+  const smoothed = energies.map((_, index) => {
+    let sum = 0;
+    let count = 0;
+    for (let k = index - 2; k <= index + 2; k += 1) {
+      if (k < 0 || k >= energies.length) continue;
+      sum += energies[k];
+      count += 1;
+    }
+    return sum / count;
+  });
+
+  const sorted = [...smoothed].sort((a, b) => a - b);
+  const noise = sorted[Math.floor(sorted.length * 0.2)] || 0;
+  const peak = sorted[Math.floor(sorted.length * 0.9)] || 0;
+  const threshold = Math.max(noise * 1.8, noise + (peak - noise) * 0.26);
+
+  const voiced = smoothed.map((value) => value > threshold);
+  const raw = [];
+  let start = null;
+  for (let i = 0; i < voiced.length; i += 1) {
+    if (voiced[i] && start == null) start = i;
+    if (!voiced[i] && start != null) {
+      raw.push([start, i]);
+      start = null;
+    }
+  }
+  if (start != null) raw.push([start, voiced.length]);
+
+  const frameDur = frameSize / sampleRate;
+  const minFrames = Math.max(1, Math.ceil(minSpeechSec / frameDur));
+  const mergeGapFrames = Math.max(1, Math.ceil(mergeGapSec / frameDur));
+  const merged = [];
+  raw.forEach(([from, to]) => {
+    if (to - from < minFrames) return;
+    if (!merged.length) {
+      merged.push([from, to]);
+      return;
+    }
+    const last = merged[merged.length - 1];
+    if (from - last[1] <= mergeGapFrames) last[1] = to;
+    else merged.push([from, to]);
+  });
+
+  const duration = Number(audioBuffer.duration) || (data.length / sampleRate);
+  return merged
+    .slice(0, maxClips)
+    .map(([from, to]) => ({
+      start: Math.max(0, from * frameDur - padSec),
+      end: Math.min(duration, to * frameDur + padSec)
+    }))
+    .filter((segment) => segment.end - segment.start >= minSpeechSec);
+}
+
+async function detectCreateSpeechLines() {
+  if (state.create.busy) return;
+  if (!state.create.videoFile) {
+    setCreateStatus(t('create.status.needVideo'));
+    toast(t('create.status.needVideo'));
+    return;
+  }
+
+  state.create.busy = true;
+  syncCreateActions();
+  setCreateStatus(t('create.detect.working'));
+  try {
+    await wait(30);
+    const audioBuffer = await decodeCreateAudioBuffer();
+    const segments = detectSpeechSegments(audioBuffer);
+    if (!segments.length) {
+      setCreateStatus(t('create.detect.none'));
+      toast(t('create.detect.none'));
+      return;
+    }
+    state.create.lines = segments.map((segment, index) => ({
+      id: crypto.randomUUID ? crypto.randomUUID() : `line-${Date.now()}-${index}`,
+      character: t('create.character.placeholder'),
+      text: t('create.detect.line', { n: index + 1 }),
+      start: Number(segment.start.toFixed(2)),
+      end: Number(segment.end.toFixed(2))
+    }));
+    state.create.zipBytes = null;
+    renderCreateLines();
+    setCreateStatus(t('create.detect.done', { n: segments.length }));
+    toast(t('create.detect.done', { n: segments.length }));
+  } catch (error) {
+    setCreateStatus(error.message || t('create.detect.fail'));
+    toast(error.message || t('create.detect.fail'));
+  } finally {
+    state.create.busy = false;
+    syncCreateActions();
+  }
 }
 
 function addCreateLine() {

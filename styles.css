@@ -3762,6 +3762,26 @@ body.hide-ads .studio-layout {
   flex-wrap: wrap;
   gap: 8px;
 }
+.create-detect-btn {
+  border: 0;
+  border-radius: 999px;
+  min-height: 40px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  background: var(--dp-grad);
+  box-shadow: 0 8px 22px rgba(245, 46, 131, 0.3);
+}
+.create-detect-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.create-detect-btn:not(:disabled):hover {
+  filter: brightness(1.06);
+}
 .create-video {
   width: 100%;
   max-height: 420px;
