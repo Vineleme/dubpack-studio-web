@@ -206,7 +206,10 @@ const state = {
     sceneEnd: CREATE_SCENE_MAX_SEC,
     previewTimer: 0,
     previewLineId: null,
-    previewOnTimeUpdate: null
+    previewOnTimeUpdate: null,
+    vocalsFile: null,
+    vocalsBytes: null,
+    vocalsName: ''
   }
 };
 
@@ -354,7 +357,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '160';
+  const swVersion = '161';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -464,6 +467,8 @@ function bindUi() {
   document.querySelector('#createVideoInput')?.addEventListener('change', onCreateVideoPicked);
   document.querySelector('#createZipInput')?.addEventListener('change', onCreateZipPicked);
   document.querySelector('#createDetectBtn')?.addEventListener('click', () => void detectCreateSpeechLines());
+  document.querySelector('#createVocalsInput')?.addEventListener('change', onCreateVocalsPicked);
+  document.querySelector('#createVocalsClearBtn')?.addEventListener('click', clearCreateVocals);
   document.querySelector('#createMarkStartBtn')?.addEventListener('click', () => markCreateTime('start'));
   document.querySelector('#createMarkEndBtn')?.addEventListener('click', () => markCreateTime('end'));
   document.querySelector('#createSceneFromPlayheadBtn')?.addEventListener('click', setCreateSceneFromPlayhead);
@@ -1192,6 +1197,10 @@ function syncCreateActions() {
   document.querySelector('#createDownloadBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
   document.querySelector('#createOpenBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
   document.querySelector('#createAddLineBtn')?.toggleAttribute('disabled', busy);
+  document.querySelector('#createVocalsInput')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createVocalsClearBtn')?.toggleAttribute('disabled', !state.create.vocalsBytes || busy);
+  document.querySelector('label.create-file-btn')?.classList.toggle('is-disabled', !hasVideo || busy);
+  syncCreateVocalsUi();
   syncCreateSceneUi();
 }
 
@@ -1483,6 +1492,7 @@ async function loadCreateVideo(file) {
   state.create.videoUrl = URL.createObjectURL(file);
   state.create.zipBytes = null;
   state.create.lines = [];
+  clearCreateVocals({ silent: true });
   const video = document.querySelector('#createVideo');
   if (video) {
     video.src = state.create.videoUrl;
@@ -1567,22 +1577,95 @@ function sliceAudioBufferWindow(audioBuffer, startSec, endSec) {
 }
 
 async function decodeCreateAudioBuffer() {
-  if (!state.create.videoBytes?.length) {
+  const sourceBytes = state.create.vocalsBytes?.length
+    ? state.create.vocalsBytes
+    : state.create.videoBytes;
+  if (!sourceBytes?.length) {
     throw new Error(t('create.status.needVideo'));
   }
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   try {
-    const copy = state.create.videoBytes.buffer.slice(
-      state.create.videoBytes.byteOffset,
-      state.create.videoBytes.byteOffset + state.create.videoBytes.byteLength
+    const copy = sourceBytes.buffer.slice(
+      sourceBytes.byteOffset,
+      sourceBytes.byteOffset + sourceBytes.byteLength
     );
     return await ctx.decodeAudioData(copy);
   } catch {
     await ctx.close().catch(() => undefined);
-    throw new Error(t('create.detect.fail'));
+    throw new Error(state.create.vocalsBytes?.length ? t('create.vocals.fail') : t('create.detect.fail'));
   } finally {
     if (ctx.state !== 'closed') await ctx.close().catch(() => undefined);
   }
+}
+
+function syncCreateVocalsUi() {
+  const meta = document.querySelector('#createVocalsMeta');
+  if (!meta) return;
+  if (state.create.vocalsBytes?.length) {
+    meta.textContent = t('create.vocals.ready', { name: state.create.vocalsName || 'vocals' });
+    return;
+  }
+  meta.textContent = t('create.vocals.empty');
+}
+
+async function onCreateVocalsPicked(event) {
+  const file = event.target?.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  if (!state.create.videoFile) {
+    setCreateStatus(t('create.status.needVideo'));
+    toast(t('create.status.needVideo'));
+    return;
+  }
+  const name = String(file.name || '').toLowerCase();
+  const type = String(file.type || '').toLowerCase();
+  const ok = type.startsWith('audio/')
+    || /\.(wav|mp3|flac|m4a|ogg|aac|wma|aiff|aif)$/i.test(name);
+  if (!ok) {
+    setCreateStatus(t('create.vocals.badFile'));
+    toast(t('create.vocals.badFile'));
+    return;
+  }
+  try {
+    state.create.busy = true;
+    syncCreateActions();
+    setCreateStatus(t('create.vocals.loading'));
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    // Decode once to validate browser support before locking it in.
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      await ctx.decodeAudioData(copy);
+    } finally {
+      if (ctx.state !== 'closed') await ctx.close().catch(() => undefined);
+    }
+    state.create.vocalsFile = file;
+    state.create.vocalsBytes = bytes;
+    state.create.vocalsName = file.name;
+    state.create.zipBytes = null;
+    syncCreateVocalsUi();
+    setCreateStatus(t('create.vocals.ready', { name: file.name }));
+    toast(t('create.vocals.ready', { name: file.name }));
+  } catch {
+    clearCreateVocals({ silent: true });
+    setCreateStatus(t('create.vocals.fail'));
+    toast(t('create.vocals.fail'));
+  } finally {
+    state.create.busy = false;
+    syncCreateActions();
+  }
+}
+
+function clearCreateVocals({ silent = false } = {}) {
+  state.create.vocalsFile = null;
+  state.create.vocalsBytes = null;
+  state.create.vocalsName = '';
+  syncCreateVocalsUi();
+  if (!silent) {
+    setCreateStatus(t('create.vocals.cleared'));
+    toast(t('create.vocals.cleared'));
+  }
+  syncCreateActions();
 }
 
 function mixAudioBufferMono(audioBuffer) {
@@ -1932,8 +2015,9 @@ async function detectCreateSpeechLines() {
     state.create.zipBytes = null;
     stopCreatePreview();
     renderCreateLines();
-    setCreateStatus(t('create.detect.done', { n: segments.length }));
-    toast(t('create.detect.done', { n: segments.length }));
+    const doneKey = state.create.vocalsBytes?.length ? 'create.detect.doneVocals' : 'create.detect.done';
+    setCreateStatus(t(doneKey, { n: segments.length }));
+    toast(t(doneKey, { n: segments.length }));
   } catch (error) {
     setCreateStatus(error.message || t('create.detect.fail'));
     toast(error.message || t('create.detect.fail'));
@@ -1998,7 +2082,10 @@ function resetCreatePack() {
     sceneEnd: CREATE_SCENE_MAX_SEC,
     previewTimer: 0,
     previewLineId: null,
-    previewOnTimeUpdate: null
+    previewOnTimeUpdate: null,
+    vocalsFile: null,
+    vocalsBytes: null,
+    vocalsName: ''
   };
   const video = document.querySelector('#createVideo');
   if (video) {
@@ -2023,6 +2110,7 @@ function resetCreatePack() {
   if (title) title.textContent = '—';
   const meta = document.querySelector('#createVideoMeta');
   if (meta) meta.textContent = t('create.video.empty');
+  syncCreateVocalsUi();
   renderCreateLines();
   syncCreateActions();
   setCreateStatus(t('create.status.ready'));

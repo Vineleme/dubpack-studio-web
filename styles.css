@@ -3771,6 +3771,26 @@ body.hide-ads .studio-layout {
   border: 1px solid rgba(255, 143, 196, 0.22);
   background: rgba(245, 46, 131, 0.06);
 }
+.create-vocals-box {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 143, 196, 0.18);
+  background: rgba(120, 48, 160, 0.12);
+}
+.create-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin: 0;
+}
+.create-file-btn.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
 .create-scene-head {
   display: flex;
   justify-content: space-between;
