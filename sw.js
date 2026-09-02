@@ -9,6 +9,7 @@ const PRECACHE = [
   './payments.config.js',
   './ads.js',
   './ads.config.js',
+  './ads.txt',
   './manifest.webmanifest',
   './assets/dubpack-logo.jpg',
   './assets/dubpack-logo-brand.jpg',
