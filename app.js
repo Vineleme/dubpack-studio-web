@@ -1,6 +1,7 @@
 const AUDIO_EXTS = ['mp3', 'wav', 'ogg', 'm4a', 'webm'];
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 const VIDEO_EXTS = ['mp4', 'mov', 'webm', 'ogv', 'm4v'];
+const CREATE_SCENE_MAX_SEC = 80;
 const MAX_LINE_SECONDS = 600;
 const GUIDE_VOLUME = 0.08;
 const BED_VOLUME = 0.03;
@@ -200,7 +201,11 @@ const state = {
     videoUrl: '',
     zipBytes: null,
     lines: [],
-    busy: false
+    busy: false,
+    sceneStart: 0,
+    sceneEnd: CREATE_SCENE_MAX_SEC,
+    previewTimer: 0,
+    previewLineId: null
   }
 };
 
@@ -348,7 +353,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '153';
+  const swVersion = '154';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -460,6 +465,11 @@ function bindUi() {
   document.querySelector('#createDetectBtn')?.addEventListener('click', () => void detectCreateSpeechLines());
   document.querySelector('#createMarkStartBtn')?.addEventListener('click', () => markCreateTime('start'));
   document.querySelector('#createMarkEndBtn')?.addEventListener('click', () => markCreateTime('end'));
+  document.querySelector('#createSceneFromPlayheadBtn')?.addEventListener('click', setCreateSceneFromPlayhead);
+  document.querySelector('#createMarkSceneStartBtn')?.addEventListener('click', () => markCreateSceneBoundary('start'));
+  document.querySelector('#createMarkSceneEndBtn')?.addEventListener('click', () => markCreateSceneBoundary('end'));
+  document.querySelector('#createSceneStart')?.addEventListener('change', onCreateSceneInputsChanged);
+  document.querySelector('#createSceneEnd')?.addEventListener('change', onCreateSceneInputsChanged);
   document.querySelector('#createAddLineBtn')?.addEventListener('click', addCreateLine);
   document.querySelector('#createDownloadBtn')?.addEventListener('click', () => void exportCreatePack({ open: false }));
   document.querySelector('#createOpenBtn')?.addEventListener('click', () => void exportCreatePack({ open: true }));
@@ -479,6 +489,11 @@ function bindUi() {
     if (file) void handleCreateIncomingFile(file);
   });
   document.querySelector('#createLineList')?.addEventListener('click', (event) => {
+    const playBtn = event.target.closest('[data-create-play]');
+    if (playBtn) {
+      void previewCreateLine(playBtn.dataset.createPlay);
+      return;
+    }
     const btn = event.target.closest('[data-create-remove]');
     if (!btn) return;
     removeCreateLine(btn.dataset.createRemove);
@@ -1169,9 +1184,99 @@ function syncCreateActions() {
   document.querySelector('#createDetectBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkEndBtn')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createSceneFromPlayheadBtn')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createMarkSceneStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createMarkSceneEndBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createDownloadBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
   document.querySelector('#createOpenBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
   document.querySelector('#createAddLineBtn')?.toggleAttribute('disabled', busy);
+  syncCreateSceneUi();
+}
+
+function createVideoDuration() {
+  const video = document.querySelector('#createVideo');
+  const duration = Number(video?.duration);
+  return Number.isFinite(duration) && duration > 0 ? duration : 0;
+}
+
+function getCreateSceneWindow() {
+  const duration = createVideoDuration();
+  let start = Number(state.create.sceneStart) || 0;
+  let end = Number(state.create.sceneEnd) || 0;
+  if (duration) {
+    start = Math.max(0, Math.min(start, duration));
+    end = Math.max(0, Math.min(end, duration));
+  }
+  if (end <= start) end = Math.min((duration || CREATE_SCENE_MAX_SEC), start + Math.min(CREATE_SCENE_MAX_SEC, 1));
+  if (end - start > CREATE_SCENE_MAX_SEC) end = start + CREATE_SCENE_MAX_SEC;
+  return { start, end, duration };
+}
+
+function syncCreateSceneUi(toastIfClamped = false) {
+  const requestedStart = Number(document.querySelector('#createSceneStart')?.value);
+  const requestedEnd = Number(document.querySelector('#createSceneEnd')?.value);
+  const requestedLen = (Number.isFinite(requestedEnd) && Number.isFinite(requestedStart))
+    ? requestedEnd - requestedStart
+    : 0;
+  const { start, end } = getCreateSceneWindow();
+  state.create.sceneStart = start;
+  state.create.sceneEnd = end;
+  const startInput = document.querySelector('#createSceneStart');
+  const endInput = document.querySelector('#createSceneEnd');
+  if (startInput) startInput.value = start.toFixed(2);
+  if (endInput) endInput.value = end.toFixed(2);
+  const lengthEl = document.querySelector('#createSceneLength');
+  if (lengthEl) {
+    lengthEl.textContent = t('create.scene.length', {
+      current: formatSeconds(end - start),
+      max: formatSeconds(CREATE_SCENE_MAX_SEC)
+    });
+  }
+  if (toastIfClamped && requestedLen > CREATE_SCENE_MAX_SEC + 0.01) {
+    toast(t('create.scene.tooLong'));
+    setCreateStatus(t('create.scene.tooLong'));
+  }
+}
+
+function onCreateSceneInputsChanged() {
+  state.create.sceneStart = Number(document.querySelector('#createSceneStart')?.value || 0);
+  state.create.sceneEnd = Number(document.querySelector('#createSceneEnd')?.value || 0);
+  syncCreateSceneUi(true);
+  state.create.zipBytes = null;
+}
+
+function markCreateSceneBoundary(which) {
+  const video = document.querySelector('#createVideo');
+  if (!video?.src) {
+    setCreateStatus(t('create.status.needVideo'));
+    return;
+  }
+  const time = Number(video.currentTime || 0);
+  if (which === 'start') {
+    state.create.sceneStart = time;
+    state.create.sceneEnd = Math.min(createVideoDuration() || time + CREATE_SCENE_MAX_SEC, time + CREATE_SCENE_MAX_SEC);
+  } else {
+    state.create.sceneEnd = time;
+    if (state.create.sceneEnd - state.create.sceneStart > CREATE_SCENE_MAX_SEC) {
+      state.create.sceneStart = Math.max(0, state.create.sceneEnd - CREATE_SCENE_MAX_SEC);
+    }
+  }
+  syncCreateSceneUi(true);
+  state.create.zipBytes = null;
+}
+
+function setCreateSceneFromPlayhead() {
+  const video = document.querySelector('#createVideo');
+  if (!video?.src) {
+    setCreateStatus(t('create.status.needVideo'));
+    return;
+  }
+  const start = Number(video.currentTime || 0);
+  const duration = createVideoDuration();
+  state.create.sceneStart = start;
+  state.create.sceneEnd = Math.min(duration || start + CREATE_SCENE_MAX_SEC, start + CREATE_SCENE_MAX_SEC);
+  syncCreateSceneUi(true);
+  state.create.zipBytes = null;
 }
 
 function renderCreateLines() {
@@ -1183,13 +1288,17 @@ function renderCreateLines() {
   state.create.lines.forEach((line, index) => {
     const item = document.createElement('li');
     item.className = 'create-line-item';
+    const playing = state.create.previewLineId === line.id;
     item.innerHTML = `
       <div>
         <strong>${index + 1}. ${escapeHtml(line.character)}</strong>
         <p>${escapeHtml(line.text)}</p>
         <small>${formatSeconds(line.start)} → ${formatSeconds(line.end)} · ${formatSeconds(line.end - line.start)}</small>
       </div>
-      <button type="button" class="ghost" data-create-remove="${line.id}" data-i18n="create.remove">${t('create.remove')}</button>
+      <div class="create-line-actions">
+        <button type="button" class="secondary" data-create-play="${line.id}">${playing ? t('create.stop') : t('create.play')}</button>
+        <button type="button" class="ghost" data-create-remove="${line.id}">${t('create.remove')}</button>
+      </div>
     `;
     list.appendChild(item);
   });
@@ -1236,6 +1345,7 @@ async function handleCreateIncomingFile(file) {
 }
 
 async function loadCreateVideo(file) {
+  stopCreatePreview();
   if (state.create.videoUrl) URL.revokeObjectURL(state.create.videoUrl);
   state.create.videoFile = file;
   state.create.videoBytes = new Uint8Array(await file.arrayBuffer());
@@ -1255,19 +1365,27 @@ async function loadCreateVideo(file) {
       if (video.readyState >= 1) done();
     });
   }
+  const duration = createVideoDuration();
+  state.create.sceneStart = 0;
+  state.create.sceneEnd = Math.min(CREATE_SCENE_MAX_SEC, duration || CREATE_SCENE_MAX_SEC);
+  syncCreateSceneUi(false);
   const title = document.querySelector('#createWorkspaceTitle');
   if (title) title.textContent = file.name.replace(/\.[^.]+$/, '');
   const meta = document.querySelector('#createVideoMeta');
   if (meta) {
     meta.textContent = t('create.video.ready', {
       name: file.name,
-      duration: formatSeconds(video?.duration || 0)
+      duration: formatSeconds(duration || 0)
     });
   }
   const nameInput = document.querySelector('#createPackName');
   if (nameInput && !nameInput.value.trim()) {
     nameInput.value = file.name.replace(/\.[^.]+$/, '');
   }
+  const lineStart = document.querySelector('#createStart');
+  const lineEnd = document.querySelector('#createEnd');
+  if (lineStart) lineStart.value = state.create.sceneStart.toFixed(2);
+  if (lineEnd) lineEnd.value = Math.min(state.create.sceneStart + 1, state.create.sceneEnd).toFixed(2);
   renderCreateLines();
   syncCreateActions();
   setCreateStatus('');
@@ -1280,9 +1398,65 @@ function markCreateTime(which) {
     setCreateStatus(t('create.status.needVideo'));
     return;
   }
-  const value = Number(video.currentTime || 0);
+  const { start: sceneStart, end: sceneEnd } = getCreateSceneWindow();
+  let value = Number(video.currentTime || 0);
+  value = Math.max(sceneStart, Math.min(sceneEnd, value));
   const input = document.querySelector(which === 'end' ? '#createEnd' : '#createStart');
   if (input) input.value = value.toFixed(2);
+}
+
+function stopCreatePreview() {
+  if (state.create.previewTimer) {
+    clearTimeout(state.create.previewTimer);
+    state.create.previewTimer = 0;
+  }
+  state.create.previewLineId = null;
+  const video = document.querySelector('#createVideo');
+  if (video && !video.paused) video.pause();
+}
+
+async function previewCreateLine(id) {
+  const line = state.create.lines.find((item) => item.id === id);
+  const video = document.querySelector('#createVideo');
+  if (!line || !video?.src) return;
+  if (state.create.previewLineId === id) {
+    stopCreatePreview();
+    renderCreateLines();
+    return;
+  }
+  stopCreatePreview();
+  state.create.previewLineId = id;
+  renderCreateLines();
+  try {
+    await seekMedia(video, line.start);
+    video.muted = false;
+    video.volume = 1;
+    await video.play();
+    const ms = Math.max(80, Math.ceil((line.end - line.start) * 1000));
+    state.create.previewTimer = setTimeout(() => {
+      stopCreatePreview();
+      renderCreateLines();
+    }, ms);
+  } catch {
+    stopCreatePreview();
+    renderCreateLines();
+  }
+}
+
+function sliceAudioBufferWindow(audioBuffer, startSec, endSec) {
+  const sampleRate = audioBuffer.sampleRate;
+  const mono = mixAudioBufferMono(audioBuffer);
+  const start = Math.max(0, Math.floor(startSec * sampleRate));
+  const end = Math.min(mono.length, Math.floor(endSec * sampleRate));
+  const length = Math.max(1, end - start);
+  const data = mono.subarray(start, end);
+  return {
+    sampleRate,
+    length,
+    duration: length / sampleRate,
+    numberOfChannels: 1,
+    getChannelData: () => data
+  };
 }
 
 async function decodeCreateAudioBuffer() {
@@ -1396,13 +1570,21 @@ async function detectCreateSpeechLines() {
     return;
   }
 
+  syncCreateSceneUi(true);
+  const { start: sceneStart, end: sceneEnd } = getCreateSceneWindow();
   state.create.busy = true;
   syncCreateActions();
   setCreateStatus(t('create.detect.working'));
   try {
     await wait(30);
     const audioBuffer = await decodeCreateAudioBuffer();
-    const segments = detectSpeechSegments(audioBuffer);
+    const windowBuffer = sliceAudioBufferWindow(audioBuffer, sceneStart, sceneEnd);
+    const segments = detectSpeechSegments(windowBuffer, {
+      minSpeechSec: 0.4,
+      mergeGapSec: 0.35,
+      padSec: 0.1,
+      maxClips: 24
+    });
     if (!segments.length) {
       setCreateStatus(t('create.detect.none'));
       toast(t('create.detect.none'));
@@ -1412,10 +1594,11 @@ async function detectCreateSpeechLines() {
       id: crypto.randomUUID ? crypto.randomUUID() : `line-${Date.now()}-${index}`,
       character: t('create.character.placeholder'),
       text: t('create.detect.line', { n: index + 1 }),
-      start: Number(segment.start.toFixed(2)),
-      end: Number(segment.end.toFixed(2))
+      start: Number((sceneStart + segment.start).toFixed(2)),
+      end: Number((sceneStart + segment.end).toFixed(2))
     }));
     state.create.zipBytes = null;
+    stopCreatePreview();
     renderCreateLines();
     setCreateStatus(t('create.detect.done', { n: segments.length }));
     toast(t('create.detect.done', { n: segments.length }));
@@ -1431,13 +1614,16 @@ async function detectCreateSpeechLines() {
 function addCreateLine() {
   const character = document.querySelector('#createCharacter')?.value?.trim() || '';
   const text = document.querySelector('#createText')?.value?.trim() || '';
-  const start = Number(document.querySelector('#createStart')?.value || 0);
-  const end = Number(document.querySelector('#createEnd')?.value || 0);
+  let start = Number(document.querySelector('#createStart')?.value || 0);
+  let end = Number(document.querySelector('#createEnd')?.value || 0);
+  const { start: sceneStart, end: sceneEnd } = getCreateSceneWindow();
   if (!character || !text) {
     setCreateStatus(t('create.status.needText'));
     toast(t('create.status.needText'));
     return;
   }
+  start = Math.max(sceneStart, Math.min(sceneEnd, start));
+  end = Math.max(sceneStart, Math.min(sceneEnd, end));
   if (!(end > start)) {
     setCreateStatus(t('create.status.badTime'));
     toast(t('create.status.badTime'));
@@ -1454,18 +1640,20 @@ function addCreateLine() {
   const textEl = document.querySelector('#createText');
   if (textEl) textEl.value = '';
   document.querySelector('#createStart').value = end.toFixed(2);
-  document.querySelector('#createEnd').value = (end + 1).toFixed(2);
+  document.querySelector('#createEnd').value = Math.min(sceneEnd, end + 1).toFixed(2);
   renderCreateLines();
   setCreateStatus('');
 }
 
 function removeCreateLine(id) {
+  if (state.create.previewLineId === id) stopCreatePreview();
   state.create.lines = state.create.lines.filter((line) => line.id !== id);
   state.create.zipBytes = null;
   renderCreateLines();
 }
 
 function resetCreatePack() {
+  stopCreatePreview();
   if (state.create.videoUrl) URL.revokeObjectURL(state.create.videoUrl);
   state.create = {
     videoFile: null,
@@ -1473,7 +1661,11 @@ function resetCreatePack() {
     videoUrl: '',
     zipBytes: null,
     lines: [],
-    busy: false
+    busy: false,
+    sceneStart: 0,
+    sceneEnd: CREATE_SCENE_MAX_SEC,
+    previewTimer: 0,
+    previewLineId: null
   };
   const video = document.querySelector('#createVideo');
   if (video) {
@@ -1490,6 +1682,10 @@ function resetCreatePack() {
   if (start) start.value = '0';
   const end = document.querySelector('#createEnd');
   if (end) end.value = '1';
+  const sceneStart = document.querySelector('#createSceneStart');
+  if (sceneStart) sceneStart.value = '0';
+  const sceneEnd = document.querySelector('#createSceneEnd');
+  if (sceneEnd) sceneEnd.value = String(CREATE_SCENE_MAX_SEC);
   const title = document.querySelector('#createWorkspaceTitle');
   if (title) title.textContent = '—';
   const meta = document.querySelector('#createVideoMeta');

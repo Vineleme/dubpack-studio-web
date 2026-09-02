@@ -3762,6 +3762,27 @@ body.hide-ads .studio-layout {
   flex-wrap: wrap;
   gap: 8px;
 }
+.create-scene-box {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 143, 196, 0.22);
+  background: rgba(245, 46, 131, 0.06);
+}
+.create-scene-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.create-scene-length {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #ffd0e4;
+}
 .create-detect-btn {
   border: 0;
   border-radius: 999px;
@@ -3825,6 +3846,13 @@ body.hide-ads .studio-layout {
   color: #e8d7ea;
 }
 .create-line-item small { color: #b08aa4; }
+.create-line-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  min-width: 96px;
+}
 .create-actions {
   display: grid;
   gap: 10px;
