@@ -354,7 +354,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '159';
+  const swVersion = '160';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -1658,13 +1658,74 @@ function mergeFrameRanges(ranges, gapFrames) {
   return merged;
 }
 
+/** Split oversized dialogue into dub-friendly takes at the quietest natural pauses. */
+function splitLongSpeechRanges(ranges, {
+  scores,
+  active,
+  frameDur,
+  maxLineSec = 8.5,
+  targetLineSec = 5.5,
+  minSpeechSec = 0.55
+} = {}) {
+  const maxFrames = Math.max(2, Math.ceil(maxLineSec / frameDur));
+  const targetFrames = Math.max(2, Math.ceil(targetLineSec / frameDur));
+  const minFrames = Math.max(1, Math.ceil(minSpeechSec / frameDur));
+  const out = [];
+
+  ranges.forEach(([from, to]) => {
+    let cursor = from;
+    while (to - cursor > maxFrames) {
+      const searchStart = cursor + minFrames;
+      const searchEnd = Math.min(cursor + maxFrames, to - minFrames);
+      if (searchEnd <= searchStart) {
+        const hard = Math.min(to - minFrames, cursor + targetFrames);
+        out.push([cursor, hard]);
+        cursor = hard;
+        continue;
+      }
+
+      const ideal = Math.min(searchEnd, Math.max(searchStart, cursor + targetFrames));
+      let bestAt = ideal;
+      let bestScore = -Infinity;
+
+      for (let i = searchStart; i <= searchEnd; i += 1) {
+        const rms = scores[i]?.rms || 0;
+        const quiet = !active[i];
+        // Look a little around i to prefer real pauses, not single soft frames.
+        let valley = rms;
+        let quietRun = quiet ? 1 : 0;
+        for (let k = Math.max(searchStart, i - 2); k <= Math.min(searchEnd, i + 2); k += 1) {
+          valley = Math.min(valley, scores[k]?.rms || 0);
+          if (!active[k]) quietRun += 1;
+        }
+        const nearIdeal = 1 - (Math.abs(i - ideal) / Math.max(1, maxFrames));
+        const score = (quiet ? 2.4 : 0) + quietRun * 0.35 + nearIdeal * 1.6 - valley * 40;
+        if (score > bestScore) {
+          bestScore = score;
+          bestAt = i;
+        }
+      }
+
+      out.push([cursor, bestAt]);
+      cursor = bestAt;
+    }
+    if (to - cursor >= minFrames) out.push([cursor, to]);
+    else if (out.length) out[out.length - 1][1] = to;
+    else out.push([from, to]);
+  });
+
+  return out;
+}
+
 function detectSpeechSegments(audioBuffer, {
   frameMs = 25,
   minSpeechSec = 0.55,
   mergeGapSec = 1.05,
   phraseGapSec = 1.6,
+  maxLineSec = 8.5,
+  targetLineSec = 5.5,
   padSec = 0.18,
-  maxClips = 14
+  maxClips = 24
 } = {}) {
   const sampleRate = audioBuffer.sampleRate;
   const raw = mixAudioBufferMono(audioBuffer);
@@ -1802,8 +1863,26 @@ function detectSpeechSegments(audioBuffer, {
     phrases.push({ ...item });
   });
 
+  // Pass 4: long monologues are hard to dub in-game — cut at natural pauses.
+  const dubSized = splitLongSpeechRanges(phrases.map((item) => [item.from, item.to]), {
+    scores,
+    active,
+    frameDur,
+    maxLineSec,
+    targetLineSec,
+    minSpeechSec
+  }).map(([from, to]) => {
+    const source = phrases.find((item) => from >= item.from && to <= item.to) || phrases[0];
+    return {
+      from,
+      to,
+      score: source?.score ?? 0,
+      musicPenalty: source?.musicPenalty ?? 0
+    };
+  });
+
   const duration = Number(audioBuffer.duration) || (raw.length / sampleRate);
-  return phrases
+  return dubSized
     .slice(0, maxClips)
     .map(({ from, to }) => ({
       start: Math.max(0, from * frameDur - padSec),
@@ -1833,8 +1912,10 @@ async function detectCreateSpeechLines() {
       minSpeechSec: 0.55,
       mergeGapSec: 1.05,
       phraseGapSec: 1.6,
+      maxLineSec: 8.5,
+      targetLineSec: 5.5,
       padSec: 0.18,
-      maxClips: 14
+      maxClips: 24
     });
     if (!segments.length) {
       setCreateStatus(t('create.detect.none'));
