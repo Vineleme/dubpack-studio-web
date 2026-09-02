@@ -3354,6 +3354,12 @@ body:not(.in-studio) .site-footer { display: none; }
   margin: 0 auto;
   padding: 0 12px 24px;
 }
+.studio-ad-left,
+.studio-ad-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .studio-ad-left { grid-area: adleft; }
 #studioApp { grid-area: studio; }
 .studio-ad-right { grid-area: adright; }
@@ -3362,9 +3368,29 @@ body:not(.in-studio) .site-footer { display: none; }
   position: sticky;
   top: 12px;
 }
-.studio-ad-bottom { position: static; }
-.studio-ad-box {
-  min-height: 520px;
+.studio-ad-bottom,
+.studio-ad-masthead,
+.studio-ad-footer { position: static; }
+.studio-ad-masthead {
+  margin: 0 0 14px;
+}
+.studio-ad-mobile {
+  display: none;
+  margin: 0 0 12px;
+  padding: 0 12px;
+}
+.studio-ad-footer {
+  max-width: 1600px;
+  margin: 0 auto 16px;
+  padding: 0 12px;
+}
+.studio-ad-rail {
+  position: static;
+  margin-bottom: 14px;
+}
+.studio-ad-rail:last-child { margin-bottom: 0; }
+.studio-ad-unit {
+  min-height: 250px;
   display: grid;
   place-items: center;
   align-content: center;
@@ -3380,13 +3406,28 @@ body:not(.in-studio) .site-footer { display: none; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.studio-ad-box-wide { min-height: 220px; margin-bottom: 14px; }
-.studio-ad-box-leader {
-  min-height: 90px;
-  grid-auto-flow: column;
-  justify-content: center;
-  padding: 16px 20px;
+.studio-ad-left .studio-ad-unit:first-child,
+.studio-ad-right .studio-ad-unit:first-child {
+  min-height: 520px;
 }
+.studio-ad-unit-wide {
+  min-height: 90px;
+}
+.studio-ad-rail .studio-ad-unit-wide {
+  min-height: 200px;
+}
+.studio-ad-unit.has-live-ad {
+  border-color: transparent;
+  background: transparent;
+  min-height: 0;
+  padding: 0;
+}
+.studio-ad-slot {
+  width: 100%;
+  min-height: inherit;
+}
+.studio-ad-slot:empty + .studio-ad-fallback { display: grid; }
+.studio-ad-unit.has-live-ad .studio-ad-pro { display: none; }
 .studio-ad-pro {
   letter-spacing: 0;
   text-transform: none;
@@ -3418,7 +3459,9 @@ body.hide-ads .studio-layout {
 }
 
 @media (max-width: 860px) {
-  .studio-ad-bottom { display: none; }
+  .studio-ad-bottom,
+  .studio-ad-masthead { display: none; }
+  .studio-ad-mobile { display: block; }
   .studio-layout {
     grid-template-areas: "studio";
     padding: 0;

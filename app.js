@@ -340,7 +340,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '147';
+  const swVersion = '148';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -498,6 +498,7 @@ async function bootApp() {
   initAuthRememberUi();
   revealStudio();
   refreshAccountUi();
+  window.DubpackAds?.init();
   capturePendingCena();
   applyPendingCena();
   window.DubpackCart?.initCart({
@@ -787,7 +788,7 @@ function refreshAccountUi() {
     els.proBtn.textContent = owner ? t('pro.btn.owner') : pro ? t('pro.btn.manage') : t('pro.btn');
   }
   if (loggedIn) ensureProMonthlyCredits();
-  document.body.classList.toggle('hide-ads', owner || pro);
+  window.DubpackAds?.syncHidden(owner || pro);
   renderAvatars();
   updateCreditUi();
 }
