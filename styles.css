@@ -3472,3 +3472,101 @@ body.hide-ads .studio-layout {
   .cv-dock { grid-template-columns: 1fr 1fr; }
   .cv-status { grid-column: 1 / -1; grid-template-columns: 1fr; }
 }
+
+.create-pack-page .create-legal {
+  margin: 0 0 18px;
+  max-width: 62ch;
+}
+.create-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.create-field span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8f8ca8;
+}
+.create-field input,
+.create-field textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(8, 8, 12, 0.72);
+  color: #f4f2ff;
+  padding: 12px 14px;
+  font: inherit;
+}
+.create-field-wide { grid-column: 1 / -1; }
+.create-video-block {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 20px;
+}
+.create-video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.create-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.create-video {
+  width: 100%;
+  max-height: 360px;
+  border-radius: 14px;
+  background: #05050a;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.create-line-form {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(8, 8, 12, 0.45);
+}
+.create-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.create-line-list {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.create-line-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(8, 8, 12, 0.55);
+}
+.create-line-item p {
+  margin: 4px 0;
+  color: #d7d4ea;
+}
+.create-line-item small { color: #8f8ca8; }
+.create-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+#createStatus { min-height: 1.2em; }
+
+@media (max-width: 640px) {
+  .create-times { grid-template-columns: 1fr; }
+  .create-line-item { flex-direction: column; }
+}

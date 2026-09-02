@@ -1,4 +1,4 @@
-const AUDIO_EXTS = ['mp3', 'wav', 'ogg', 'm4a'];
+const AUDIO_EXTS = ['mp3', 'wav', 'ogg', 'm4a', 'webm'];
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 const VIDEO_EXTS = ['mp4', 'mov', 'webm', 'ogv', 'm4v'];
 const MAX_LINE_SECONDS = 600;
@@ -193,7 +193,15 @@ const state = {
   tipTimer: 0,
   exportLayout: 'original',
   pendingCena: null,
-  waveGen: 0
+  waveGen: 0,
+  create: {
+    videoFile: null,
+    videoBytes: null,
+    videoUrl: '',
+    zipBytes: null,
+    lines: [],
+    busy: false
+  }
 };
 
 const els = {
@@ -340,7 +348,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '149';
+  const swVersion = '150';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -447,6 +455,18 @@ function bindUi() {
     setTab('record');
   });
   document.querySelector('#cenaImportBtn')?.addEventListener('click', openImportModal);
+  document.querySelector('#createVideoInput')?.addEventListener('change', onCreateVideoPicked);
+  document.querySelector('#createMarkStartBtn')?.addEventListener('click', () => markCreateTime('start'));
+  document.querySelector('#createMarkEndBtn')?.addEventListener('click', () => markCreateTime('end'));
+  document.querySelector('#createAddLineBtn')?.addEventListener('click', addCreateLine);
+  document.querySelector('#createDownloadBtn')?.addEventListener('click', () => void exportCreatePack({ open: false }));
+  document.querySelector('#createOpenBtn')?.addEventListener('click', () => void exportCreatePack({ open: true }));
+  document.querySelector('#createResetBtn')?.addEventListener('click', resetCreatePack);
+  document.querySelector('#createLineList')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-create-remove]');
+    if (!btn) return;
+    removeCreateLine(btn.dataset.createRemove);
+  });
   document.querySelectorAll('[data-lang]').forEach((button) => {
     button.addEventListener('click', () => changeLang(button.dataset.lang));
   });
@@ -1110,6 +1130,367 @@ function closeImportModal() {
   document.querySelector('#importModal')?.classList.add('is-hidden');
 }
 
+function setCreateStatus(message) {
+  const el = document.querySelector('#createStatus');
+  if (el) el.textContent = message || '';
+}
+
+function createPackName() {
+  const raw = document.querySelector('#createPackName')?.value?.trim();
+  return raw || 'meu-pack';
+}
+
+function syncCreateActions() {
+  const hasVideo = Boolean(state.create.videoFile);
+  const hasLines = state.create.lines.length > 0;
+  const busy = state.create.busy;
+  document.querySelector('#createMarkStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createMarkEndBtn')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createDownloadBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
+  document.querySelector('#createOpenBtn')?.toggleAttribute('disabled', !hasVideo || !hasLines || busy);
+  document.querySelector('#createAddLineBtn')?.toggleAttribute('disabled', busy);
+}
+
+function renderCreateLines() {
+  const list = document.querySelector('#createLineList');
+  const empty = document.querySelector('#createLinesEmpty');
+  const count = document.querySelector('#createLineCount');
+  if (!list) return;
+  list.replaceChildren();
+  state.create.lines.forEach((line, index) => {
+    const item = document.createElement('li');
+    item.className = 'create-line-item';
+    item.innerHTML = `
+      <div>
+        <strong>${index + 1}. ${escapeHtml(line.character)}</strong>
+        <p>${escapeHtml(line.text)}</p>
+        <small>${formatSeconds(line.start)} → ${formatSeconds(line.end)} · ${formatSeconds(line.end - line.start)}</small>
+      </div>
+      <button type="button" class="ghost" data-create-remove="${line.id}" data-i18n="create.remove">${t('create.remove')}</button>
+    `;
+    list.appendChild(item);
+  });
+  if (empty) empty.hidden = state.create.lines.length > 0;
+  if (count) count.textContent = t('create.lines.count', { n: state.create.lines.length });
+  syncCreateActions();
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function onCreateVideoPicked(event) {
+  const file = event.target.files?.[0];
+  if (event.target) event.target.value = '';
+  if (!file) return;
+  if (state.create.videoUrl) URL.revokeObjectURL(state.create.videoUrl);
+  state.create.videoFile = file;
+  state.create.videoBytes = new Uint8Array(await file.arrayBuffer());
+  state.create.videoUrl = URL.createObjectURL(file);
+  state.create.zipBytes = null;
+  const video = document.querySelector('#createVideo');
+  if (video) {
+    video.src = state.create.videoUrl;
+    video.load();
+    await new Promise((resolve) => {
+      const done = () => {
+        video.removeEventListener('loadedmetadata', done);
+        resolve();
+      };
+      video.addEventListener('loadedmetadata', done);
+      if (video.readyState >= 1) done();
+    });
+  }
+  const meta = document.querySelector('#createVideoMeta');
+  if (meta) {
+    meta.textContent = t('create.video.ready', {
+      name: file.name,
+      duration: formatSeconds(video?.duration || 0)
+    });
+  }
+  if (!document.querySelector('#createPackName')?.value?.trim()) {
+    const nameInput = document.querySelector('#createPackName');
+    if (nameInput) nameInput.value = file.name.replace(/\.[^.]+$/, '');
+  }
+  syncCreateActions();
+  setCreateStatus('');
+}
+
+function markCreateTime(which) {
+  const video = document.querySelector('#createVideo');
+  if (!video?.src) {
+    setCreateStatus(t('create.status.needVideo'));
+    return;
+  }
+  const value = Number(video.currentTime || 0);
+  const input = document.querySelector(which === 'end' ? '#createEnd' : '#createStart');
+  if (input) input.value = value.toFixed(2);
+}
+
+function addCreateLine() {
+  const character = document.querySelector('#createCharacter')?.value?.trim() || '';
+  const text = document.querySelector('#createText')?.value?.trim() || '';
+  const start = Number(document.querySelector('#createStart')?.value || 0);
+  const end = Number(document.querySelector('#createEnd')?.value || 0);
+  if (!character || !text) {
+    setCreateStatus(t('create.status.needText'));
+    toast(t('create.status.needText'));
+    return;
+  }
+  if (!(end > start)) {
+    setCreateStatus(t('create.status.badTime'));
+    toast(t('create.status.badTime'));
+    return;
+  }
+  state.create.lines.push({
+    id: crypto.randomUUID ? crypto.randomUUID() : `line-${Date.now()}-${Math.random()}`,
+    character,
+    text,
+    start,
+    end
+  });
+  state.create.zipBytes = null;
+  const textEl = document.querySelector('#createText');
+  if (textEl) textEl.value = '';
+  document.querySelector('#createStart').value = end.toFixed(2);
+  document.querySelector('#createEnd').value = (end + 1).toFixed(2);
+  renderCreateLines();
+  setCreateStatus('');
+}
+
+function removeCreateLine(id) {
+  state.create.lines = state.create.lines.filter((line) => line.id !== id);
+  state.create.zipBytes = null;
+  renderCreateLines();
+}
+
+function resetCreatePack() {
+  if (state.create.videoUrl) URL.revokeObjectURL(state.create.videoUrl);
+  state.create = {
+    videoFile: null,
+    videoBytes: null,
+    videoUrl: '',
+    zipBytes: null,
+    lines: [],
+    busy: false
+  };
+  const video = document.querySelector('#createVideo');
+  if (video) {
+    video.removeAttribute('src');
+    video.load();
+  }
+  const nameInput = document.querySelector('#createPackName');
+  if (nameInput) nameInput.value = '';
+  const character = document.querySelector('#createCharacter');
+  if (character) character.value = '';
+  const text = document.querySelector('#createText');
+  if (text) text.value = '';
+  const start = document.querySelector('#createStart');
+  if (start) start.value = '0';
+  const end = document.querySelector('#createEnd');
+  if (end) end.value = '1';
+  const meta = document.querySelector('#createVideoMeta');
+  if (meta) meta.textContent = t('create.video.empty');
+  renderCreateLines();
+  setCreateStatus('');
+}
+
+function encodeWavFromPCM(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeStr = (offset, str) => {
+    for (let i = 0; i < str.length; i += 1) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    offset += 2;
+  }
+  return new Uint8Array(buffer);
+}
+
+function silenceWavBytes(durationSec, sampleRate = 22050) {
+  const length = Math.max(1, Math.floor(Math.max(0.05, durationSec) * sampleRate));
+  return encodeWavFromPCM(new Float32Array(length), sampleRate);
+}
+
+function seekMedia(media, time) {
+  return new Promise((resolve) => {
+    const onSeeked = () => {
+      media.removeEventListener('seeked', onSeeked);
+      resolve();
+    };
+    media.addEventListener('seeked', onSeeked);
+    try {
+      media.currentTime = Math.max(0, time);
+    } catch {
+      media.removeEventListener('seeked', onSeeked);
+      resolve();
+    }
+  });
+}
+
+async function extractLineAudio(videoEl, start, end) {
+  const duration = Math.max(0.05, end - start);
+  const capture = videoEl.captureStream?.bind(videoEl) || videoEl.mozCaptureStream?.bind(videoEl);
+  if (!capture || typeof MediaRecorder === 'undefined') {
+    return { bytes: silenceWavBytes(duration), ext: 'wav' };
+  }
+
+  const stream = capture.call(videoEl);
+  const audioTracks = stream.getAudioTracks();
+  if (!audioTracks.length) {
+    stream.getTracks().forEach((track) => track.stop());
+    return { bytes: silenceWavBytes(duration), ext: 'wav' };
+  }
+
+  const audioStream = new MediaStream(audioTracks);
+  const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/mp4']
+    .find((type) => MediaRecorder.isTypeSupported(type)) || '';
+  const recorder = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined);
+  const chunks = [];
+  recorder.ondataavailable = (event) => {
+    if (event.data?.size) chunks.push(event.data);
+  };
+
+  const wasMuted = videoEl.muted;
+  const wasVolume = videoEl.volume;
+  videoEl.muted = false;
+  videoEl.volume = 0.001;
+  await seekMedia(videoEl, start);
+  const stopped = new Promise((resolve) => {
+    recorder.onstop = () => resolve();
+  });
+  recorder.start(50);
+  await videoEl.play().catch(() => undefined);
+  await wait(Math.ceil(duration * 1000) + 80);
+  videoEl.pause();
+  if (recorder.state !== 'inactive') recorder.stop();
+  await stopped;
+  videoEl.muted = wasMuted;
+  videoEl.volume = wasVolume;
+  stream.getTracks().forEach((track) => track.stop());
+
+  const blob = new Blob(chunks, { type: recorder.mimeType || mime || 'audio/webm' });
+  if (!blob.size) return { bytes: silenceWavBytes(duration), ext: 'wav' };
+  const type = recorder.mimeType || blob.type || '';
+  const ext = /mp4|m4a|aac/i.test(type) ? 'm4a' : /ogg/i.test(type) ? 'ogg' : /wav/i.test(type) ? 'wav' : 'webm';
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), ext };
+}
+
+async function buildCreatePackZip() {
+  if (!state.create.videoFile || !state.create.videoBytes) {
+    throw new Error(t('create.status.needVideo'));
+  }
+  if (!state.create.lines.length) {
+    throw new Error(t('create.status.needLines'));
+  }
+
+  const video = document.querySelector('#createVideo');
+  if (!video?.src) throw new Error(t('create.status.needVideo'));
+
+  const videoExt = (state.create.videoFile.name.split('.').pop() || 'mp4').toLowerCase();
+  const safeExt = VIDEO_EXTS.includes(videoExt) ? videoExt : 'mp4';
+  const files = {
+    [`dub_video.${safeExt}`]: state.create.videoBytes
+  };
+  const linesMeta = [];
+
+  for (let index = 0; index < state.create.lines.length; index += 1) {
+    const line = state.create.lines[index];
+    setCreateStatus(t('create.status.extract', { n: index + 1 }));
+    const { bytes, ext } = await extractLineAudio(video, line.start, line.end);
+    const fileName = `${String(index + 1).padStart(2, '0')}-${safeFile(line.character)}.${ext}`;
+    files[fileName] = bytes;
+    linesMeta.push({
+      file: fileName,
+      character: line.character,
+      text: line.text,
+      start: Number(line.start.toFixed(3)),
+      end: Number(line.end.toFixed(3)),
+      duration: Number((line.end - line.start).toFixed(3))
+    });
+  }
+
+  const meta = {
+    name: createPackName(),
+    lines: linesMeta
+  };
+  files['pack.json'] = new TextEncoder().encode(JSON.stringify(meta, null, 2));
+  return fflate.zipSync(files);
+}
+
+async function exportCreatePack({ open = false } = {}) {
+  if (state.create.busy) return;
+  if (!state.create.videoFile) {
+    setCreateStatus(t('create.status.needVideo'));
+    toast(t('create.status.needVideo'));
+    return;
+  }
+  if (!state.create.lines.length) {
+    setCreateStatus(t('create.status.needLines'));
+    toast(t('create.status.needLines'));
+    return;
+  }
+
+  state.create.busy = true;
+  syncCreateActions();
+  setCreateStatus(t('create.status.building'));
+  try {
+    if (!state.create.zipBytes) {
+      state.create.zipBytes = await buildCreatePackZip();
+    }
+    const name = createPackName();
+    if (open) {
+      const pack = await buildPack(name, state.create.zipBytes);
+      upsertPack(pack);
+      state.activePackId = pack.id;
+      state.activeIndex = 0;
+      renderPackGrid();
+      updateScoreCard();
+      selectScene(0);
+      setTab('record');
+      scheduleSave();
+      warmSceneAudio(pack.scenes);
+      setCreateStatus(t('create.status.opened'));
+      toast(t('create.status.opened'));
+    } else {
+      const url = URL.createObjectURL(new Blob([state.create.zipBytes], { type: 'application/zip' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeFile(name)}.zip`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setCreateStatus(t('create.status.done'));
+      toast(t('create.status.done'));
+    }
+  } catch (error) {
+    setCreateStatus(error.message || t('create.status.error'));
+    toast(error.message || t('create.status.error'));
+  } finally {
+    state.create.busy = false;
+    syncCreateActions();
+  }
+}
+
 function setImportProgress(current, total, label) {
   const wrap = document.querySelector('#importProgressWrap');
   const bar = document.querySelector('#importProgressBar');
@@ -1314,7 +1695,7 @@ function applyTab(tab) {
   }
   const studioMode = tab === 'packs' || tab === 'record';
   document.querySelector('#studioFloor')?.classList.toggle('is-hidden', !studioMode);
-  document.querySelector('#studioIntro')?.classList.toggle('is-compact', Boolean(currentPack()));
+  document.querySelector('#studioIntro')?.classList.toggle('is-compact', Boolean(currentPack()) || tab === 'create');
   document.body.classList.toggle('has-pack', Boolean(currentPack()));
   document.querySelectorAll('.tab-view').forEach((view) => view.classList.remove('active'));
   if (studioMode) {
@@ -1326,11 +1707,15 @@ function applyTab(tab) {
     const isStudio = button.dataset.tab === 'packs' || button.dataset.tab === 'record';
     button.classList.toggle('active', button.dataset.tab === tab || (studioMode && isStudio && button.dataset.tab === 'packs'));
   });
-  document.querySelector('.dashboard')?.classList.toggle('final-mode', tab === 'dub');
+  document.querySelector('.dashboard')?.classList.toggle('final-mode', tab === 'dub' || tab === 'create');
   if (!studioMode) abortCapture();
   if (studioMode && currentPack() && !state.previewing) selectScene(state.activeIndex);
   if (tab === 'dub') {
     showFinalVideo(currentPack());
+  }
+  if (tab === 'create') {
+    renderCreateLines();
+    syncCreateActions();
   }
   if (tab === 'credits' || tab === 'profile') {
     updateCreditUi();
@@ -1338,7 +1723,7 @@ function applyTab(tab) {
     refreshAccountUi();
   }
   if (studioMode) renderActivity();
-  if (tab === 'profile' || tab === 'credits') {
+  if (tab === 'profile' || tab === 'credits' || tab === 'create') {
     document.querySelector('.content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
