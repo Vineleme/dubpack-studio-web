@@ -353,7 +353,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '156';
+  const swVersion = '157';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -1664,15 +1664,15 @@ function framePitchStrength(frame, sampleRate) {
 
 function detectSpeechSegments(audioBuffer, {
   frameMs = 25,
-  minSpeechSec = 0.5,
-  mergeGapSec = 0.35,
-  padSec = 0.08,
-  maxClips = 14
+  minSpeechSec = 0.35,
+  mergeGapSec = 0.4,
+  padSec = 0.1,
+  maxClips = 18
 } = {}) {
   const sampleRate = audioBuffer.sampleRate;
   const raw = mixAudioBufferMono(audioBuffer);
-  const speechBand = onePoleLowpass(onePoleHighpass(raw, sampleRate, 120), sampleRate, 3200);
-  const lowBand = onePoleLowpass(raw, sampleRate, 180);
+  const speechBand = onePoleLowpass(onePoleHighpass(raw, sampleRate, 100), sampleRate, 3800);
+  const lowBand = onePoleLowpass(raw, sampleRate, 160);
   const frameSize = Math.max(1, Math.round(sampleRate * frameMs / 1000));
   const hop = frameSize;
   const scores = [];
@@ -1701,46 +1701,33 @@ function detectSpeechSegments(audioBuffer, {
     const bandRatio = rms / fullRms;
     const lowRatio = lowRms / fullRms;
     const zcr = zc / size;
-    const frame = speechBand.subarray(i, end);
-    const pitch = framePitchStrength(frame, sampleRate);
+    const pitch = framePitchStrength(speechBand.subarray(i, end), sampleRate);
     const prevScore = scores[scores.length - 1];
     const pitchDelta = prevScore ? Math.abs(pitch - prevScore.pitch) : 0;
     const rmsDelta = prevScore ? Math.abs(rms - prevScore.rms) : 0;
-    const voiceLike = (
-      rms > 0.003
-      && bandRatio >= 0.38
-      && lowRatio <= 0.72
-      && zcr >= 0.02
-      && zcr <= 0.26
-      && pitch >= 0.2
-      && pitch <= 0.92
-      && (pitchDelta >= 0.01 || rmsDelta >= rms * 0.08 || bandRatio >= 0.55)
-    );
-    scores.push({ rms, pitch, voiceLike, pitchDelta, rmsDelta, bandRatio, lowRatio });
+    scores.push({ rms, pitch, bandRatio, lowRatio, zcr, pitchDelta, rmsDelta });
   }
 
   if (!scores.length) return [];
 
-  const windowFrames = Math.max(8, Math.round(1000 / frameMs));
-  const gated = scores.map((item, index) => {
-    const from = Math.max(0, index - windowFrames);
-    const to = Math.min(scores.length, index + windowFrames + 1);
-    const local = scores.slice(from, to).map((entry) => entry.rms).sort((a, b) => a - b);
-    const median = local[Math.floor(local.length * 0.5)] || 0;
-    const localOk = item.rms >= Math.max(0.004, median * 1.15);
-    return item.voiceLike && localOk && item.pitch >= 0.22;
-  });
+  const allRms = scores.map((item) => item.rms).sort((a, b) => a - b);
+  const noise = allRms[Math.floor(allRms.length * 0.15)] || 0;
+  const peak = allRms[Math.floor(allRms.length * 0.9)] || 0;
+  const energyGate = Math.max(0.0015, noise + (peak - noise) * 0.18);
+
+  // Pass 1: any active speech-band energy (dialogue OR music). Soft on purpose.
+  const active = scores.map((item) => item.rms >= energyGate && item.bandRatio >= 0.22);
 
   const rawRanges = [];
   let rangeStart = null;
-  for (let i = 0; i < gated.length; i += 1) {
-    if (gated[i] && rangeStart == null) rangeStart = i;
-    if (!gated[i] && rangeStart != null) {
+  for (let i = 0; i < active.length; i += 1) {
+    if (active[i] && rangeStart == null) rangeStart = i;
+    if (!active[i] && rangeStart != null) {
       rawRanges.push([rangeStart, i]);
       rangeStart = null;
     }
   }
-  if (rangeStart != null) rawRanges.push([rangeStart, gated.length]);
+  if (rangeStart != null) rawRanges.push([rangeStart, active.length]);
 
   const frameDur = hop / sampleRate;
   const minFrames = Math.max(1, Math.ceil(minSpeechSec / frameDur));
@@ -1757,51 +1744,62 @@ function detectSpeechSegments(audioBuffer, {
     else merged.push([from, to]);
   });
 
+  // Pass 2: score each chunk — higher = more spoken-like, lower = soundtrack-like.
   const ranked = merged.map(([from, to]) => {
     const slice = scores.slice(from, to);
     const n = Math.max(1, slice.length);
     const avgPitch = slice.reduce((sum, item) => sum + item.pitch, 0) / n;
     const avgRms = slice.reduce((sum, item) => sum + item.rms, 0) / n;
     const avgLow = slice.reduce((sum, item) => sum + item.lowRatio, 0) / n;
-    const voicedRatio = slice.filter((item) => item.voiceLike).length / n;
+    const avgBand = slice.reduce((sum, item) => sum + item.bandRatio, 0) / n;
+    const avgZcr = slice.reduce((sum, item) => sum + item.zcr, 0) / n;
     const pitchStd = Math.sqrt(slice.reduce((sum, item) => sum + ((item.pitch - avgPitch) ** 2), 0) / n);
     const rmsStd = Math.sqrt(slice.reduce((sum, item) => sum + ((item.rms - avgRms) ** 2), 0) / n);
     const rmsCv = rmsStd / (avgRms + 1e-9);
     let transitions = 0;
     for (let i = from + 1; i < to; i += 1) {
-      if (gated[i] !== gated[i - 1]) transitions += 1;
+      if (active[i] !== active[i - 1]) transitions += 1;
     }
     const transitionsPerSec = transitions / Math.max(0.2, (to - from) * frameDur);
-    const musicLike = avgLow > 0.55 && pitchStd < 0.045 && rmsCv < 0.28 && transitionsPerSec < 1.2;
-    const score = (
-      pitchStd * 4
-      + rmsCv * 2.2
-      + transitionsPerSec * 0.8
-      + voicedRatio * 1.4
-      + Math.min(0.35, avgPitch) * 0.5
-      - (musicLike ? 3 : 0)
-      - Math.max(0, avgLow - 0.5) * 1.5
+    const musicPenalty = (
+      (avgLow > 0.58 ? 1.2 : 0)
+      + (pitchStd < 0.035 ? 1.1 : 0)
+      + (rmsCv < 0.2 ? 1.0 : 0)
+      + (transitionsPerSec < 0.8 ? 0.8 : 0)
+      + (avgZcr < 0.015 ? 0.7 : 0)
     );
-    return { from, to, score, musicLike, pitchStd, rmsCv, voicedRatio };
-  }).filter((item) => (
-    !item.musicLike
-    && item.voicedRatio >= 0.45
-    && item.pitchStd >= 0.03
-    && item.rmsCv >= 0.18
-    && item.score > 0.8
-  ));
+    const speechBonus = (
+      pitchStd * 5
+      + rmsCv * 2.8
+      + transitionsPerSec * 1.1
+      + Math.min(0.7, avgBand) * 1.2
+      + (avgPitch > 0.15 && avgPitch < 0.85 ? 0.6 : 0)
+    );
+    const score = speechBonus - musicPenalty;
+    return { from, to, score, musicPenalty, pitchStd, rmsCv };
+  });
 
   ranked.sort((a, b) => b.score - a.score);
 
+  // Prefer spoken-like chunks; if none clear, still return the least "music-like" actives
+  // so the UI never goes empty when there is real audio in the scene.
+  let chosen = ranked.filter((item) => item.score >= 0.55 && item.musicPenalty < 3.2);
+  if (!chosen.length) {
+    chosen = ranked.filter((item) => item.score >= 0.15).slice(0, Math.min(8, maxClips));
+  }
+  if (!chosen.length) {
+    chosen = ranked.slice(0, Math.min(6, maxClips));
+  }
+
   const duration = Number(audioBuffer.duration) || (raw.length / sampleRate);
-  return ranked
+  return chosen
     .slice(0, maxClips)
     .sort((a, b) => a.from - b.from)
     .map(({ from, to }) => ({
       start: Math.max(0, from * frameDur - padSec),
       end: Math.min(duration, to * frameDur + padSec)
     }))
-    .filter((segment) => segment.end - segment.start >= minSpeechSec);
+    .filter((segment) => segment.end - segment.start >= minSpeechSec * 0.85);
 }
 
 async function detectCreateSpeechLines() {
@@ -1822,10 +1820,10 @@ async function detectCreateSpeechLines() {
     const audioBuffer = await decodeCreateAudioBuffer();
     const windowBuffer = sliceAudioBufferWindow(audioBuffer, sceneStart, sceneEnd);
     const segments = detectSpeechSegments(windowBuffer, {
-      minSpeechSec: 0.5,
-      mergeGapSec: 0.35,
-      padSec: 0.08,
-      maxClips: 14
+      minSpeechSec: 0.35,
+      mergeGapSec: 0.4,
+      padSec: 0.1,
+      maxClips: 18
     });
     if (!segments.length) {
       setCreateStatus(t('create.detect.none'));
