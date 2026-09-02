@@ -359,7 +359,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '163';
+  const swVersion = '164';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -2342,6 +2342,35 @@ async function previewCreateLine(id) {
   }
 }
 
+async function extractLineFrame(videoEl, time) {
+  const duration = Number(videoEl.duration);
+  let target = Math.max(0, Number(time) || 0);
+  if (Number.isFinite(duration) && duration > 0) {
+    target = Math.min(target, Math.max(0, duration - 0.05));
+  }
+  await seekMedia(videoEl, target);
+  await wait(40);
+  const width = videoEl.videoWidth || 0;
+  const height = videoEl.videoHeight || 0;
+  if (!width || !height) {
+    throw new Error(t('create.status.frameFail'));
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  if (!ctx) throw new Error(t('create.status.frameFail'));
+  ctx.drawImage(videoEl, 0, 0, width, height);
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (result) => (result ? resolve(result) : reject(new Error(t('create.status.frameFail')))),
+      'image/jpeg',
+      0.94
+    );
+  });
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), ext: 'jpg' };
+}
+
 async function extractLineAudio(videoEl, start, end) {
   const duration = Math.max(0.05, end - start);
   const capture = videoEl.captureStream?.bind(videoEl) || videoEl.mozCaptureStream?.bind(videoEl);
@@ -2417,11 +2446,18 @@ async function buildCreatePackZip() {
   for (let index = 0; index < state.create.lines.length; index += 1) {
     const line = state.create.lines[index];
     setCreateStatus(t('create.status.extract', { n: index + 1 }));
+    const base = `${String(index + 1).padStart(2, '0')}-${safeFile(line.character)}`;
+    const frameAt = line.start + Math.min(0.35, Math.max(0.08, (line.end - line.start) * 0.2));
+    const frame = await extractLineFrame(video, frameAt);
+    const imageName = `${base}.${frame.ext}`;
+    files[imageName] = frame.bytes;
+
     const { bytes, ext } = await extractLineAudio(video, line.start, line.end);
-    const fileName = `${String(index + 1).padStart(2, '0')}-${safeFile(line.character)}.${ext}`;
+    const fileName = `${base}.${ext}`;
     files[fileName] = bytes;
     linesMeta.push({
       file: fileName,
+      image: imageName,
       character: line.character,
       text: line.text,
       start: Number(line.start.toFixed(3)),
@@ -2615,7 +2651,12 @@ async function buildPack(name, zipBytes) {
     const duration = clampDuration(span && Math.abs(span - measured) < 8 ? Math.min(span, measured + 0.35) : measured);
     const character = choicer?.character || line?.character || line?.speaker || detectCharacter(choicer?.caption || baseName);
     const subtitle = choicer?.caption || line?.text || line?.line || line?.subtitle || line?.dialogue || sidecar || spokenLineFromName(baseName, character);
-    const imageUrl = findSceneArt(choicer, index, images, objectUrl, entry);
+    let imageUrl = '';
+    if (line?.image) {
+      const imageEntry = images.find((item) => namesMatch(item.name, line.image));
+      if (imageEntry) imageUrl = objectUrl(imageEntry);
+    }
+    if (!imageUrl) imageUrl = findSceneArt(choicer, index, images, objectUrl, entry);
     const matchedVideo = visualUrlFor(entry, index, videos, objectUrl);
     const sharedUrl = sharedVideo ? objectUrl(sharedVideo) : '';
     const firstVideo = videos[0] ? objectUrl(videos[0]) : '';
