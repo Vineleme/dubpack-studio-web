@@ -13,7 +13,8 @@ const BED_DUB_MUTE = 0.003;
 const PLAY_ORIGINAL_KEY = 'dubpack-play-original-audio';
 const MIC_MONITOR_KEY = 'dubpack-mic-monitor';
 const MIC_FILTER_KEY = 'dubpack-mic-filter';
-const WAVE_PREROLL_SEC = 1.0; // seconds of empty timeline shown before the line starts
+const WAVE_PREROLL_SEC = 3; // matches on-screen 3-2-1 wait zone
+const WAVE_POSTROLL_SEC = 1; // quiet tail after the end marker
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
@@ -3626,40 +3627,40 @@ async function startTakeFlow() {
     track.enabled = true;
   });
   startMeter(stream);
-  els.countdownBadge.style.display = 'grid';
-  els.recordingOverlay.style.display = 'grid';
+  if (els.countdownBadge) {
+    els.countdownBadge.style.display = 'grid';
+    els.countdownBadge.textContent = '3';
+    els.countdownBadge.classList.add('is-on');
+  }
+  els.recordingOverlay.style.display = 'none';
   els.stageState.textContent = 'Prepare a fala...';
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
   els.recordBtn.setAttribute('aria-label', 'Parar');
   els.micHint.textContent = 'Toque de novo para cancelar';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Preparando';
+  if (els.timerValue) els.timerValue.textContent = '3';
 
-  // Prefetch green guide waves during countdown so recording starts immersive.
-  if (scene?.audioUrl) {
-    void peaksFromUrl(scene.audioUrl).then((peaks) => {
-      if (state.captureGen !== gen || state.recorder) return;
-      paintGuideWavePreview(scene, peaks);
-    });
-  }
-
-  let count = 3;
-  els.countdownBadge.textContent = String(count);
-  els.timerValue.textContent = String(count);
-  state.countdownTimer = setInterval(() => {
-    count -= 1;
-    els.countdownBadge.textContent = count === 0 ? 'DUBLE!' : String(count);
-    els.timerValue.textContent = String(Math.max(0, count));
-    if (count <= 0) {
+  // Wave + countdown share one clock: wait zone → red start → record.
+  void startLiveWaveGuide(scene, Number(scene.duration) || 2, {
+    captureGen: gen,
+    onSpeakStart: () => {
+      if (state.captureGen !== gen) return;
       clearInterval(state.countdownTimer);
+      clearTimeout(state.countdownStartTimer);
       state.countdownTimer = null;
-      state.countdownStartTimer = setTimeout(() => {
-        state.countdownStartTimer = null;
-        if (state.captureGen !== gen) return;
-        recordActiveScene();
-      }, 220);
+      state.countdownStartTimer = null;
+      recordActiveScene();
     }
-  }, 1000);
+  });
+
+  // Safety: if the wave guide never arms, still start after the wait zone.
+  clearTimeout(state.countdownStartTimer);
+  state.countdownStartTimer = setTimeout(() => {
+    state.countdownStartTimer = null;
+    if (state.captureGen !== gen || state.recorder) return;
+    recordActiveScene();
+  }, Math.round(WAVE_PREROLL_SEC * 1000) + 80);
 }
 
 function isPhone() {
@@ -3737,6 +3738,7 @@ function takeLooksLikeWebm(take) {
 
 function recordActiveScene() {
   if (!state.liveStream) return;
+  if (state.recorder) return;
   const scene = currentScene();
   const stream = state.liveStream;
   if (!scene || !stream) return;
@@ -3821,19 +3823,26 @@ function recordActiveScene() {
   };
 
   els.countdownBadge.style.display = 'none';
+  els.countdownBadge?.classList.remove('is-on');
   els.recordingOverlay.style.display = 'grid';
   els.stageState.textContent = 'Gravando take...';
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
   els.recordBtn.setAttribute('aria-label', 'Parar');
-  els.micHint.textContent = 'Fale nas ondas · siga a barra verde';
+  els.micHint.textContent = 'Fale nas ondas · siga a barra';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
   playSceneMedia(scene, recMs / 1000);
-  // Soft reference in headphones + live green wave with playhead L→R.
+  // Soft reference in headphones. Playhead was already started in the 3-2-1 wait zone.
   if (scene.audioUrl) {
     playClickAudio([{ url: scene.audioUrl, volume: GUIDE_VOLUME }], recMs / 1000);
   }
-  void startLiveWaveGuide(scene, recMs / 1000);
+  if (!state.liveWave?.active) {
+    void startLiveWaveGuide(scene, recMs / 1000);
+  } else if (state.liveWave) {
+    // Keep the same clock; mark speak as armed so the guide won't re-fire record.
+    state.liveWave.armedRecord = true;
+    state.liveWave.onSpeakStart = null;
+  }
 
   state.recordingTimer = setInterval(() => {
     const remaining = Math.max(0, (recMs / 1000) - ((Date.now() - startedAt) / 1000));
@@ -4423,46 +4432,89 @@ function animateProgress(duration) {
   }, 80);
 }
 
-async function startLiveWaveGuide(scene, durationSec) {
+async function startLiveWaveGuide(scene, durationSec, opts = {}) {
+  if (state.liveWave?.active) return;
   stopLiveWaveGuide();
-  // Total timeline = pre-roll + actual recording duration.
+  // Timeline: wait zone (3-2-1) → speak between red markers → short tail.
+  // Start the clock immediately so countdown and playhead stay locked together.
   const recDuration = Math.max(0.4, Number(durationSec) || Number(scene?.duration) || 2);
   const preroll = WAVE_PREROLL_SEC;
-  const totalDuration = preroll + recDuration;
-
-  const refPeaks = scene?.audioUrl ? await peaksFromUrl(scene.audioUrl) : [];
+  const postroll = WAVE_POSTROLL_SEC;
+  const totalDuration = preroll + recDuration + postroll;
   const live = {
     active: true,
     startedAt: performance.now(),
     duration: recDuration,
     preroll,
+    postroll,
     totalDuration,
-    refPeaks,
+    refPeaks: [],
     livePeaks: new Float32Array(WAVE_BINS),
-    raf: 0
+    raf: 0,
+    armedRecord: false,
+    captureGen: opts.captureGen,
+    onSpeakStart: typeof opts.onSpeakStart === 'function' ? opts.onSpeakStart : null
   };
   state.liveWave = live;
   els.wavePlayhead?.classList.add('is-live');
+  els.wavePlayhead?.classList.remove('is-speaking');
   document.querySelector('#waveStage')?.classList.add('is-live');
   if (els.stageState) {
-    els.stageState.textContent = 'Siga as ondas';
+    els.stageState.textContent = 'Espere a barra chegar no vermelho';
     els.stageState.className = 'stage-state recording';
+  }
+  const startLabel = document.querySelector('#waveStartLabel');
+  const endLabel = document.querySelector('#waveEndLabel');
+  if (startLabel) startLabel.textContent = '-' + preroll.toFixed(1);
+  if (endLabel) endLabel.textContent = '+' + postroll.toFixed(1);
+
+  if (scene?.audioUrl) {
+    void peaksFromUrl(scene.audioUrl).then((peaks) => {
+      if (state.liveWave !== live) return;
+      live.refPeaks = peaks || [];
+    });
   }
 
   const tick = () => {
     if (!state.liveWave?.active || state.liveWave !== live) return;
     const elapsed = (performance.now() - live.startedAt) / 1000;
     const totalProgress = Math.min(1, elapsed / live.totalDuration);
-    // Progress for UI progress bar is only within rec window (after preroll).
     const recElapsed = Math.max(0, elapsed - live.preroll);
     const recProgress = Math.min(1, recElapsed / live.duration);
+    const speaking = elapsed >= live.preroll && elapsed <= (live.preroll + live.duration);
 
-    els.videoProgress.style.width = `${recProgress * 100}%`;
-    els.elapsedLabel.textContent = formatSeconds(recElapsed);
-    if (els.cueLabel) els.cueLabel.textContent = formatSeconds(recElapsed);
-    if (els.wavePlayhead) els.wavePlayhead.style.left = `${totalProgress * 100}%`;
+    if (elapsed < live.preroll) {
+      const count = Math.max(1, Math.ceil(live.preroll - elapsed));
+      if (els.countdownBadge) {
+        els.countdownBadge.style.display = 'grid';
+        els.countdownBadge.classList.add('is-on');
+        els.countdownBadge.textContent = String(count);
+      }
+      if (els.timerValue) els.timerValue.textContent = String(count);
+    } else if (!live.armedRecord && live.onSpeakStart) {
+      live.armedRecord = true;
+      if (els.countdownBadge) {
+        els.countdownBadge.textContent = 'DUBLE!';
+        els.countdownBadge.style.display = 'grid';
+        els.countdownBadge.classList.add('is-on');
+      }
+      live.onSpeakStart();
+    }
 
-    if (state.analyser && recElapsed > 0) {
+    els.videoProgress.style.width = (recProgress * 100) + '%';
+    els.elapsedLabel.textContent = formatSeconds(Math.min(recElapsed, live.duration));
+    if (els.cueLabel) els.cueLabel.textContent = formatSeconds(Math.min(recElapsed, live.duration));
+    if (els.wavePlayhead) {
+      els.wavePlayhead.style.left = (totalProgress * 100) + '%';
+      els.wavePlayhead.classList.toggle('is-speaking', speaking);
+    }
+    if (els.stageState) {
+      els.stageState.textContent = speaking
+        ? 'Fale nas ondas'
+        : (elapsed < live.preroll ? 'Espere a barra chegar no vermelho' : 'Fim da fala');
+    }
+
+    if (state.analyser && speaking) {
       const wave = new Uint8Array(state.analyser.fftSize);
       state.analyser.getByteTimeDomainData(wave);
       let peak = 0;
@@ -4477,7 +4529,7 @@ async function startLiveWaveGuide(scene, durationSec) {
     paintLiveWaveFrame(scene, live, totalProgress);
     if (totalProgress >= 1) {
       live.active = false;
-      els.wavePlayhead?.classList.remove('is-live');
+      els.wavePlayhead?.classList.remove('is-live', 'is-speaking');
       document.querySelector('#waveStage')?.classList.remove('is-live');
       return;
     }
@@ -4491,7 +4543,7 @@ function stopLiveWaveGuide() {
   if (live?.raf) cancelAnimationFrame(live.raf);
   if (live) live.active = false;
   state.liveWave = null;
-  els.wavePlayhead?.classList.remove('is-live');
+  els.wavePlayhead?.classList.remove('is-live', 'is-speaking');
   document.querySelector('#waveStage')?.classList.remove('is-live');
 }
 
@@ -4500,17 +4552,14 @@ function paintGuideWavePreview(scene, peaks) {
   if (!canvas) return;
   const { width, height } = sizeWaveCanvas(canvas);
   const ctx = canvas.getContext('2d');
-  const sceneDuration = Math.max(0.2, Number(scene?.duration) || 1);
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  for (let y = 12; y < height; y += 12) ctx.fillRect(0, y, width, 1);
-  ctx.fillStyle = 'rgba(255,255,255,0.16)';
-  ctx.fillRect(0, height / 2, width, 1);
-  drawWaveLayerTimed(ctx, peaks, '#5bff3a', width, height, {
-    sceneDuration,
-    audioDuration: sceneDuration,
-    startOffset: 0,
-    alpha: 0.55
+  const duration = Math.max(0.2, Number(scene?.duration) || 1);
+  paintChoicerWaveFrame(ctx, width, height, {
+    preroll: WAVE_PREROLL_SEC,
+    duration,
+    postroll: WAVE_POSTROLL_SEC,
+    refPeaks: peaks,
+    playX: 0,
+    maskAhead: false
   });
   if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
 }
@@ -4520,70 +4569,121 @@ function paintLiveWaveFrame(scene, live, totalProgress) {
   if (!canvas || !live) return;
   const { width, height } = sizeWaveCanvas(canvas);
   const ctx = canvas.getContext('2d');
-
-  // Total time window = preroll + recording duration.
-  const preroll = live.preroll || 0;
-  const totalDuration = live.totalDuration || (preroll + live.duration);
   const playX = Math.max(0, Math.min(width, totalProgress * width));
-  // X offset where voice wave starts (after preroll).
-  const waveOffsetX = Math.round((preroll / totalDuration) * width);
+  paintChoicerWaveFrame(ctx, width, height, {
+    preroll: live.preroll || WAVE_PREROLL_SEC,
+    duration: live.duration,
+    postroll: live.postroll || WAVE_POSTROLL_SEC,
+    refPeaks: live.refPeaks,
+    livePeaks: Array.from(live.livePeaks),
+    playX,
+    maskAhead: true
+  });
+}
+
+/** Wait zone → red start → original voice → red end → short tail. */
+function paintChoicerWaveFrame(ctx, width, height, {
+  preroll,
+  duration,
+  postroll,
+  refPeaks,
+  livePeaks = null,
+  takePeaks = null,
+  takeDuration = null,
+  takeOnset = 0,
+  playX = null,
+  maskAhead = false
+} = {}) {
+  const total = Math.max(0.2, preroll + duration + postroll);
+  const startX = (preroll / total) * width;
+  const endX = ((preroll + duration) / total) * width;
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
   for (let y = 12; y < height; y += 12) ctx.fillRect(0, y, width, 1);
-  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 10; i += 1) {
+    const x = (width * i) / 10;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
   ctx.fillRect(0, height / 2, width, 1);
 
-  // Faint vertical marker at pre-roll boundary ("start speaking here").
-  ctx.strokeStyle = 'rgba(91,255,58,0.35)';
-  ctx.setLineDash([4, 4]);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(waveOffsetX, 0);
-  ctx.lineTo(waveOffsetX, height);
-  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 70, 90, 0.95)';
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 1.5;
+  [startX, endX].forEach((x) => {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  });
   ctx.setLineDash([]);
 
-  // Reference (original voice) wave, shifted right by the preroll gap.
-  const refStartOffset = preroll;
-  const refDisplayDuration = totalDuration;
-  drawWaveLayerTimed(ctx, live.refPeaks, '#5bff3a', width, height, {
-    sceneDuration: refDisplayDuration,
-    audioDuration: live.duration,
-    startOffset: refStartOffset,
-    alpha: 0.34
-  });
-
-  // Live-recorded voice trail (also starts after preroll).
-  drawWaveLayerTimed(ctx, Array.from(live.livePeaks), '#5bff3a', width, height, {
-    sceneDuration: refDisplayDuration,
-    audioDuration: live.duration,
-    startOffset: refStartOffset,
+  // Original dubbing guide (purple) only between the red markers.
+  drawWaveStrokeTimed(ctx, refPeaks, '#c084fc', width, height, {
+    sceneDuration: total,
+    audioDuration: duration,
+    startOffset: preroll,
     alpha: 0.95
   });
 
-  // Dark mask ahead of the playhead, then faint guide.
-  ctx.fillStyle = 'rgba(8, 7, 15, 0.88)';
-  ctx.fillRect(playX + 1, 0, Math.max(0, width - playX), height);
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(playX, 0, Math.max(0, width - playX), height);
-  ctx.clip();
-  drawWaveLayerTimed(ctx, live.refPeaks, '#5bff3a', width, height, {
-    sceneDuration: refDisplayDuration,
-    audioDuration: live.duration,
-    startOffset: refStartOffset,
-    alpha: 0.28
-  });
-  ctx.restore();
+  if (takePeaks?.length) {
+    drawWaveLayerTimed(ctx, takePeaks, '#5bff3a', width, height, {
+      sceneDuration: total,
+      audioDuration: Math.max(0.05, Number(takeDuration) || duration),
+      startOffset: preroll + Math.max(0, Number(takeOnset) || 0),
+      alpha: 0.82
+    });
+  }
 
-  // Soft glow at playhead.
-  const grad = ctx.createLinearGradient(playX - 18, 0, playX + 18, 0);
-  grad.addColorStop(0, 'rgba(91,255,58,0)');
-  grad.addColorStop(0.5, 'rgba(91,255,58,0.22)');
-  grad.addColorStop(1, 'rgba(91,255,58,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(playX - 18, 0, 36, height);
+  if (livePeaks?.length) {
+    drawWaveLayerTimed(ctx, livePeaks, '#5bff3a', width, height, {
+      sceneDuration: total,
+      audioDuration: duration,
+      startOffset: preroll,
+      alpha: 0.95
+    });
+  }
+
+  // Cyan time markers like Choicer: wait · 0.0 · duration · postroll
+  ctx.fillStyle = 'rgba(120, 230, 255, 0.95)';
+  ctx.font = `600 ${Math.max(11, Math.round(height * 0.11))}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillText((-preroll).toFixed(1), 6, 6);
+  ctx.textAlign = 'center';
+  ctx.fillText('0.0', startX, 6);
+  ctx.fillText(duration.toFixed(1), endX, 6);
+  ctx.textAlign = 'right';
+  ctx.fillText('+' + postroll.toFixed(1), width - 6, 6);
+
+  if (maskAhead && playX != null) {
+    ctx.fillStyle = 'rgba(8, 7, 15, 0.72)';
+    ctx.fillRect(playX + 1, 0, Math.max(0, width - playX), height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(playX, 0, Math.max(0, width - playX), height);
+    ctx.clip();
+    drawWaveStrokeTimed(ctx, refPeaks, '#c084fc', width, height, {
+      sceneDuration: total,
+      audioDuration: duration,
+      startOffset: preroll,
+      alpha: 0.32
+    });
+    ctx.restore();
+
+    const grad = ctx.createLinearGradient(playX - 16, 0, playX + 16, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,0.28)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(playX - 16, 0, 32, height);
+  }
 }
 
 function downloadTake() {
@@ -5006,6 +5106,7 @@ function abortCapture({ keepPreview = false } = {}) {
   state.playbackTimer = null;
   state.videoTimer = null;
   els.countdownBadge && (els.countdownBadge.style.display = 'none');
+  els.countdownBadge?.classList.remove('is-on');
   if (els.recordingOverlay) els.recordingOverlay.style.display = 'none';
   els.recordBtn?.classList.remove('recording');
   els.recordBtn?.setAttribute('aria-label', 'Gravar');
@@ -5401,6 +5502,47 @@ function drawWaveLayerTimed(ctx, peaks, color, width, height, {
   ctx.restore();
 }
 
+/** Thin bipolar stroke for the original guide voice (Choicer-style). */
+function drawWaveStrokeTimed(ctx, peaks, color, width, height, {
+  sceneDuration,
+  audioDuration,
+  startOffset = 0,
+  alpha = 1
+} = {}) {
+  if (!peaks?.length || !(sceneDuration > 0)) return;
+  const mid = height / 2;
+  const duration = Math.max(0.05, Number(audioDuration) || sceneDuration);
+  const startX = (Math.max(0, Number(startOffset) || 0) / sceneDuration) * width;
+  const spanX = Math.max(2, (duration / sceneDuration) * width);
+  const gap = spanX / Math.max(1, peaks.length - 1);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.2, height * 0.018);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  peaks.forEach((peak, index) => {
+    const amp = Math.max(0.8, peak * (mid - 6) * 0.78);
+    const x = startX + (index * gap);
+    const y = mid - amp;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  for (let index = peaks.length - 1; index >= 0; index -= 1) {
+    const amp = Math.max(0.8, peaks[index] * (mid - 6) * 0.78);
+    const x = startX + (index * gap);
+    ctx.lineTo(x, mid + amp);
+  }
+  ctx.closePath();
+  ctx.globalAlpha = alpha * 0.22;
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.globalAlpha = alpha;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function sizeWaveCanvas(canvas) {
   const rect = canvas.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -5418,44 +5560,36 @@ async function paintOverlapWave(scene, take) {
   const { width, height } = sizeWaveCanvas(canvas);
   const ctx = canvas.getContext('2d');
   const sceneDuration = Math.max(0.2, Number(scene?.duration) || 1);
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  for (let y = 12; y < height; y += 12) ctx.fillRect(0, y, width, 1);
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  ctx.fillRect(0, height / 2, width, 1);
-  // Vertical time marks so you can follow left → right while speaking.
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ctx.lineWidth = 1;
-  const marks = 8;
-  for (let i = 1; i < marks; i += 1) {
-    const x = (width * i) / marks;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
   const refPeaks = scene?.audioUrl ? await peaksFromUrl(scene.audioUrl) : [];
   if (gen !== state.waveGen) return;
-  drawWaveLayerTimed(ctx, refPeaks, '#f36aa8', width, height, {
-    sceneDuration,
-    audioDuration: sceneDuration,
-    startOffset: 0,
-    alpha: 0.92
-  });
+  let takePeaks = null;
+  let takeDuration = sceneDuration;
+  let takeOnset = 0;
   if (take?.blob || take?.url) {
-    const takePeaks = take.peaks || await (take.blob ? peaksFromBlob(take.blob) : peaksFromUrl(take.url));
+    takePeaks = take.peaks || await (take.blob ? peaksFromBlob(take.blob) : peaksFromUrl(take.url));
     if (takePeaks?.length) take.peaks = takePeaks;
     if (gen !== state.waveGen) return;
-    const takeDuration = Number(take.duration) > 0.05
+    takeDuration = Number(take.duration) > 0.05
       ? Number(take.duration)
       : (Number(take.voiced) > 0.05 ? Number(take.voiced) : sceneDuration);
-    drawWaveLayerTimed(ctx, takePeaks, '#5bff3a', width, height, {
-      sceneDuration,
-      audioDuration: takeDuration,
-      startOffset: Math.max(0, Number(take.onset) || 0),
-      alpha: 0.82
-    });
+    takeOnset = Math.max(0, Number(take.onset) || 0);
   }
+  paintChoicerWaveFrame(ctx, width, height, {
+    preroll: WAVE_PREROLL_SEC,
+    duration: sceneDuration,
+    postroll: WAVE_POSTROLL_SEC,
+    refPeaks,
+    takePeaks,
+    takeDuration,
+    takeOnset,
+    playX: null,
+    maskAhead: false
+  });
+  const startLabel = document.querySelector('#waveStartLabel');
+  const endLabel = document.querySelector('#waveEndLabel');
+  if (startLabel) startLabel.textContent = '-' + WAVE_PREROLL_SEC.toFixed(1);
+  if (endLabel) endLabel.textContent = '+' + WAVE_POSTROLL_SEC.toFixed(1);
+  if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
 }
 
 function timingStatus(scene, take) {
