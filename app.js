@@ -5508,7 +5508,7 @@ function updateTimingDesk(scene, take) {
   }
 }
 
-const WAVE_BINS = 220;
+const WAVE_BINS = 320;
 const wavePeakCache = new Map();
 
 function extractPeaks(buffer, bins = WAVE_BINS) {
@@ -5619,7 +5619,7 @@ function drawWaveLayerTimed(ctx, peaks, color, width, height, {
   ctx.restore();
 }
 
-/** Thin bipolar stroke for the original guide voice (Choicer-style). */
+/** Classic thin mirrored waveform ticks for the original guide voice. */
 function drawWaveStrokeTimed(ctx, peaks, color, width, height, {
   sceneDuration,
   audioDuration,
@@ -5631,33 +5631,36 @@ function drawWaveStrokeTimed(ctx, peaks, color, width, height, {
   const duration = Math.max(0.05, Number(audioDuration) || sceneDuration);
   const startX = (Math.max(0, Number(startOffset) || 0) / sceneDuration) * width;
   const spanX = Math.max(2, (duration / sceneDuration) * width);
-  const gap = spanX / Math.max(1, peaks.length - 1);
-  const ampScale = Math.min(mid - 4, (mid - 5) * 1.12);
+  const gap = spanX / Math.max(1, peaks.length);
+  const maxPeak = peaks.reduce((max, peak) => Math.max(max, peak || 0), 0.001);
+  const ampScale = (mid - 5) * 0.96;
+  const barW = Math.max(1, Math.min(2.4, gap * 0.62));
+
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(1.6, height * 0.024);
-  ctx.lineJoin = 'round';
+  ctx.lineWidth = barW;
   ctx.lineCap = 'round';
+
+  ctx.globalAlpha = alpha * 0.2;
   ctx.beginPath();
-  peaks.forEach((peak, index) => {
-    const amp = Math.max(1.4, peak * ampScale);
-    const x = startX + (index * gap);
-    const y = mid - amp;
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  for (let index = peaks.length - 1; index >= 0; index -= 1) {
-    const amp = Math.max(1.4, peaks[index] * ampScale);
-    const x = startX + (index * gap);
-    ctx.lineTo(x, mid + amp);
-  }
-  ctx.closePath();
-  ctx.globalAlpha = alpha * 0.28;
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.globalAlpha = alpha;
+  ctx.moveTo(startX, mid);
+  ctx.lineTo(startX + spanX, mid);
   ctx.stroke();
+  ctx.globalAlpha = alpha;
+
+  peaks.forEach((peak, index) => {
+    const norm = Math.min(1, Math.max(0, (peak || 0) / maxPeak));
+    const shaped = Math.pow(norm, 0.62);
+    const amp = Math.max(1.2, shaped * ampScale);
+    if (amp < 1.6 && norm < 0.04) return;
+    const x = startX + (index * gap) + gap * 0.5;
+    if (x < -2 || x > width + 2) return;
+    ctx.beginPath();
+    ctx.moveTo(x, mid - amp);
+    ctx.lineTo(x, mid + amp);
+    ctx.stroke();
+  });
   ctx.restore();
 }
 
