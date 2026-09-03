@@ -7,6 +7,7 @@ const GUIDE_VOLUME = 0.08;
 const BED_VOLUME = 0.03;
 const BED_EXPORT = 0.06;
 const BED_DUCK = 0.012;
+const BED_DUB_MUTE = 0.003;
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
@@ -366,7 +367,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '168';
+  const swVersion = '169';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -5404,6 +5405,18 @@ function loadExportVideo(src) {
   });
 }
 
+async function waitForFilmMetadata(film) {
+  const deadline = performance.now() + 10000;
+  while (performance.now() < deadline) {
+    const source = film.getPaintSource?.();
+    const w = source?.videoWidth || source?.width || 0;
+    const h = source?.videoHeight || source?.height || 0;
+    if (w > 1 && h > 1) return true;
+    await wait(40);
+  }
+  return false;
+}
+
 async function waitForFilmReady(film) {
   const deadline = performance.now() + 10000;
   while (performance.now() < deadline) {
@@ -5553,7 +5566,10 @@ async function openFilmPlayback(candidates, onProgress) {
 }
 
 async function decodeAudioFrom(audioCtx, blob, url) {
-  const tryDecode = async (data) => audioCtx.decodeAudioData(data.slice(0));
+  const tryDecode = async (data) => {
+    const copy = data.slice(0);
+    return audioCtx.decodeAudioData(copy);
+  };
   if (blob) {
     try {
       return await tryDecode(await blob.arrayBuffer());
@@ -5562,9 +5578,32 @@ async function decodeAudioFrom(audioCtx, blob, url) {
     }
   }
   if (url) {
-    return tryDecode(await fetch(url).then((response) => response.arrayBuffer()));
+    try {
+      return await tryDecode(await fetch(url).then((response) => response.arrayBuffer()));
+    } catch {
+      return decodeAudioFromElement(audioCtx, url);
+    }
   }
   throw new Error('sem áudio');
+}
+
+function decodeAudioFromElement(audioCtx, url) {
+  return new Promise((resolve, reject) => {
+    const audio = document.createElement('audio');
+    audio.preload = 'auto';
+    audio.src = url;
+    const fail = () => reject(new Error('sem áudio'));
+    audio.addEventListener('error', fail, { once: true });
+    audio.addEventListener('loadeddata', async () => {
+      try {
+        const response = await fetch(url);
+        const data = await response.arrayBuffer();
+        resolve(await audioCtx.decodeAudioData(data.slice(0)));
+      } catch {
+        fail();
+      }
+    }, { once: true });
+  });
 }
 
 function startBufferAt(audioCtx, dest, buffer, when, gainValue) {
@@ -5585,15 +5624,15 @@ function startBufferAt(audioCtx, dest, buffer, when, gainValue) {
   };
 }
 
-function duckDuringTakes(gainNode, t0, windows) {
+function duckDuringTakes(gainNode, t0, windows, duckLevel = BED_DUCK) {
   const param = gainNode.gain;
   param.setValueAtTime(BED_EXPORT, t0);
   windows.forEach((win) => {
     const start = t0 + win.offset;
     const end = start + win.duration;
     param.setValueAtTime(BED_EXPORT, Math.max(t0, start - 0.08));
-    param.linearRampToValueAtTime(BED_DUCK, start + 0.05);
-    param.setValueAtTime(BED_DUCK, Math.max(start + 0.05, end - 0.05));
+    param.linearRampToValueAtTime(duckLevel, start + 0.05);
+    param.setValueAtTime(duckLevel, Math.max(start + 0.05, end - 0.05));
     param.linearRampToValueAtTime(BED_EXPORT, end + 0.12);
   });
 }
@@ -5863,9 +5902,14 @@ async function composeDubbedVideo(pack, onProgress) {
           ...win,
           buffer: await decodeAudioFrom(audioCtx, win.take.blob, win.take.url)
         });
-      } catch {
-        // Sem take decodificado, a fala original do filme fica.
+      } catch (error) {
+        console.warn('Falha ao decodificar take', win.scene?.id, error);
       }
+    }
+    if (takeWindows.length && !takeBuffers.length) {
+      throw new Error(getLang() === 'en'
+        ? 'Could not read your recorded takes. Re-record the lines and try again.'
+        : 'Não consegui ler as gravações da dublagem. Grave as falas de novo e tente finalizar outra vez.');
     }
 
     if (!playBacking) {
@@ -5905,24 +5949,29 @@ async function composeDubbedVideo(pack, onProgress) {
       recorder.onstop = resolve;
     });
 
-    if (bed) bed.el.currentTime = exportStart;
-    await film.play()?.catch?.(() => undefined);
-    if (bed) await bed.el.play().catch(() => undefined);
-    const ready = await waitForFilmReady(film);
-    if (!ready) {
+    const filmReady = await waitForFilmMetadata(film);
+    if (!filmReady) {
       throw new Error(getLang() === 'en'
-        ? 'The scene video did not start. Reload the page and try again.'
-        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
+        ? 'The scene video did not load. Reload the page and try again.'
+        : 'O vídeo da cena não carregou. Recarregue a página e tente de novo.');
     }
+
+    if (film.seek) await film.seek(exportStart);
+    if (bed) bed.el.currentTime = exportStart;
+    film.pause?.();
+    bed?.el?.pause?.();
+
     recorder.start(isIOS() ? 100 : 250);
     recordingStarted = true;
-    const t0 = audioCtx.currentTime + 0.05;
+    const t0 = audioCtx.currentTime + 0.08;
     const bedGain = playBacking?.(t0) || bed?.gain;
     const relativeTakeWindows = takeBuffers.map((win) => ({
       offset: Math.max(0, win.offset - exportStart),
       duration: win.duration
     }));
-    if (bedGain && relativeTakeWindows.length) duckDuringTakes(bedGain, t0, relativeTakeWindows);
+    if (bedGain && relativeTakeWindows.length) {
+      duckDuringTakes(bedGain, t0, relativeTakeWindows, BED_DUB_MUTE);
+    }
     takeBuffers.forEach((win) => {
       stops.push(startBufferAt(
         audioCtx,
@@ -5932,6 +5981,15 @@ async function composeDubbedVideo(pack, onProgress) {
         gainForTake(win.buffer)
       ).stop);
     });
+
+    await film.play()?.catch?.(() => undefined);
+    if (bed) await bed.el.play().catch(() => undefined);
+    const playing = await waitForFilmReady(film);
+    if (!playing) {
+      throw new Error(getLang() === 'en'
+        ? 'The scene video did not start. Reload the page and try again.'
+        : 'O vídeo da cena não começou a tocar. Recarregue a página e tente de novo.');
+    }
 
     let finished = false;
     film.ended.then(() => { finished = true; });
