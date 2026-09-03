@@ -4728,16 +4728,33 @@ function prefersReducedMotion() {
 
 function playCdInsert(pack) {
   return new Promise((resolve) => {
-    const source = document.querySelector(`[data-pack-id="${pack.id}"] .cd-disc`);
-    const slot = document.querySelector('#cdSlot');
+    const card = document.querySelector(`[data-pack-id="${pack.id}"]`);
+    const source = card?.querySelector('.cd-disc');
     const deck = document.querySelector('#cdDeck');
-    if (!source || !slot || prefersReducedMotion()) {
+    const tray = document.querySelector('#cdTray');
+    const trayDisc = document.querySelector('#cdTrayDisc');
+    if (!source || !deck || !tray || prefersReducedMotion()) {
       syncCdTray(pack);
       resolve();
       return;
     }
+
+    const finish = () => {
+      fly.remove();
+      card.classList.remove('is-giving');
+      deck.classList.remove('is-open');
+      syncCdTray(pack);
+      resolve();
+    };
+
+    deck.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    card.classList.add('is-giving');
+    if (trayDisc) {
+      trayDisc.hidden = true;
+      trayDisc.replaceChildren();
+    }
+
     const from = source.getBoundingClientRect();
-    const to = slot.getBoundingClientRect();
     const fly = source.cloneNode(true);
     fly.classList.add('cd-fly');
     fly.style.width = `${from.width}px`;
@@ -4745,19 +4762,28 @@ function playCdInsert(pack) {
     fly.style.left = `${from.left}px`;
     fly.style.top = `${from.top}px`;
     document.body.append(fly);
-    deck?.classList.add('is-open');
-    requestAnimationFrame(() => {
+    deck.classList.add('is-open');
+
+    const land = () => {
+      const to = tray.getBoundingClientRect();
+      const target = 112;
+      const scale = target / Math.max(1, from.width);
       const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
       const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
-      const scale = Math.max(0.28, Math.min(0.55, (Math.min(to.height, 78) / from.height)));
-      fly.style.transform = `translate(${dx}px, ${dy}px) scale(${scale}) rotate(-18deg)`;
-    });
-    setTimeout(() => {
-      fly.remove();
-      deck?.classList.remove('is-open');
-      syncCdTray(pack);
-      resolve();
-    }, 720);
+      fly.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+    };
+
+    window.setTimeout(() => {
+      land();
+      window.setTimeout(() => {
+        syncCdTray(pack);
+        fly.style.opacity = '0';
+        window.setTimeout(() => {
+          deck.classList.remove('is-open');
+          window.setTimeout(finish, 620);
+        }, 70);
+      }, 560);
+    }, 580);
   });
 }
 
