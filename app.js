@@ -13,8 +13,8 @@ const BED_DUB_MUTE = 0.003;
 const PLAY_ORIGINAL_KEY = 'dubpack-play-original-audio';
 const MIC_MONITOR_KEY = 'dubpack-mic-monitor';
 const MIC_FILTER_KEY = 'dubpack-mic-filter';
-const WAVE_PREROLL_SEC = 3; // matches on-screen 3-2-1 wait zone
-const WAVE_POSTROLL_SEC = 1; // quiet tail after the end marker
+const WAVE_PREROLL_SEC = 3; // wait zone before first red (3-2-1 + white bar)
+const WAVE_POSTROLL_SEC = 3; // same width on the right so the speak window stays centered
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
@@ -4653,9 +4653,17 @@ function paintChoicerWaveFrame(ctx, width, height, {
   playX = null,
   maskAhead = false
 } = {}) {
-  const total = Math.max(0.2, preroll + duration + postroll);
-  const startX = (preroll / total) * width;
-  const endX = ((preroll + duration) / total) * width;
+  // Equal left/right pads keep the red start/end markers centered in the panel.
+  const side = Math.max(
+    WAVE_PREROLL_SEC,
+    Number(preroll) || 0,
+    Number(postroll) || 0
+  );
+  const leftPad = side;
+  const rightPad = side;
+  const total = Math.max(0.2, leftPad + duration + rightPad);
+  const startX = (leftPad / total) * width;
+  const endX = ((leftPad + duration) / total) * width;
   const ref = refWave || (refPeaks?.length ? { peaks: refPeaks, duration } : null);
   const framed = layoutRefInSpeakZone(ref, duration);
 
@@ -4679,9 +4687,10 @@ function paintChoicerWaveFrame(ctx, width, height, {
   ctx.fillRect(0, 0, startX, height);
   ctx.fillRect(endX, 0, Math.max(0, width - endX), height);
 
-  ctx.strokeStyle = 'rgba(255, 70, 90, 0.95)';
-  ctx.setLineDash([5, 4]);
-  ctx.lineWidth = 1.5;
+  // Start/end take markers (red dashed) — both must stay obvious.
+  ctx.strokeStyle = 'rgba(255, 64, 86, 1)';
+  ctx.setLineDash([6, 4]);
+  ctx.lineWidth = Math.max(2, height * 0.025);
   [startX, endX].forEach((x) => {
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -4690,11 +4699,11 @@ function paintChoicerWaveFrame(ctx, width, height, {
   });
   ctx.setLineDash([]);
 
-  // Original character line — fitted & centered between the red markers.
+  // Original character line — fitted between the red markers.
   drawWaveStrokeTimed(ctx, framed.peaks, '#c084fc', width, height, {
     sceneDuration: total,
     audioDuration: framed.audioDuration,
-    startOffset: preroll + framed.startOffset,
+    startOffset: leftPad + framed.startOffset,
     alpha: 0.95
   });
 
@@ -4705,7 +4714,7 @@ function paintChoicerWaveFrame(ctx, width, height, {
     drawWaveLayerTimed(ctx, takePeaks, '#5bff3a', width, height, {
       sceneDuration: total,
       audioDuration: Math.min(takeDur, maxDur),
-      startOffset: preroll + takeStart,
+      startOffset: leftPad + takeStart,
       alpha: 0.82
     });
   }
@@ -4714,22 +4723,22 @@ function paintChoicerWaveFrame(ctx, width, height, {
     drawWaveLayerTimed(ctx, livePeaks, '#5bff3a', width, height, {
       sceneDuration: total,
       audioDuration: duration,
-      startOffset: preroll,
+      startOffset: leftPad,
       alpha: 0.95
     });
   }
 
-  // Cyan time markers anchored on the red lines.
+  // Cyan time markers: wait · 0.0 · duration · matching tail
   ctx.fillStyle = 'rgba(120, 230, 255, 0.95)';
   ctx.font = `600 ${Math.max(11, Math.round(height * 0.11))}px ui-sans-serif, system-ui, sans-serif`;
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
-  ctx.fillText((-preroll).toFixed(1), 6, 6);
+  ctx.fillText((-leftPad).toFixed(1), 6, 6);
   ctx.textAlign = 'center';
   ctx.fillText('0.0', startX, 6);
   ctx.fillText(duration.toFixed(1), endX, 6);
   ctx.textAlign = 'right';
-  ctx.fillText('+' + postroll.toFixed(1), width - 6, 6);
+  ctx.fillText('+' + rightPad.toFixed(1), width - 6, 6);
 
   if (maskAhead && playX != null) {
     ctx.fillStyle = 'rgba(8, 7, 15, 0.72)';
@@ -4741,7 +4750,7 @@ function paintChoicerWaveFrame(ctx, width, height, {
     drawWaveStrokeTimed(ctx, framed.peaks, '#c084fc', width, height, {
       sceneDuration: total,
       audioDuration: framed.audioDuration,
-      startOffset: preroll + framed.startOffset,
+      startOffset: leftPad + framed.startOffset,
       alpha: 0.32
     });
     ctx.restore();
