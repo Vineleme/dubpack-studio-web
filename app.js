@@ -1413,7 +1413,7 @@ async function decodeCreateAudioForWhisper() {
         offsetSec: looksLikeSceneStem ? sceneStart : 0
       };
     } catch (error) {
-      console.warn('Whisper vocals decode failed, using video audio', error);
+      console.warn('Caption audio decode failed, using video audio', error);
     }
   }
 
@@ -1470,7 +1470,7 @@ async function transcribeCreateCaptions() {
           filled += 1;
         }
       } catch (lineError) {
-        console.warn('Whisper line failed', index + 1, lineError);
+        console.warn('Caption line failed', index + 1, lineError);
       }
     }
 
@@ -1482,7 +1482,7 @@ async function transcribeCreateCaptions() {
     setCreateStatus(t('create.whisper.done'));
     toast(t('create.whisper.done'));
   } catch (error) {
-    console.error('Whisper transcription failed:', error);
+    console.error('Caption transcription failed:', error);
     setCreateStatus(t('create.whisper.fail'));
     toast(t('create.whisper.fail'));
   } finally {
