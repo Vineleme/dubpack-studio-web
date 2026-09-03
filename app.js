@@ -492,6 +492,12 @@ function bindUi() {
   document.querySelector('#createDetectBtn')?.addEventListener('click', () => void detectCreateSpeechLines());
   document.querySelector('#createMarkStartBtn')?.addEventListener('click', () => markCreateTime('start'));
   document.querySelector('#createMarkEndBtn')?.addEventListener('click', () => markCreateTime('end'));
+  document.querySelector('#createSceneFromPlayheadBtn')?.addEventListener('click', setCreateSceneFromPlayhead);
+  document.querySelector('#createMarkSceneStartBtn')?.addEventListener('click', () => markCreateSceneBoundary('start'));
+  document.querySelector('#createMarkSceneEndBtn')?.addEventListener('click', () => markCreateSceneBoundary('end'));
+  document.querySelector('#createSceneStart')?.addEventListener('change', onCreateSceneInputsChanged);
+  document.querySelector('#createSceneEnd')?.addEventListener('change', onCreateSceneInputsChanged);
+  bindCreateSceneScrub();
   document.querySelector('#createAddLineBtn')?.addEventListener('click', addCreateLine);
   document.querySelector('#createConfirmLinesBtn')?.addEventListener('click', confirmCreateLines);
   document.querySelector('#createEditLinesBtn')?.addEventListener('click', unconfirmCreateLines);
@@ -1221,6 +1227,9 @@ function syncCreateActions() {
   document.querySelector('#createDetectBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkEndBtn')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createSceneFromPlayheadBtn')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createMarkSceneStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createMarkSceneEndBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createDownloadBtn')?.toggleAttribute('disabled', !hasVideo || !captionsReady || busy);
   document.querySelector('#createOpenBtn')?.toggleAttribute('disabled', !hasVideo || !captionsReady || busy);
   document.querySelector('#createAddLineBtn')?.toggleAttribute('disabled', busy || confirmed);
@@ -1228,6 +1237,7 @@ function syncCreateActions() {
   document.querySelector('#createTranscribeBtn')?.toggleAttribute('disabled', !confirmed || !hasLines || busy);
   document.querySelector('#createLineForm')?.classList.toggle('is-hidden', confirmed);
   syncCreateCaptionsUi();
+  syncCreateSceneUi();
 }
 
 function createCaptionsReady() {
@@ -1414,68 +1424,209 @@ function getCreateSceneWindow() {
     start = Math.max(0, Math.min(start, duration));
     end = Math.max(0, Math.min(end, duration));
   }
-  if (end <= start) {
-    end = Math.min(duration || CREATE_SCENE_MAX_SEC, start + CREATE_SCENE_MAX_SEC);
-  }
+  if (end <= start) end = Math.min((duration || CREATE_SCENE_MAX_SEC), start + Math.min(CREATE_SCENE_MAX_SEC, 1));
   if (end - start > CREATE_SCENE_MAX_SEC) end = start + CREATE_SCENE_MAX_SEC;
   return { start, end, duration };
 }
 
-function syncCreateSceneUi() {
+function syncCreateSceneUi(toastIfClamped = false) {
+  const requestedStart = Number(document.querySelector('#createSceneStart')?.value);
+  const requestedEnd = Number(document.querySelector('#createSceneEnd')?.value);
+  const requestedLen = (Number.isFinite(requestedEnd) && Number.isFinite(requestedStart))
+    ? requestedEnd - requestedStart
+    : 0;
   const { start, end } = getCreateSceneWindow();
   state.create.sceneStart = start;
   state.create.sceneEnd = end;
+  const startInput = document.querySelector('#createSceneStart');
+  const endInput = document.querySelector('#createSceneEnd');
+  if (startInput) startInput.value = start.toFixed(2);
+  if (endInput) endInput.value = end.toFixed(2);
+  const lengthEl = document.querySelector('#createSceneLength');
+  if (lengthEl) {
+    lengthEl.textContent = t('create.scene.length', {
+      current: formatSeconds(end - start),
+      max: formatSeconds(CREATE_SCENE_MAX_SEC)
+    });
+  }
+  const startLabel = document.querySelector('#createScrubStartLabel');
+  const endLabel = document.querySelector('#createScrubEndLabel');
+  if (startLabel) startLabel.textContent = formatSeconds(start);
+  if (endLabel) endLabel.textContent = formatSeconds(end);
+  updateCreateSceneScrub();
+  if (toastIfClamped && requestedLen > CREATE_SCENE_MAX_SEC + 0.01) {
+    toast(t('create.scene.tooLong'));
+    setCreateStatus(t('create.scene.tooLong'));
+  }
 }
 
-/** Pick a ≤1:20 window that covers detected speech (prefers the densest stretch). */
-function autoFitCreateSceneFromSegments(segments, audioDuration) {
-  const duration = Math.max(0.5, Number(audioDuration) || createVideoDuration() || CREATE_SCENE_MAX_SEC);
-  if (!segments?.length) {
-    return {
-      start: 0,
-      end: Math.min(CREATE_SCENE_MAX_SEC, duration),
-      segments: []
-    };
+function updateCreateSceneScrub() {
+  const duration = createVideoDuration() || Math.max(state.create.sceneEnd, CREATE_SCENE_MAX_SEC);
+  const { start, end } = getCreateSceneWindow();
+  const left = (start / duration) * 100;
+  const width = ((end - start) / duration) * 100;
+  const selection = document.querySelector('#createScrubSelection');
+  const handleStart = document.querySelector('#createScrubStart');
+  const handleEnd = document.querySelector('#createScrubEnd');
+  if (selection) {
+    selection.style.left = `${left}%`;
+    selection.style.width = `${Math.max(1.5, width)}%`;
   }
-  const pad = 0.35;
-  const first = Math.max(0, segments[0].start - pad);
-  const last = Math.min(duration, segments[segments.length - 1].end + pad);
-  let start = first;
-  let end = last;
-  if (end - start <= CREATE_SCENE_MAX_SEC) {
-    return { start, end, segments };
-  }
+  if (handleStart) handleStart.style.left = `${left}%`;
+  if (handleEnd) handleEnd.style.left = `${(end / duration) * 100}%`;
+  updateCreateScrubPlayhead();
+}
 
-  // Sliding window: keep the 1:20 span with the most speech seconds.
-  let bestStart = first;
-  let bestScore = -1;
-  const step = 0.5;
-  const maxStart = Math.max(first, last - CREATE_SCENE_MAX_SEC);
-  for (let cursor = first; cursor <= maxStart + 0.001; cursor += step) {
-    const winStart = cursor;
-    const winEnd = cursor + CREATE_SCENE_MAX_SEC;
-    let score = 0;
-    segments.forEach((segment) => {
-      const overlap = Math.min(segment.end, winEnd) - Math.max(segment.start, winStart);
-      if (overlap > 0) score += overlap;
-    });
-    if (score > bestScore) {
-      bestScore = score;
-      bestStart = winStart;
+function updateCreateScrubPlayhead() {
+  const video = document.querySelector('#createVideo');
+  const playhead = document.querySelector('#createScrubPlayhead');
+  const duration = createVideoDuration();
+  if (!playhead || !duration) return;
+  const time = Number(video?.currentTime || 0);
+  playhead.style.left = `${Math.max(0, Math.min(100, (time / duration) * 100))}%`;
+}
+
+function bindCreateSceneScrub() {
+  const track = document.querySelector('#createScrubTrack');
+  if (!track || track.dataset.bound === '1') return;
+  track.dataset.bound = '1';
+  let mode = null;
+  let dragOffset = 0;
+
+  const timeFromClientX = (clientX) => {
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+    const duration = createVideoDuration() || CREATE_SCENE_MAX_SEC;
+    return ratio * duration;
+  };
+
+  const applyWindow = (start, end, { seek = false } = {}) => {
+    const duration = createVideoDuration() || CREATE_SCENE_MAX_SEC;
+    let nextStart = Math.max(0, Math.min(start, duration));
+    let nextEnd = Math.max(0, Math.min(end, duration));
+    if (nextEnd <= nextStart) nextEnd = Math.min(duration, nextStart + 0.5);
+    if (nextEnd - nextStart > CREATE_SCENE_MAX_SEC) {
+      if (mode === 'end' || mode === 'start') {
+        if (mode === 'start') nextEnd = nextStart + CREATE_SCENE_MAX_SEC;
+        else nextStart = nextEnd - CREATE_SCENE_MAX_SEC;
+      } else {
+        nextEnd = nextStart + CREATE_SCENE_MAX_SEC;
+      }
+      nextStart = Math.max(0, nextStart);
+      nextEnd = Math.min(duration, nextEnd);
+      if (nextEnd - nextStart > CREATE_SCENE_MAX_SEC) {
+        nextEnd = nextStart + CREATE_SCENE_MAX_SEC;
+      }
+    }
+    state.create.sceneStart = nextStart;
+    state.create.sceneEnd = nextEnd;
+    state.create.zipBytes = null;
+    const startInput = document.querySelector('#createSceneStart');
+    const endInput = document.querySelector('#createSceneEnd');
+    if (startInput) startInput.value = nextStart.toFixed(2);
+    if (endInput) endInput.value = nextEnd.toFixed(2);
+    syncCreateSceneUi(false);
+    if (seek) {
+      const video = document.querySelector('#createVideo');
+      if (video) {
+        video.pause();
+        // Always preview from scene start while dragging — easier to align the cut.
+        video.currentTime = nextStart;
+      }
+    }
+  };
+
+  const onPointerMove = (event) => {
+    if (!mode) return;
+    const time = timeFromClientX(event.clientX);
+    const { start, end } = getCreateSceneWindow();
+    if (mode === 'start') applyWindow(time, end, { seek: true });
+    else if (mode === 'end') applyWindow(start, time, { seek: true });
+    else if (mode === 'move') {
+      const span = end - start;
+      const nextStart = time - dragOffset;
+      applyWindow(nextStart, nextStart + span, { seek: true });
+    }
+  };
+
+  const onPointerUp = () => {
+    mode = null;
+    document.querySelector('#createScrubSelection')?.classList.remove('is-dragging');
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+  };
+
+  const startDrag = (nextMode, event) => {
+    if (!state.create.videoFile || state.create.busy) return;
+    event.preventDefault();
+    mode = nextMode;
+    const video = document.querySelector('#createVideo');
+    if (video) {
+      video.pause();
+      video.currentTime = getCreateSceneWindow().start;
+    }
+    if (nextMode === 'move') {
+      const time = timeFromClientX(event.clientX);
+      dragOffset = time - getCreateSceneWindow().start;
+      document.querySelector('#createScrubSelection')?.classList.add('is-dragging');
+    }
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  document.querySelector('#createScrubStart')?.addEventListener('pointerdown', (event) => startDrag('start', event));
+  document.querySelector('#createScrubEnd')?.addEventListener('pointerdown', (event) => startDrag('end', event));
+  document.querySelector('#createScrubSelection')?.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('.create-scrub-handle')) return;
+    startDrag('move', event);
+  });
+
+  document.querySelector('#createVideo')?.addEventListener('timeupdate', updateCreateScrubPlayhead);
+  document.querySelector('#createVideo')?.addEventListener('seeked', updateCreateScrubPlayhead);
+}
+
+function onCreateSceneInputsChanged() {
+  state.create.sceneStart = Number(document.querySelector('#createSceneStart')?.value || 0);
+  state.create.sceneEnd = Number(document.querySelector('#createSceneEnd')?.value || 0);
+  syncCreateSceneUi(true);
+  state.create.zipBytes = null;
+  scheduleCreateStemSeparation();
+}
+
+function markCreateSceneBoundary(which) {
+  const video = document.querySelector('#createVideo');
+  if (!video?.src) {
+    setCreateStatus(t('create.status.needVideo'));
+    return;
+  }
+  const time = Number(video.currentTime || 0);
+  if (which === 'start') {
+    state.create.sceneStart = time;
+    state.create.sceneEnd = Math.min(createVideoDuration() || time + CREATE_SCENE_MAX_SEC, time + CREATE_SCENE_MAX_SEC);
+  } else {
+    state.create.sceneEnd = time;
+    if (state.create.sceneEnd - state.create.sceneStart > CREATE_SCENE_MAX_SEC) {
+      state.create.sceneStart = Math.max(0, state.create.sceneEnd - CREATE_SCENE_MAX_SEC);
     }
   }
-  start = Math.max(0, bestStart);
-  end = Math.min(duration, start + CREATE_SCENE_MAX_SEC);
-  const kept = segments.filter((segment) => segment.end > start + 0.2 && segment.start < end - 0.2);
-  return { start, end, segments: kept.length ? kept : segments.slice(0, 1) };
+  syncCreateSceneUi(true);
+  state.create.zipBytes = null;
+  scheduleCreateStemSeparation();
 }
 
-function applyCreateSceneWindow(start, end, { rescheduleStems = true } = {}) {
-  state.create.sceneStart = Math.max(0, Number(start) || 0);
-  state.create.sceneEnd = Math.max(state.create.sceneStart + 0.2, Number(end) || state.create.sceneStart + 1);
-  syncCreateSceneUi();
+function setCreateSceneFromPlayhead() {
+  const video = document.querySelector('#createVideo');
+  if (!video?.src) {
+    setCreateStatus(t('create.status.needVideo'));
+    return;
+  }
+  const start = Number(video.currentTime || 0);
+  const duration = createVideoDuration();
+  state.create.sceneStart = start;
+  state.create.sceneEnd = Math.min(duration || start + CREATE_SCENE_MAX_SEC, start + CREATE_SCENE_MAX_SEC);
+  syncCreateSceneUi(true);
   state.create.zipBytes = null;
-  if (rescheduleStems) scheduleCreateStemSeparation();
+  scheduleCreateStemSeparation();
 }
 
 function renderCreateLines() {
@@ -1604,7 +1755,7 @@ async function loadCreateVideo(file) {
   const duration = createVideoDuration();
   state.create.sceneStart = 0;
   state.create.sceneEnd = Math.min(CREATE_SCENE_MAX_SEC, duration || CREATE_SCENE_MAX_SEC);
-  syncCreateSceneUi();
+  syncCreateSceneUi(false);
   const title = document.querySelector('#createWorkspaceTitle');
   if (title) title.textContent = file.name.replace(/\.[^.]+$/, '');
   const meta = document.querySelector('#createVideoMeta');
@@ -1620,13 +1771,13 @@ async function loadCreateVideo(file) {
   }
   const lineStart = document.querySelector('#createStart');
   const lineEnd = document.querySelector('#createEnd');
-  if (lineStart) lineStart.value = '0.00';
-  if (lineEnd) lineEnd.value = '1.00';
+  if (lineStart) lineStart.value = state.create.sceneStart.toFixed(2);
+  if (lineEnd) lineEnd.value = Math.min(state.create.sceneStart + 1, state.create.sceneEnd).toFixed(2);
   renderCreateLines();
   syncCreateActions();
   setCreateStatus('');
   setTab('create');
-  // Stem prep waits until Detectar falas picks the real ≤1:20 window.
+  scheduleCreateStemSeparation();
 }
 
 function markCreateTime(which) {
@@ -1635,9 +1786,9 @@ function markCreateTime(which) {
     setCreateStatus(t('create.status.needVideo'));
     return;
   }
-  const duration = createVideoDuration();
+  const { start: sceneStart, end: sceneEnd } = getCreateSceneWindow();
   let value = Number(video.currentTime || 0);
-  if (duration) value = Math.max(0, Math.min(duration, value));
+  value = Math.max(sceneStart, Math.min(sceneEnd, value));
   const input = document.querySelector(which === 'end' ? '#createEnd' : '#createStart');
   if (input) input.value = value.toFixed(2);
 }
@@ -2308,90 +2459,45 @@ async function detectCreateSpeechLines() {
     return;
   }
 
+  syncCreateSceneUi(true);
+  const { start: sceneStart, end: sceneEnd } = getCreateSceneWindow();
   state.create.busy = true;
   syncCreateActions();
   setCreateStatus(t('create.detect.working'));
   try {
     await wait(30);
-    // Scan the full video first so the pack window can land on the speech
-    // even when the famous line is not at 0:00 (max pack length remains 1:20).
-    const fullAudio = await decodeCreateVideoAudioBuffer();
-    const scanEnd = Math.min(Number(fullAudio.duration) || 0, 20 * 60);
-    const scanBuffer = sliceAudioBufferWindow(fullAudio, 0, scanEnd || Number(fullAudio.duration) || CREATE_SCENE_MAX_SEC);
-    const rawSegments = detectSpeechSegments(scanBuffer, {
+    await ensureCreateStemsReady();
+    const audioBuffer = await decodeCreateAudioBuffer();
+    const windowBuffer = state.create.vocalsBytes?.length
+      ? audioBuffer
+      : sliceAudioBufferWindow(audioBuffer, sceneStart, sceneEnd);
+    const segments = detectSpeechSegments(windowBuffer, {
       minSpeechSec: 0.55,
       mergeGapSec: 1.05,
       phraseGapSec: 1.6,
       maxLineSec: 8.5,
       targetLineSec: 5.5,
       padSec: 0.18,
-      maxClips: 48
+      maxClips: 24
     });
-    if (!rawSegments.length) {
+    if (!segments.length) {
       setCreateStatus(t('create.detect.none'));
       toast(t('create.detect.none'));
       return;
     }
-
-    const fitted = autoFitCreateSceneFromSegments(rawSegments, Number(fullAudio.duration) || scanEnd);
-    applyCreateSceneWindow(fitted.start, fitted.end, { rescheduleStems: true });
-    const { start: sceneStart, end: sceneEnd } = getCreateSceneWindow();
-
-    // Prefer clean vocals for line timing once stems catch up; otherwise use the fitted window.
-    await ensureCreateStemsReady();
-    let absoluteSegments = fitted.segments
-      .map((segment) => ({
-        start: Math.max(sceneStart, segment.start),
-        end: Math.min(sceneEnd, segment.end)
-      }))
-      .filter((segment) => segment.end - segment.start >= 0.4);
-
-    if (state.create.vocalsBytes?.length) {
-      try {
-        const vocalsBuffer = await decodeCreateAudioBuffer();
-        const vocalSegments = detectSpeechSegments(vocalsBuffer, {
-          minSpeechSec: 0.55,
-          mergeGapSec: 1.05,
-          phraseGapSec: 1.6,
-          maxLineSec: 8.5,
-          targetLineSec: 5.5,
-          padSec: 0.18,
-          maxClips: 24
-        });
-        if (vocalSegments.length) {
-          absoluteSegments = vocalSegments.map((segment) => ({
-            start: sceneStart + segment.start,
-            end: sceneStart + segment.end
-          })).filter((segment) => segment.end - segment.start >= 0.4);
-        }
-      } catch {
-        // Keep fitted segments from the full-video scan.
-      }
-    }
-
-    if (!absoluteSegments.length) {
-      setCreateStatus(t('create.detect.none'));
-      toast(t('create.detect.none'));
-      return;
-    }
-
-    state.create.lines = absoluteSegments.map((segment, index) => ({
+    state.create.lines = segments.map((segment, index) => ({
       id: crypto.randomUUID ? crypto.randomUUID() : `line-${Date.now()}-${index}`,
       character: t('create.character.placeholder'),
       text: t('create.detect.line', { n: index + 1 }),
-      start: Number(segment.start.toFixed(2)),
-      end: Number(segment.end.toFixed(2))
+      start: Number((sceneStart + segment.start).toFixed(2)),
+      end: Number((sceneStart + segment.end).toFixed(2))
     }));
     state.create.linesConfirmed = false;
     state.create.zipBytes = null;
     stopCreatePreview();
     renderCreateLines();
-    const video = document.querySelector('#createVideo');
-    if (video) {
-      video.currentTime = sceneStart;
-    }
-    setCreateStatus(t('create.detect.done', { n: absoluteSegments.length }));
-    toast(t('create.detect.done', { n: absoluteSegments.length }));
+    setCreateStatus(t('create.detect.done', { n: segments.length }));
+    toast(t('create.detect.done', { n: segments.length }));
   } catch (error) {
     setCreateStatus(error.message || t('create.detect.fail'));
     toast(error.message || t('create.detect.fail'));
@@ -2400,7 +2506,6 @@ async function detectCreateSpeechLines() {
     syncCreateActions();
   }
 }
-
 function addCreateLine() {
   const character = document.querySelector('#createCharacter')?.value?.trim() || '';
   const text = document.querySelector('#createText')?.value?.trim() || '';
@@ -2487,6 +2592,10 @@ function resetCreatePack() {
   if (start) start.value = '0';
   const end = document.querySelector('#createEnd');
   if (end) end.value = '1';
+  const sceneStart = document.querySelector('#createSceneStart');
+  if (sceneStart) sceneStart.value = '0';
+  const sceneEnd = document.querySelector('#createSceneEnd');
+  if (sceneEnd) sceneEnd.value = String(CREATE_SCENE_MAX_SEC);
   const title = document.querySelector('#createWorkspaceTitle');
   if (title) title.textContent = '—';
   const meta = document.querySelector('#createVideoMeta');
