@@ -11,6 +11,9 @@ const ORIGINAL_LINE_EXPORT = 1;
 const BED_DUCK = 0.012;
 const BED_DUB_MUTE = 0.003;
 const PLAY_ORIGINAL_KEY = 'dubpack-play-original-audio';
+const MIC_MONITOR_KEY = 'dubpack-mic-monitor';
+const MIC_FILTER_KEY = 'dubpack-mic-filter';
+const WAVE_PREROLL_SEC = 1.0; // seconds of empty timeline shown before the line starts
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
@@ -199,6 +202,9 @@ const state = {
   exportLayout: 'original',
   exportVerticalPan: 50,
   playOriginalAudio: false,
+  micMonitoring: false,
+  micMonitorGain: null,
+  micFilter: 'original',
   pendingCena: null,
   waveGen: 0,
   liveWave: null,
@@ -477,6 +483,17 @@ function bindUi() {
     state.playOriginalAudio = Boolean(event.target.checked);
     try { localStorage.setItem(PLAY_ORIGINAL_KEY, state.playOriginalAudio ? '1' : '0'); } catch { /* ignore */ }
   });
+  document.querySelector('#micMonitorToggle')?.addEventListener('change', (event) => {
+    setMicMonitoring(Boolean(event.target.checked));
+  });
+  document.querySelector('#micFilterPreset')?.addEventListener('change', (event) => {
+    state.micFilter = event.target.value || 'original';
+    try { localStorage.setItem(MIC_FILTER_KEY, state.micFilter); } catch { /* ignore */ }
+  });
+  document.querySelector('#micSettingsBtn')?.addEventListener('click', () => {
+    const panel = document.querySelector('#micSettingsPanel');
+    if (panel) panel.hidden = !panel.hidden;
+  });
   els.previewBtnAlt?.addEventListener('click', playProjectPreview);
   els.stopPreviewBtn?.addEventListener('click', stopProjectPreview);
   els.exportVideoBtn?.addEventListener('click', () => void requestFinalMp4());
@@ -594,6 +611,7 @@ function bindUi() {
 async function bootApp() {
   applyI18n();
   syncPlayOriginalToggle();
+  syncMicSettingsUi();
   initAuthRememberUi();
   revealStudio();
   refreshAccountUi();
@@ -3923,15 +3941,27 @@ async function playTakeWithMix(pack, scene, take) {
   playSceneMedia(scene, duration);
   animateProgress(duration);
 
-  const layers = [{ url: take.url, blob: take.blob, volume: 1 }];
   if (state.playOriginalAudio && scene.audioUrl) {
     // A/B with original line (Choicer-style "Play original audio").
-    layers.push({ url: scene.audioUrl, volume: 0.55 });
-    playClickAudio(layers, duration);
+    playClickAudio([
+      { url: take.url, blob: take.blob, volume: 1 },
+      { url: scene.audioUrl, volume: 0.55 }
+    ], duration);
     return;
   }
 
-  playClickAudio(layers, duration);
+  const hasBlobFilter = state.micFilter && state.micFilter !== 'original';
+  if (hasBlobFilter && (take.blob || take.url)) {
+    // Filtered preview through Web Audio.
+    try {
+      await playFilteredTake(take, duration, state.micFilter);
+    } catch {
+      playClickAudio([{ url: take.url, blob: take.blob, volume: 1 }], duration);
+    }
+  } else {
+    playClickAudio([{ url: take.url, blob: take.blob, volume: 1 }], duration);
+  }
+
   if (pack?.backingUrl) {
     try {
       await playBackingUnderScene(pack, scene, duration, BACKING_PREVIEW);
@@ -3939,6 +3969,113 @@ async function playTakeWithMix(pack, scene, take) {
       console.warn('Backing preview failed', error);
     }
   }
+}
+
+async function playFilteredTake(take, duration, filterPreset) {
+  const ctx = await ensurePlaybackAudio();
+  if (!ctx) return;
+  const blob = take.blob || state.blobByUrl.get(take.url);
+  let arrayBuf;
+  if (blob) {
+    arrayBuf = await blob.arrayBuffer();
+  } else {
+    arrayBuf = await fetch(take.url).then((r) => r.arrayBuffer());
+  }
+  const decoded = await ctx.decodeAudioData(arrayBuf.slice(0));
+  const chain = buildMicFilterChain(ctx, filterPreset);
+  const gain = ctx.createGain();
+  gain.gain.value = 1;
+  const source = ctx.createBufferSource();
+  source.buffer = decoded;
+  source.connect(chain.input);
+  chain.output.connect(gain);
+  gain.connect(ctx.destination);
+  source.start();
+  clearTimeout(state.playbackTimer);
+  state.playbackTimer = setTimeout(stopActivePlayback, (duration + 0.5) * 1000);
+  state.playbackStops.push(() => {
+    try { source.stop(); } catch { /* ignore */ }
+    try { source.disconnect(); } catch { /* ignore */ }
+    try { gain.disconnect(); } catch { /* ignore */ }
+    try { chain.output.disconnect(); } catch { /* ignore */ }
+  });
+}
+
+/** Build a Web Audio filter chain based on the selected mic filter preset. */
+function buildMicFilterChain(ctx, preset) {
+  // Chain: highpass → [compressor] → [noise gate approximation] → output.
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 80;
+  hp.Q.value = 0.7;
+
+  const output = ctx.createGain();
+  output.gain.value = 1;
+
+  if (preset === 'broadcast') {
+    // Warm broadcast: hi-pass + gentle compression + presence boost.
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -22;
+    comp.knee.value = 12;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.18;
+    const presence = ctx.createBiquadFilter();
+    presence.type = 'peaking';
+    presence.frequency.value = 3000;
+    presence.Q.value = 0.8;
+    presence.gain.value = 3;
+    hp.connect(comp);
+    comp.connect(presence);
+    presence.connect(output);
+    return { input: hp, output };
+  }
+
+  if (preset === 'clean') {
+    // Clean voice: hi-pass + soft compressor + de-ess (cut sibilance).
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.knee.value = 8;
+    comp.ratio.value = 3;
+    comp.attack.value = 0.002;
+    comp.release.value = 0.12;
+    const deess = ctx.createBiquadFilter();
+    deess.type = 'peaking';
+    deess.frequency.value = 7500;
+    deess.Q.value = 1.4;
+    deess.gain.value = -4;
+    hp.connect(comp);
+    comp.connect(deess);
+    deess.connect(output);
+    return { input: hp, output };
+  }
+
+  if (preset === 'warm') {
+    // Warm: boost lows, cut harsh highs, light comp.
+    const low = ctx.createBiquadFilter();
+    low.type = 'peaking';
+    low.frequency.value = 200;
+    low.Q.value = 0.9;
+    low.gain.value = 2.5;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -20;
+    comp.ratio.value = 5;
+    comp.attack.value = 0.005;
+    comp.release.value = 0.22;
+    const hi = ctx.createBiquadFilter();
+    hi.type = 'highshelf';
+    hi.frequency.value = 5000;
+    hi.gain.value = -2;
+    hp.connect(low);
+    low.connect(comp);
+    comp.connect(hi);
+    hi.connect(output);
+    return { input: hp, output };
+  }
+
+  // 'original' / fallback — just hi-pass.
+  hp.connect(output);
+  return { input: hp, output };
 }
 
 async function ensurePackBackingBuffer(pack) {
@@ -4285,12 +4422,18 @@ function animateProgress(duration) {
 
 async function startLiveWaveGuide(scene, durationSec) {
   stopLiveWaveGuide();
-  const duration = Math.max(0.4, Number(durationSec) || Number(scene?.duration) || 2);
+  // Total timeline = pre-roll + actual recording duration.
+  const recDuration = Math.max(0.4, Number(durationSec) || Number(scene?.duration) || 2);
+  const preroll = WAVE_PREROLL_SEC;
+  const totalDuration = preroll + recDuration;
+
   const refPeaks = scene?.audioUrl ? await peaksFromUrl(scene.audioUrl) : [];
   const live = {
     active: true,
     startedAt: performance.now(),
-    duration,
+    duration: recDuration,
+    preroll,
+    totalDuration,
     refPeaks,
     livePeaks: new Float32Array(WAVE_BINS),
     raf: 0
@@ -4306,26 +4449,30 @@ async function startLiveWaveGuide(scene, durationSec) {
   const tick = () => {
     if (!state.liveWave?.active || state.liveWave !== live) return;
     const elapsed = (performance.now() - live.startedAt) / 1000;
-    const progress = Math.min(1, elapsed / live.duration);
-    els.videoProgress.style.width = `${progress * 100}%`;
-    els.elapsedLabel.textContent = formatSeconds(elapsed);
-    if (els.cueLabel) els.cueLabel.textContent = formatSeconds(elapsed);
-    if (els.wavePlayhead) els.wavePlayhead.style.left = `${progress * 100}%`;
+    const totalProgress = Math.min(1, elapsed / live.totalDuration);
+    // Progress for UI progress bar is only within rec window (after preroll).
+    const recElapsed = Math.max(0, elapsed - live.preroll);
+    const recProgress = Math.min(1, recElapsed / live.duration);
 
-    if (state.analyser) {
+    els.videoProgress.style.width = `${recProgress * 100}%`;
+    els.elapsedLabel.textContent = formatSeconds(recElapsed);
+    if (els.cueLabel) els.cueLabel.textContent = formatSeconds(recElapsed);
+    if (els.wavePlayhead) els.wavePlayhead.style.left = `${totalProgress * 100}%`;
+
+    if (state.analyser && recElapsed > 0) {
       const wave = new Uint8Array(state.analyser.fftSize);
       state.analyser.getByteTimeDomainData(wave);
       let peak = 0;
       for (let i = 0; i < wave.length; i += 1) {
         peak = Math.max(peak, Math.abs(wave[i] - 128) / 128);
       }
-      const bin = Math.min(WAVE_BINS - 1, Math.floor(progress * (WAVE_BINS - 1)));
+      const bin = Math.min(WAVE_BINS - 1, Math.floor(recProgress * (WAVE_BINS - 1)));
       live.livePeaks[bin] = Math.max(live.livePeaks[bin], peak);
       if (bin > 0) live.livePeaks[bin - 1] = Math.max(live.livePeaks[bin - 1], peak * 0.7);
     }
 
-    paintLiveWaveFrame(scene, live, progress);
-    if (progress >= 1) {
+    paintLiveWaveFrame(scene, live, totalProgress);
+    if (totalProgress >= 1) {
       live.active = false;
       els.wavePlayhead?.classList.remove('is-live');
       document.querySelector('#waveStage')?.classList.remove('is-live');
@@ -4365,13 +4512,18 @@ function paintGuideWavePreview(scene, peaks) {
   if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
 }
 
-function paintLiveWaveFrame(scene, live, progress) {
+function paintLiveWaveFrame(scene, live, totalProgress) {
   const canvas = els.waveCanvas;
   if (!canvas || !live) return;
   const { width, height } = sizeWaveCanvas(canvas);
   const ctx = canvas.getContext('2d');
-  const sceneDuration = Math.max(0.2, Number(scene?.duration) || live.duration || 1);
-  const playX = Math.max(0, Math.min(width, progress * width));
+
+  // Total time window = preroll + recording duration.
+  const preroll = live.preroll || 0;
+  const totalDuration = live.totalDuration || (preroll + live.duration);
+  const playX = Math.max(0, Math.min(width, totalProgress * width));
+  // X offset where voice wave starts (after preroll).
+  const waveOffsetX = Math.round((preroll / totalDuration) * width);
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
@@ -4379,23 +4531,35 @@ function paintLiveWaveFrame(scene, live, progress) {
   ctx.fillStyle = 'rgba(255,255,255,0.16)';
   ctx.fillRect(0, height / 2, width, 1);
 
-  // Full guide (original line shape) in green — what you follow.
+  // Faint vertical marker at pre-roll boundary ("start speaking here").
+  ctx.strokeStyle = 'rgba(91,255,58,0.35)';
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(waveOffsetX, 0);
+  ctx.lineTo(waveOffsetX, height);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Reference (original voice) wave, shifted right by the preroll gap.
+  const refStartOffset = preroll;
+  const refDisplayDuration = totalDuration;
   drawWaveLayerTimed(ctx, live.refPeaks, '#5bff3a', width, height, {
-    sceneDuration,
-    audioDuration: sceneDuration,
-    startOffset: 0,
+    sceneDuration: refDisplayDuration,
+    audioDuration: live.duration,
+    startOffset: refStartOffset,
     alpha: 0.34
   });
 
-  // Bright green trail of your voice so far.
+  // Live-recorded voice trail (also starts after preroll).
   drawWaveLayerTimed(ctx, Array.from(live.livePeaks), '#5bff3a', width, height, {
-    sceneDuration,
-    audioDuration: sceneDuration,
-    startOffset: 0,
+    sceneDuration: refDisplayDuration,
+    audioDuration: live.duration,
+    startOffset: refStartOffset,
     alpha: 0.95
   });
 
-  // Hide live paint past the playhead, keep faint guide ahead.
+  // Dark mask ahead of the playhead, then faint guide.
   ctx.fillStyle = 'rgba(8, 7, 15, 0.88)';
   ctx.fillRect(playX + 1, 0, Math.max(0, width - playX), height);
   ctx.save();
@@ -4403,14 +4567,14 @@ function paintLiveWaveFrame(scene, live, progress) {
   ctx.rect(playX, 0, Math.max(0, width - playX), height);
   ctx.clip();
   drawWaveLayerTimed(ctx, live.refPeaks, '#5bff3a', width, height, {
-    sceneDuration,
-    audioDuration: sceneDuration,
-    startOffset: 0,
+    sceneDuration: refDisplayDuration,
+    audioDuration: live.duration,
+    startOffset: refStartOffset,
     alpha: 0.28
   });
   ctx.restore();
 
-  // Soft glow band at playhead for immersion.
+  // Soft glow at playhead.
   const grad = ctx.createLinearGradient(playX - 18, 0, playX + 18, 0);
   grad.addColorStop(0, 'rgba(91,255,58,0)');
   grad.addColorStop(0.5, 'rgba(91,255,58,0.22)');
@@ -4804,6 +4968,13 @@ function startMeter(stream) {
   state.analyser = state.audioContext.createAnalyser();
   state.analyser.fftSize = 256;
   source.connect(state.analyser);
+
+  // Mic monitoring: route mic to speakers when active.
+  if (state.micMonitoring) {
+    applyMicMonitorRouting(source, state.audioContext);
+  } else {
+    state.micMonitorGain = null;
+  }
   const data = new Uint8Array(state.analyser.frequencyBinCount);
   const wave = new Uint8Array(state.analyser.fftSize);
   const tick = () => {
@@ -4875,9 +5046,53 @@ async function profileTakeAudio(blob) {
   }
 }
 
+function applyMicMonitorRouting(source, ctx) {
+  const gain = ctx.createGain();
+  gain.gain.value = 0.9;
+  source.connect(gain);
+  gain.connect(ctx.destination);
+  state.micMonitorGain = gain;
+}
+
+function stopMicMonitor() {
+  if (state.micMonitorGain) {
+    try { state.micMonitorGain.disconnect(); } catch { /* ignore */ }
+    state.micMonitorGain = null;
+  }
+}
+
+function setMicMonitoring(active) {
+  state.micMonitoring = active;
+  try { localStorage.setItem(MIC_MONITOR_KEY, active ? '1' : '0'); } catch { /* ignore */ }
+  if (!active) {
+    stopMicMonitor();
+    return;
+  }
+  // If meter is already running, connect now.
+  if (state.audioContext && state.liveStream && !state.micMonitorGain) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      const source = state.audioContext.createMediaStreamSource(state.liveStream);
+      applyMicMonitorRouting(source, state.audioContext);
+    }
+  }
+}
+
+function syncMicSettingsUi() {
+  const monitorToggle = document.querySelector('#micMonitorToggle');
+  const filterSelect = document.querySelector('#micFilterPreset');
+  try {
+    state.micMonitoring = localStorage.getItem(MIC_MONITOR_KEY) === '1';
+    state.micFilter = localStorage.getItem(MIC_FILTER_KEY) || 'original';
+  } catch { /* ignore */ }
+  if (monitorToggle) monitorToggle.checked = Boolean(state.micMonitoring);
+  if (filterSelect) filterSelect.value = state.micFilter;
+}
+
 function stopMeter() {
   cancelAnimationFrame(state.meterRaf);
   state.meterRaf = 0;
+  stopMicMonitor();
   state.analyser = null;
   state.recordStream = null;
   state.audioContext?.close().catch(() => undefined);

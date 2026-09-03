@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=180" />
+    <link rel="stylesheet" href="./styles.css?v=181" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -291,6 +291,25 @@
                 <small data-i18n="studio.playOriginal.hint">Fone evita vazamento no microfone</small>
               </span>
             </label>
+            <label class="cv-pref-toggle" for="micMonitorToggle">
+              <input id="micMonitorToggle" type="checkbox" />
+              <span>
+                <strong data-i18n="studio.micMonitor">Ouvir meu microfone</strong>
+                <small data-i18n="studio.micMonitor.hint">Use fone — grave, ajuste o volume</small>
+              </span>
+            </label>
+            <button id="micSettingsBtn" class="cv-key cv-key-mic-settings" type="button" data-i18n="studio.micSettings">⚙ Configurar voz</button>
+            <div id="micSettingsPanel" class="mic-settings-panel" hidden>
+              <p class="mic-settings-title" data-i18n="studio.micSettings.title">Efeito de voz no take</p>
+              <label class="mic-settings-label" data-i18n="studio.micSettings.preset">Preset</label>
+              <select id="micFilterPreset" class="mic-settings-select">
+                <option value="original" data-i18n="studio.micFilter.original">Original (sem efeito)</option>
+                <option value="broadcast" data-i18n="studio.micFilter.broadcast">Broadcast — compressor + presença</option>
+                <option value="clean" data-i18n="studio.micFilter.clean">Limpa — compressor + de-ess</option>
+                <option value="warm" data-i18n="studio.micFilter.warm">Quente — graves + suavização</option>
+              </select>
+              <p class="mic-settings-hint" data-i18n="studio.micSettings.hint">Aplicado ao preview do take. O export usa a voz original gravada.</p>
+            </div>
             <button id="nextBtn" class="cv-key" type="button" data-i18n="studio.next">Next clip</button>
             <button id="rolesBtn" class="cv-key" type="button" data-i18n="roles.btn">Escolher funções</button>
             <button id="exportVideoBtn" class="cv-key cv-key-watch" type="button" disabled data-i18n="studio.watch">Watch dub</button>
@@ -714,9 +733,9 @@
     <script src="./vendor/fflate.min.js?v=169"></script>
     <script src="./payments.config.js?v=169"></script>
     <script src="./ads.config.js?v=169"></script>
-    <script src="./i18n.js?v=180"></script>
+    <script src="./i18n.js?v=181"></script>
     <script src="./payments.js?v=169"></script>
     <script src="./ads.js?v=169"></script>
-    <script src="./app.js?v=180"></script>
+    <script src="./app.js?v=181"></script>
   </body>
 </html>

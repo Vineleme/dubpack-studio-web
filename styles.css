@@ -485,6 +485,54 @@ body.has-pack .cv-wave .timing-labels { display: flex; }
   font-size: 11px;
   line-height: 1.35;
 }
+.cv-key-mic-settings {
+  background: linear-gradient(180deg, #1e2a1e, #111814);
+  border-color: rgba(91,255,58,0.25);
+  color: #9af079;
+  font-size: 12px;
+}
+.cv-key-mic-settings:hover { border-color: rgba(91,255,58,0.5); color: #5bff3a; }
+.mic-settings-panel {
+  background: rgba(10,18,10,0.96);
+  border: 1px solid rgba(91,255,58,0.25);
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+.mic-settings-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5bff3a;
+  margin: 0;
+}
+.mic-settings-label {
+  font-size: 11px;
+  color: #8f8ca8;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.mic-settings-select {
+  background: #111813;
+  border: 1px solid rgba(91,255,58,0.3);
+  border-radius: 8px;
+  color: #e4f4e0;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  width: 100%;
+  cursor: pointer;
+}
+.mic-settings-select:focus { outline: 2px solid rgba(91,255,58,0.5); }
+.mic-settings-hint {
+  font-size: 11px;
+  color: #6a6882;
+  margin: 0;
+  line-height: 1.4;
+}
 .cv-meter {
   display: grid;
   justify-items: center;
