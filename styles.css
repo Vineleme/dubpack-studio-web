@@ -1122,9 +1122,10 @@ body.needs-auth .dashboard {
 }
 .cd-fly {
   position: fixed;
-  z-index: 90;
+  z-index: 3;
   pointer-events: none;
   margin: 0;
+  transform-origin: center center;
   transition: transform 0.52s cubic-bezier(.2,.75,.15,1);
   will-change: transform, clip-path;
   box-shadow:
@@ -1187,6 +1188,8 @@ body.needs-auth .dashboard {
   display: grid;
   place-items: center;
   padding-top: 4px;
+  position: relative;
+  z-index: 4;
 }
 .cd-slot {
   position: relative;
@@ -1199,7 +1202,8 @@ body.needs-auth .dashboard {
     inset 0 8px 10px rgba(0,0,0,0.72),
     0 1px 0 rgba(255,255,255,0.14);
   overflow: hidden;
-  perspective: 120px;
+  perspective: 160px;
+  z-index: 5;
 }
 .cd-slot-lip {
   position: absolute;
