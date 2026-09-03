@@ -366,7 +366,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '165';
+  const swVersion = '166';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -1521,8 +1521,9 @@ function bindCreateSceneScrub() {
     if (seek) {
       const video = document.querySelector('#createVideo');
       if (video) {
-        const target = mode === 'end' ? nextEnd : mode === 'move' ? (nextStart + nextEnd) / 2 : nextStart;
-        video.currentTime = target;
+        video.pause();
+        // Always preview from scene start while dragging — easier to align the cut.
+        video.currentTime = nextStart;
       }
     }
   };
@@ -1551,6 +1552,11 @@ function bindCreateSceneScrub() {
     if (!state.create.videoFile || state.create.busy) return;
     event.preventDefault();
     mode = nextMode;
+    const video = document.querySelector('#createVideo');
+    if (video) {
+      video.pause();
+      video.currentTime = getCreateSceneWindow().start;
+    }
     if (nextMode === 'move') {
       const time = timeFromClientX(event.clientX);
       dragOffset = time - getCreateSceneWindow().start;
