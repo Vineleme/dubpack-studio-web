@@ -199,6 +199,7 @@ const state = {
   exportVerticalPan: 50,
   pendingCena: null,
   waveGen: 0,
+  liveWave: null,
   create: {
     videoFile: null,
     videoBytes: null,
@@ -3439,6 +3440,7 @@ async function startTakeFlow() {
   stream.getAudioTracks().forEach((track) => {
     track.enabled = true;
   });
+  startMeter(stream);
   els.countdownBadge.style.display = 'grid';
   els.recordingOverlay.style.display = 'grid';
   els.stageState.textContent = 'Prepare a fala...';
@@ -3447,6 +3449,15 @@ async function startTakeFlow() {
   els.recordBtn.setAttribute('aria-label', 'Parar');
   els.micHint.textContent = 'Toque de novo para cancelar';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Preparando';
+
+  // Prefetch green guide waves during countdown so recording starts immersive.
+  const scene = currentScene();
+  if (scene?.audioUrl) {
+    void peaksFromUrl(scene.audioUrl).then((peaks) => {
+      if (state.captureGen !== gen || state.recorder) return;
+      paintGuideWavePreview(scene, peaks);
+    });
+  }
 
   let count = 3;
   els.countdownBadge.textContent = String(count);
@@ -3572,6 +3583,7 @@ function recordActiveScene() {
     const discarded = state.ignoreRecorderStop;
     state.ignoreRecorderStop = false;
     state.recorder = null;
+    stopLiveWaveGuide();
     if (discarded) return;
 
     const pack = currentPack();
@@ -3630,10 +3642,14 @@ function recordActiveScene() {
   els.stageState.className = 'stage-state recording';
   els.recordBtn.classList.add('recording');
   els.recordBtn.setAttribute('aria-label', 'Parar');
-  els.micHint.textContent = 'Fale agora · a cena se move com você';
+  els.micHint.textContent = 'Fale nas ondas · siga a barra verde';
   if (els.recordingStatus) els.recordingStatus.textContent = 'Gravando';
   playSceneMedia(scene, recMs / 1000);
-  animateProgress(recMs / 1000);
+  // Soft reference in headphones + live green wave with playhead L→R.
+  if (scene.audioUrl) {
+    playClickAudio([{ url: scene.audioUrl, volume: GUIDE_VOLUME }], recMs / 1000);
+  }
+  void startLiveWaveGuide(scene, recMs / 1000);
 
   state.recordingTimer = setInterval(() => {
     const remaining = Math.max(0, (recMs / 1000) - ((Date.now() - startedAt) / 1000));
@@ -4018,9 +4034,147 @@ function animateProgress(duration) {
     els.videoProgress.style.width = `${progress * 100}%`;
     els.elapsedLabel.textContent = formatSeconds(progress * duration);
     if (els.cueLabel) els.cueLabel.textContent = formatSeconds(progress * duration);
-    if (els.wavePlayhead) els.wavePlayhead.style.left = `${progress * 100}%`;
+    if (!state.liveWave?.active && els.wavePlayhead) {
+      els.wavePlayhead.style.left = `${progress * 100}%`;
+    }
     if (progress >= 1) clearInterval(state.progressTimer);
   }, 80);
+}
+
+async function startLiveWaveGuide(scene, durationSec) {
+  stopLiveWaveGuide();
+  const duration = Math.max(0.4, Number(durationSec) || Number(scene?.duration) || 2);
+  const refPeaks = scene?.audioUrl ? await peaksFromUrl(scene.audioUrl) : [];
+  const live = {
+    active: true,
+    startedAt: performance.now(),
+    duration,
+    refPeaks,
+    livePeaks: new Float32Array(WAVE_BINS),
+    raf: 0
+  };
+  state.liveWave = live;
+  els.wavePlayhead?.classList.add('is-live');
+  document.querySelector('#waveStage')?.classList.add('is-live');
+  if (els.stageState) {
+    els.stageState.textContent = 'Siga as ondas';
+    els.stageState.className = 'stage-state recording';
+  }
+
+  const tick = () => {
+    if (!state.liveWave?.active || state.liveWave !== live) return;
+    const elapsed = (performance.now() - live.startedAt) / 1000;
+    const progress = Math.min(1, elapsed / live.duration);
+    els.videoProgress.style.width = `${progress * 100}%`;
+    els.elapsedLabel.textContent = formatSeconds(elapsed);
+    if (els.cueLabel) els.cueLabel.textContent = formatSeconds(elapsed);
+    if (els.wavePlayhead) els.wavePlayhead.style.left = `${progress * 100}%`;
+
+    if (state.analyser) {
+      const wave = new Uint8Array(state.analyser.fftSize);
+      state.analyser.getByteTimeDomainData(wave);
+      let peak = 0;
+      for (let i = 0; i < wave.length; i += 1) {
+        peak = Math.max(peak, Math.abs(wave[i] - 128) / 128);
+      }
+      const bin = Math.min(WAVE_BINS - 1, Math.floor(progress * (WAVE_BINS - 1)));
+      live.livePeaks[bin] = Math.max(live.livePeaks[bin], peak);
+      if (bin > 0) live.livePeaks[bin - 1] = Math.max(live.livePeaks[bin - 1], peak * 0.7);
+    }
+
+    paintLiveWaveFrame(scene, live, progress);
+    if (progress >= 1) {
+      live.active = false;
+      els.wavePlayhead?.classList.remove('is-live');
+      document.querySelector('#waveStage')?.classList.remove('is-live');
+      return;
+    }
+    live.raf = requestAnimationFrame(tick);
+  };
+  live.raf = requestAnimationFrame(tick);
+}
+
+function stopLiveWaveGuide() {
+  const live = state.liveWave;
+  if (live?.raf) cancelAnimationFrame(live.raf);
+  if (live) live.active = false;
+  state.liveWave = null;
+  els.wavePlayhead?.classList.remove('is-live');
+  document.querySelector('#waveStage')?.classList.remove('is-live');
+}
+
+function paintGuideWavePreview(scene, peaks) {
+  const canvas = els.waveCanvas;
+  if (!canvas) return;
+  const { width, height } = sizeWaveCanvas(canvas);
+  const ctx = canvas.getContext('2d');
+  const sceneDuration = Math.max(0.2, Number(scene?.duration) || 1);
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  for (let y = 12; y < height; y += 12) ctx.fillRect(0, y, width, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(0, height / 2, width, 1);
+  drawWaveLayerTimed(ctx, peaks, '#5bff3a', width, height, {
+    sceneDuration,
+    audioDuration: sceneDuration,
+    startOffset: 0,
+    alpha: 0.55
+  });
+  if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
+}
+
+function paintLiveWaveFrame(scene, live, progress) {
+  const canvas = els.waveCanvas;
+  if (!canvas || !live) return;
+  const { width, height } = sizeWaveCanvas(canvas);
+  const ctx = canvas.getContext('2d');
+  const sceneDuration = Math.max(0.2, Number(scene?.duration) || live.duration || 1);
+  const playX = Math.max(0, Math.min(width, progress * width));
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  for (let y = 12; y < height; y += 12) ctx.fillRect(0, y, width, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(0, height / 2, width, 1);
+
+  // Full guide (original line shape) in green — what you follow.
+  drawWaveLayerTimed(ctx, live.refPeaks, '#5bff3a', width, height, {
+    sceneDuration,
+    audioDuration: sceneDuration,
+    startOffset: 0,
+    alpha: 0.34
+  });
+
+  // Bright green trail of your voice so far.
+  drawWaveLayerTimed(ctx, Array.from(live.livePeaks), '#5bff3a', width, height, {
+    sceneDuration,
+    audioDuration: sceneDuration,
+    startOffset: 0,
+    alpha: 0.95
+  });
+
+  // Hide live paint past the playhead, keep faint guide ahead.
+  ctx.fillStyle = 'rgba(8, 7, 15, 0.88)';
+  ctx.fillRect(playX + 1, 0, Math.max(0, width - playX), height);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(playX, 0, Math.max(0, width - playX), height);
+  ctx.clip();
+  drawWaveLayerTimed(ctx, live.refPeaks, '#5bff3a', width, height, {
+    sceneDuration,
+    audioDuration: sceneDuration,
+    startOffset: 0,
+    alpha: 0.28
+  });
+  ctx.restore();
+
+  // Soft glow band at playhead for immersion.
+  const grad = ctx.createLinearGradient(playX - 18, 0, playX + 18, 0);
+  grad.addColorStop(0, 'rgba(91,255,58,0)');
+  grad.addColorStop(0.5, 'rgba(91,255,58,0.22)');
+  grad.addColorStop(1, 'rgba(91,255,58,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(playX - 18, 0, 36, height);
 }
 
 function downloadTake() {
@@ -4328,6 +4482,7 @@ function abortCapture({ keepPreview = false } = {}) {
   els.recordBtn?.classList.remove('recording');
   els.recordBtn?.setAttribute('aria-label', 'Gravar');
   stopActivePlayback();
+  stopLiveWaveGuide();
   if (!keepPreview) stopClipVideo();
   if (state.recorder?.state === 'recording') {
     state.ignoreRecorderStop = true;
