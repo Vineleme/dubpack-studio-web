@@ -19,6 +19,27 @@ const WAVE_POSTROLL_SEC = 3; // same width on the right so the speak window stay
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
+const EXPORT_WATERMARK_SRC = './assets/dubpack-logo-official.png';
+let exportWatermarkImage = null;
+let exportWatermarkLoad = null;
+
+function ensureExportWatermarkImage() {
+  if (exportWatermarkImage?.complete && exportWatermarkImage.naturalWidth) {
+    return Promise.resolve(exportWatermarkImage);
+  }
+  if (exportWatermarkLoad) return exportWatermarkLoad;
+  exportWatermarkLoad = new Promise((resolve) => {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      exportWatermarkImage = img;
+      resolve(img);
+    };
+    img.onerror = () => resolve(null);
+    img.src = EXPORT_WATERMARK_SRC;
+  });
+  return exportWatermarkLoad;
+}
 const PRO_MONTHLY_PRICE = 9.9;
 const PRO_MONTHLY_PRICE_USD = 2.99;
 const PRO_MONTHLY_CREDITS = 200;
@@ -6467,6 +6488,7 @@ async function requestFinalMp4(layout) {
   }
   const watermarked = shouldWatermarkExport();
   if (watermarked) {
+    await ensureExportWatermarkImage();
     toast(getLang() === 'en'
       ? `Free export includes a ${EXPORT_WATERMARK_LABEL} watermark. PRO removes it.`
       : `Exportação grátis sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
@@ -7081,41 +7103,29 @@ function roundRectPath(ctx, x, y, w, h, r) {
 }
 
 function drawExportWatermark(ctx, width, height) {
-  const label = EXPORT_WATERMARK_LABEL;
-  const pad = Math.max(14, Math.round(width * 0.022));
-  const fontSize = Math.max(18, Math.round(width * 0.032));
+  const img = exportWatermarkImage;
+  if (!img?.complete || !img.naturalWidth) {
+    void ensureExportWatermarkImage();
+    return;
+  }
+  // Small, low-contrast mark in the corner — readable, not a banner.
+  const maxW = Math.max(64, Math.round(width * 0.16));
+  const scale = maxW / img.naturalWidth;
+  const w = img.naturalWidth * scale;
+  const h = img.naturalHeight * scale;
+  const pad = Math.max(8, Math.round(Math.min(width, height) * 0.02));
+  const x = width - w - pad;
+  const y = height - h - pad;
   ctx.save();
-  ctx.font = `800 ${fontSize}px Inter, system-ui, sans-serif`;
-  ctx.textBaseline = 'bottom';
-  const textW = ctx.measureText(label).width;
-  const boxW = textW + pad * 2.2;
-  const boxH = fontSize + pad * 1.35;
-  const x = width - boxW - pad;
-  const y = height - pad;
-  ctx.fillStyle = 'rgba(9, 8, 23, 0.62)';
-  roundRectPath(ctx, x, y - boxH, boxW, boxH, 10);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(245, 46, 131, 0.9)';
-  ctx.fillRect(x, y - boxH, 4, boxH);
-  ctx.shadowColor = 'rgba(245, 46, 131, 0.45)';
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
-  ctx.fillText(label, x + pad + 2, y - pad * 0.55);
-  ctx.shadowBlur = 0;
-  ctx.globalAlpha = 0.11;
-  ctx.font = `900 ${Math.max(28, Math.round(width * 0.075))}px Inter, system-ui, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.translate(width / 2, height / 2);
-  ctx.rotate(-0.32);
-  ctx.fillStyle = '#f52e83';
-  ctx.fillText(label, 0, 0);
+  ctx.globalAlpha = 0.34;
+  ctx.drawImage(img, x, y, w, h);
   ctx.restore();
 }
 
 async function buildComposedVideoTrack(film) {
   const vertical = state.exportLayout === 'vertical';
   const watermarked = shouldWatermarkExport();
+  if (watermarked) await ensureExportWatermarkImage();
   let width = 1280;
   let height = 720;
   for (let attempt = 0; attempt < 60; attempt += 1) {
