@@ -4419,14 +4419,22 @@ function stopActivePlayback() {
 
 function animateProgress(duration) {
   clearInterval(state.progressTimer);
+  const speak = Math.max(0.05, Number(duration) || 1);
+  const preroll = WAVE_PREROLL_SEC;
+  const postroll = WAVE_POSTROLL_SEC;
+  const total = preroll + speak + postroll;
   const startedAt = Date.now();
+  // Playhead travels only between the red markers (speak zone), never the wait/tail.
+  if (!state.liveWave?.active && els.wavePlayhead) {
+    els.wavePlayhead.style.left = `${(preroll / total) * 100}%`;
+  }
   state.progressTimer = setInterval(() => {
-    const progress = Math.min(1, (Date.now() - startedAt) / (duration * 1000));
+    const progress = Math.min(1, (Date.now() - startedAt) / (speak * 1000));
     els.videoProgress.style.width = `${progress * 100}%`;
-    els.elapsedLabel.textContent = formatSeconds(progress * duration);
-    if (els.cueLabel) els.cueLabel.textContent = formatSeconds(progress * duration);
+    els.elapsedLabel.textContent = formatSeconds(progress * speak);
+    if (els.cueLabel) els.cueLabel.textContent = formatSeconds(progress * speak);
     if (!state.liveWave?.active && els.wavePlayhead) {
-      els.wavePlayhead.style.left = `${progress * 100}%`;
+      els.wavePlayhead.style.left = `${((preroll + progress * speak) / total) * 100}%`;
     }
     if (progress >= 1) clearInterval(state.progressTimer);
   }, 80);
@@ -4448,7 +4456,7 @@ async function startLiveWaveGuide(scene, durationSec, opts = {}) {
     preroll,
     postroll,
     totalDuration,
-    refPeaks: [],
+    refWave: null,
     livePeaks: new Float32Array(WAVE_BINS),
     raf: 0,
     armedRecord: false,
@@ -4469,9 +4477,9 @@ async function startLiveWaveGuide(scene, durationSec, opts = {}) {
   if (endLabel) endLabel.textContent = '+' + postroll.toFixed(1);
 
   if (scene?.audioUrl) {
-    void peaksFromUrl(scene.audioUrl).then((peaks) => {
+    void refWaveFromUrl(scene.audioUrl).then((ref) => {
       if (state.liveWave !== live) return;
-      live.refPeaks = peaks || [];
+      live.refWave = ref || null;
     });
   }
 
@@ -4547,7 +4555,7 @@ function stopLiveWaveGuide() {
   document.querySelector('#waveStage')?.classList.remove('is-live');
 }
 
-function paintGuideWavePreview(scene, peaks) {
+function paintGuideWavePreview(scene, refWave) {
   const canvas = els.waveCanvas;
   if (!canvas) return;
   const { width, height } = sizeWaveCanvas(canvas);
@@ -4557,11 +4565,12 @@ function paintGuideWavePreview(scene, peaks) {
     preroll: WAVE_PREROLL_SEC,
     duration,
     postroll: WAVE_POSTROLL_SEC,
-    refPeaks: peaks,
-    playX: 0,
+    refWave,
+    playX: null,
     maskAhead: false
   });
-  if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
+  const total = WAVE_PREROLL_SEC + duration + WAVE_POSTROLL_SEC;
+  if (els.wavePlayhead) els.wavePlayhead.style.left = `${(WAVE_PREROLL_SEC / total) * 100}%`;
 }
 
 function paintLiveWaveFrame(scene, live, totalProgress) {
@@ -4574,19 +4583,69 @@ function paintLiveWaveFrame(scene, live, totalProgress) {
     preroll: live.preroll || WAVE_PREROLL_SEC,
     duration: live.duration,
     postroll: live.postroll || WAVE_POSTROLL_SEC,
-    refPeaks: live.refPeaks,
+    refWave: live.refWave,
     livePeaks: Array.from(live.livePeaks),
     playX,
     maskAhead: true
   });
 }
 
-/** Wait zone → red start → original voice → red end → short tail. */
+/**
+ * Place the original character line inside the speak window (between red markers).
+ * Uses the voiced body when possible, time-aligned to playback, clipped so nothing
+ * spills past the end marker. Short lines sit inset/centered in the window.
+ */
+function layoutRefInSpeakZone(refWave, speakDuration) {
+  const speak = Math.max(0.2, Number(speakDuration) || 1);
+  const empty = { peaks: [], startOffset: 0, audioDuration: speak };
+  if (!refWave?.peaks?.length) return empty;
+
+  const fileDur = Math.max(0.05, Number(refWave.duration) || speak);
+  const inset = Math.min(0.16, speak * 0.05);
+  const usable = Math.max(0.08, speak - inset * 2);
+  const playEnd = Math.min(fileDur, speak);
+
+  let from = 0;
+  let to = playEnd;
+  const onset = Math.max(0, Number(refWave.onset) || 0);
+  const release = Number(refWave.release);
+  const hasVoice = (refWave.peak || 0) >= 0.02
+    && Number.isFinite(release)
+    && release > onset + 0.08;
+  if (hasVoice) {
+    from = Math.min(onset, Math.max(0, playEnd - 0.05));
+    to = Math.max(from + 0.05, Math.min(release, playEnd));
+  }
+
+  const contentDur = Math.max(0.05, to - from);
+  const peaks = slicePeaksByTime(refWave.peaks, fileDur, from, to);
+
+  // Full (or almost full) take: map timeline 0..speak into the inset window.
+  if (contentDur >= speak * 0.85 && from <= speak * 0.08) {
+    return {
+      peaks: slicePeaksByTime(refWave.peaks, fileDur, 0, playEnd),
+      startOffset: inset,
+      audioDuration: usable
+    };
+  }
+
+  // Time-aligned to playback so the playhead hits the purple wave when the character speaks.
+  let startOffset = inset + (from / speak) * usable;
+  let audioDuration = Math.max(0.05, (contentDur / speak) * usable);
+  if (startOffset + audioDuration > speak - inset * 0.5) {
+    audioDuration = Math.max(0.05, speak - inset * 0.5 - startOffset);
+  }
+
+  return { peaks, startOffset, audioDuration };
+}
+
+/** Wait zone → red start → original voice (framed) → red end → short tail. */
 function paintChoicerWaveFrame(ctx, width, height, {
   preroll,
   duration,
   postroll,
-  refPeaks,
+  refWave = null,
+  refPeaks = null,
   livePeaks = null,
   takePeaks = null,
   takeDuration = null,
@@ -4597,6 +4656,8 @@ function paintChoicerWaveFrame(ctx, width, height, {
   const total = Math.max(0.2, preroll + duration + postroll);
   const startX = (preroll / total) * width;
   const endX = ((preroll + duration) / total) * width;
+  const ref = refWave || (refPeaks?.length ? { peaks: refPeaks, duration } : null);
+  const framed = layoutRefInSpeakZone(ref, duration);
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
@@ -4613,6 +4674,11 @@ function paintChoicerWaveFrame(ctx, width, height, {
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
   ctx.fillRect(0, height / 2, width, 1);
 
+  // Dim the wait/tail zones so the speak window reads as the framed center.
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+  ctx.fillRect(0, 0, startX, height);
+  ctx.fillRect(endX, 0, Math.max(0, width - endX), height);
+
   ctx.strokeStyle = 'rgba(255, 70, 90, 0.95)';
   ctx.setLineDash([5, 4]);
   ctx.lineWidth = 1.5;
@@ -4624,19 +4690,22 @@ function paintChoicerWaveFrame(ctx, width, height, {
   });
   ctx.setLineDash([]);
 
-  // Original dubbing guide (purple) only between the red markers.
-  drawWaveStrokeTimed(ctx, refPeaks, '#c084fc', width, height, {
+  // Original character line — fitted & centered between the red markers.
+  drawWaveStrokeTimed(ctx, framed.peaks, '#c084fc', width, height, {
     sceneDuration: total,
-    audioDuration: duration,
-    startOffset: preroll,
+    audioDuration: framed.audioDuration,
+    startOffset: preroll + framed.startOffset,
     alpha: 0.95
   });
 
   if (takePeaks?.length) {
+    const takeDur = Math.max(0.05, Number(takeDuration) || duration);
+    const takeStart = Math.max(0, Number(takeOnset) || 0);
+    const maxDur = Math.max(0.05, duration - takeStart);
     drawWaveLayerTimed(ctx, takePeaks, '#5bff3a', width, height, {
       sceneDuration: total,
-      audioDuration: Math.max(0.05, Number(takeDuration) || duration),
-      startOffset: preroll + Math.max(0, Number(takeOnset) || 0),
+      audioDuration: Math.min(takeDur, maxDur),
+      startOffset: preroll + takeStart,
       alpha: 0.82
     });
   }
@@ -4650,7 +4719,7 @@ function paintChoicerWaveFrame(ctx, width, height, {
     });
   }
 
-  // Cyan time markers like Choicer: wait · 0.0 · duration · postroll
+  // Cyan time markers anchored on the red lines.
   ctx.fillStyle = 'rgba(120, 230, 255, 0.95)';
   ctx.font = `600 ${Math.max(11, Math.round(height * 0.11))}px ui-sans-serif, system-ui, sans-serif`;
   ctx.textBaseline = 'top';
@@ -4669,10 +4738,10 @@ function paintChoicerWaveFrame(ctx, width, height, {
     ctx.beginPath();
     ctx.rect(playX, 0, Math.max(0, width - playX), height);
     ctx.clip();
-    drawWaveStrokeTimed(ctx, refPeaks, '#c084fc', width, height, {
+    drawWaveStrokeTimed(ctx, framed.peaks, '#c084fc', width, height, {
       sceneDuration: total,
-      audioDuration: duration,
-      startOffset: preroll,
+      audioDuration: framed.audioDuration,
+      startOffset: preroll + framed.startOffset,
       alpha: 0.32
     });
     ctx.restore();
@@ -5231,39 +5300,44 @@ async function measureBlobPeak(blob) {
   return profile.peak || 0;
 }
 
+function profileAudioBuffer(buffer) {
+  if (!buffer) return { peak: 0, onset: 0, release: 0, voiced: 0 };
+  const samples = buffer.getChannelData(0);
+  const rate = buffer.sampleRate;
+  const windowSize = Math.max(64, Math.floor(rate * 0.02));
+  let peak = 0;
+  let onset = buffer.duration;
+  let release = 0;
+  const threshold = 0.035;
+  for (let i = 0; i < samples.length; i += windowSize) {
+    let sum = 0;
+    const end = Math.min(samples.length, i + windowSize);
+    for (let j = i; j < end; j += 1) {
+      const value = Math.abs(samples[j]);
+      peak = Math.max(peak, value);
+      sum += samples[j] * samples[j];
+    }
+    const rms = Math.sqrt(sum / Math.max(1, end - i));
+    if (rms >= threshold) {
+      const time = i / rate;
+      onset = Math.min(onset, time);
+      release = Math.max(release, time + (windowSize / rate));
+    }
+  }
+  if (peak < threshold) {
+    return { peak, onset: 0, release: 0, voiced: 0 };
+  }
+  const voiced = Math.max(0, release - onset);
+  return { peak, onset, release, voiced };
+}
+
 async function profileTakeAudio(blob) {
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx) return { peak: 0, onset: 0, release: 0, voiced: 0 };
   const ctx = new AudioCtx();
   try {
     const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
-    const samples = decoded.getChannelData(0);
-    const rate = decoded.sampleRate;
-    const windowSize = Math.max(64, Math.floor(rate * 0.02));
-    let peak = 0;
-    let onset = decoded.duration;
-    let release = 0;
-    const threshold = 0.035;
-    for (let i = 0; i < samples.length; i += windowSize) {
-      let sum = 0;
-      const end = Math.min(samples.length, i + windowSize);
-      for (let j = i; j < end; j += 1) {
-        const value = Math.abs(samples[j]);
-        peak = Math.max(peak, value);
-        sum += samples[j] * samples[j];
-      }
-      const rms = Math.sqrt(sum / Math.max(1, end - i));
-      if (rms >= threshold) {
-        const time = i / rate;
-        onset = Math.min(onset, time);
-        release = Math.max(release, time + (windowSize / rate));
-      }
-    }
-    if (peak < threshold) {
-      return { peak, onset: 0, release: 0, voiced: 0 };
-    }
-    const voiced = Math.max(0, release - onset);
-    return { peak, onset, release, voiced };
+    return profileAudioBuffer(decoded);
   } finally {
     await ctx.close().catch(() => undefined);
   }
@@ -5442,25 +5516,59 @@ function extractPeaks(buffer, bins = WAVE_BINS) {
   return peaks;
 }
 
-async function peaksFromUrl(url) {
-  if (!url) return [];
+function slicePeaksByTime(peaks, fileDuration, startSec, endSec, bins = WAVE_BINS) {
+  if (!peaks?.length) return [];
+  const dur = Math.max(0.05, Number(fileDuration) || 1);
+  const a = Math.max(0, Math.min(1, (Number(startSec) || 0) / dur));
+  const b = Math.max(a + 0.001, Math.min(1, (Number(endSec) || dur) / dur));
+  const i0 = Math.floor(a * peaks.length);
+  const i1 = Math.max(i0 + 1, Math.ceil(b * peaks.length));
+  const slice = peaks.slice(i0, i1);
+  if (slice.length <= bins) return slice;
+  const out = new Array(bins).fill(0);
+  const step = slice.length / bins;
+  for (let i = 0; i < bins; i += 1) {
+    const from = Math.floor(i * step);
+    const to = Math.min(slice.length, Math.floor((i + 1) * step));
+    let max = 0;
+    for (let j = from; j < to; j += 1) max = Math.max(max, slice[j] || 0);
+    out[i] = max;
+  }
+  return out;
+}
+
+async function refWaveFromUrl(url) {
+  if (!url) return null;
   if (wavePeakCache.has(url)) return wavePeakCache.get(url);
   const work = (async () => {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return [];
+    if (!AudioCtx) return null;
     const ctx = new AudioCtx();
     try {
       const bytes = await fetch(url).then((response) => response.arrayBuffer());
       const decoded = await ctx.decodeAudioData(bytes.slice(0));
-      return extractPeaks(decoded);
+      const profile = profileAudioBuffer(decoded);
+      return {
+        peaks: extractPeaks(decoded),
+        duration: decoded.duration,
+        onset: profile.onset,
+        release: profile.release,
+        voiced: profile.voiced,
+        peak: profile.peak
+      };
     } catch {
-      return [];
+      return null;
     } finally {
       await ctx.close().catch(() => undefined);
     }
   })();
   wavePeakCache.set(url, work);
   return work;
+}
+
+async function peaksFromUrl(url) {
+  const ref = await refWaveFromUrl(url);
+  return ref?.peaks || [];
 }
 
 async function peaksFromBlob(blob) {
@@ -5560,7 +5668,7 @@ async function paintOverlapWave(scene, take) {
   const { width, height } = sizeWaveCanvas(canvas);
   const ctx = canvas.getContext('2d');
   const sceneDuration = Math.max(0.2, Number(scene?.duration) || 1);
-  const refPeaks = scene?.audioUrl ? await peaksFromUrl(scene.audioUrl) : [];
+  const refWave = scene?.audioUrl ? await refWaveFromUrl(scene.audioUrl) : null;
   if (gen !== state.waveGen) return;
   let takePeaks = null;
   let takeDuration = sceneDuration;
@@ -5578,7 +5686,7 @@ async function paintOverlapWave(scene, take) {
     preroll: WAVE_PREROLL_SEC,
     duration: sceneDuration,
     postroll: WAVE_POSTROLL_SEC,
-    refPeaks,
+    refWave,
     takePeaks,
     takeDuration,
     takeOnset,
@@ -5589,7 +5697,8 @@ async function paintOverlapWave(scene, take) {
   const endLabel = document.querySelector('#waveEndLabel');
   if (startLabel) startLabel.textContent = '-' + WAVE_PREROLL_SEC.toFixed(1);
   if (endLabel) endLabel.textContent = '+' + WAVE_POSTROLL_SEC.toFixed(1);
-  if (els.wavePlayhead) els.wavePlayhead.style.left = '0%';
+  const total = WAVE_PREROLL_SEC + sceneDuration + WAVE_POSTROLL_SEC;
+  if (els.wavePlayhead) els.wavePlayhead.style.left = `${(WAVE_PREROLL_SEC / total) * 100}%`;
 }
 
 function timingStatus(scene, take) {
