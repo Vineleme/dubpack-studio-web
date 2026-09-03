@@ -13,6 +13,7 @@ const BED_DUB_MUTE = 0.003;
 const PLAY_ORIGINAL_KEY = 'dubpack-play-original-audio';
 const MIC_MONITOR_KEY = 'dubpack-mic-monitor';
 const MIC_FILTER_KEY = 'dubpack-mic-filter';
+const MIC_VOLUME_KEY = 'dubpack-mic-volume';
 const WAVE_PREROLL_SEC = 3; // wait zone before first red (3-2-1 + white bar)
 const WAVE_POSTROLL_SEC = 3; // same width on the right so the speak window stays centered
 const TAKE_PEAK_TARGET = 0.62;
@@ -206,6 +207,7 @@ const state = {
   micMonitoring: false,
   micMonitorGain: null,
   micFilter: 'original',
+  micVolume: 0.85,
   pendingCena: null,
   waveGen: 0,
   liveWave: null,
@@ -492,6 +494,9 @@ function bindUi() {
   document.querySelector('#micFilterPreset')?.addEventListener('change', (event) => {
     state.micFilter = event.target.value || 'original';
     try { localStorage.setItem(MIC_FILTER_KEY, state.micFilter); } catch { /* ignore */ }
+  });
+  document.querySelector('#micVolumeSlider')?.addEventListener('input', (event) => {
+    setMicVolume(Number(event.target.value) / 100);
   });
   document.querySelector('#micSettingsBtn')?.addEventListener('click', () => {
     const panel = document.querySelector('#micSettingsPanel');
@@ -3954,23 +3959,25 @@ async function playTakeWithMix(pack, scene, take) {
 
   if (state.playOriginalAudio && scene.audioUrl) {
     // A/B with original line (Choicer-style "Play original audio").
+    const takeVol = micPreviewVolume();
     playClickAudio([
-      { url: take.url, blob: take.blob, volume: 1 },
+      { url: take.url, blob: take.blob, volume: takeVol },
       { url: scene.audioUrl, volume: 0.55 }
     ], duration);
     return;
   }
 
   const hasBlobFilter = state.micFilter && state.micFilter !== 'original';
+  const takeVol = micPreviewVolume();
   if (hasBlobFilter && (take.blob || take.url)) {
     // Filtered preview through Web Audio.
     try {
       await playFilteredTake(take, duration, state.micFilter);
     } catch {
-      playClickAudio([{ url: take.url, blob: take.blob, volume: 1 }], duration);
+      playClickAudio([{ url: take.url, blob: take.blob, volume: takeVol }], duration);
     }
   } else {
-    playClickAudio([{ url: take.url, blob: take.blob, volume: 1 }], duration);
+    playClickAudio([{ url: take.url, blob: take.blob, volume: takeVol }], duration);
   }
 
   if (pack?.backingUrl) {
@@ -3995,7 +4002,7 @@ async function playFilteredTake(take, duration, filterPreset) {
   const decoded = await ctx.decodeAudioData(arrayBuf.slice(0));
   const chain = buildMicFilterChain(ctx, filterPreset);
   const gain = ctx.createGain();
-  gain.gain.value = 1;
+  gain.gain.value = micPreviewVolume();
   const source = ctx.createBufferSource();
   source.buffer = decoded;
   source.connect(chain.input);
@@ -5354,10 +5361,31 @@ async function profileTakeAudio(blob) {
 
 function applyMicMonitorRouting(source, ctx) {
   const gain = ctx.createGain();
-  gain.gain.value = 0.9;
+  gain.gain.value = micPreviewVolume();
   source.connect(gain);
   gain.connect(ctx.destination);
   state.micMonitorGain = gain;
+}
+
+function micPreviewVolume() {
+  const value = Number(state.micVolume);
+  if (!Number.isFinite(value)) return 0.85;
+  return Math.max(0, Math.min(1, value));
+}
+
+function setMicVolume(value) {
+  const next = Math.max(0, Math.min(1, Number(value) || 0));
+  state.micVolume = next;
+  try { localStorage.setItem(MIC_VOLUME_KEY, String(Math.round(next * 100))); } catch { /* ignore */ }
+  if (state.micMonitorGain) {
+    try { state.micMonitorGain.gain.value = next; } catch { /* ignore */ }
+  }
+  const slider = document.querySelector('#micVolumeSlider');
+  const label = document.querySelector('#micVolumeValue');
+  if (slider && Number(slider.value) !== Math.round(next * 100)) {
+    slider.value = String(Math.round(next * 100));
+  }
+  if (label) label.textContent = `${Math.round(next * 100)}%`;
 }
 
 function stopMicMonitor() {
@@ -5387,12 +5415,18 @@ function setMicMonitoring(active) {
 function syncMicSettingsUi() {
   const monitorToggle = document.querySelector('#micMonitorToggle');
   const filterSelect = document.querySelector('#micFilterPreset');
+  const volumeSlider = document.querySelector('#micVolumeSlider');
   try {
     state.micMonitoring = localStorage.getItem(MIC_MONITOR_KEY) === '1';
     state.micFilter = localStorage.getItem(MIC_FILTER_KEY) || 'original';
+    const savedVol = Number(localStorage.getItem(MIC_VOLUME_KEY));
+    if (Number.isFinite(savedVol)) state.micVolume = Math.max(0, Math.min(1, savedVol / 100));
   } catch { /* ignore */ }
   if (monitorToggle) monitorToggle.checked = Boolean(state.micMonitoring);
   if (filterSelect) filterSelect.value = state.micFilter;
+  if (volumeSlider) volumeSlider.value = String(Math.round(micPreviewVolume() * 100));
+  const volumeLabel = document.querySelector('#micVolumeValue');
+  if (volumeLabel) volumeLabel.textContent = `${Math.round(micPreviewVolume() * 100)}%`;
 }
 
 function stopMeter() {

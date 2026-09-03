@@ -598,6 +598,25 @@ body.has-pack .cv-wave .timing-labels { display: flex; }
   margin: 0;
   line-height: 1.4;
 }
+.mic-volume-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+.mic-volume-slider {
+  width: 100%;
+  accent-color: #5bff3a;
+  cursor: pointer;
+}
+#micVolumeValue {
+  min-width: 3.2em;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 800;
+  color: #9af079;
+  font-variant-numeric: tabular-nums;
+}
 .cv-meter {
   display: none !important;
 }
