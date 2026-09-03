@@ -211,9 +211,16 @@ const state = {
     vocalsBytes: null,
     vocalsName: '',
     linesConfirmed: false,
-    lang: 'pt'
+    lang: 'pt',
+    whisperBusy: false
   }
 };
+
+/** Cached Whisper ASR pipeline (loaded once per session). */
+let createWhisperTranscriber = null;
+let createWhisperLoadPromise = null;
+const CREATE_WHISPER_MODEL = 'Xenova/whisper-base';
+const CREATE_WHISPER_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
 const els = {
   packInput: document.querySelector('#packInput'),
@@ -359,7 +366,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '164';
+  const swVersion = '165';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -482,6 +489,7 @@ function bindUi() {
   document.querySelector('#createAddLineBtn')?.addEventListener('click', addCreateLine);
   document.querySelector('#createConfirmLinesBtn')?.addEventListener('click', confirmCreateLines);
   document.querySelector('#createEditLinesBtn')?.addEventListener('click', unconfirmCreateLines);
+  document.querySelector('#createTranscribeBtn')?.addEventListener('click', () => void transcribeCreateCaptions());
   document.querySelector('#createLangToggle')?.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-create-lang]');
     if (!btn) return;
@@ -1214,6 +1222,7 @@ function syncCreateActions() {
   document.querySelector('#createOpenBtn')?.toggleAttribute('disabled', !hasVideo || !captionsReady || busy);
   document.querySelector('#createAddLineBtn')?.toggleAttribute('disabled', busy || confirmed);
   document.querySelector('#createConfirmLinesBtn')?.toggleAttribute('disabled', !hasLines || busy);
+  document.querySelector('#createTranscribeBtn')?.toggleAttribute('disabled', !confirmed || !hasLines || busy);
   document.querySelector('#createVocalsInput')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createVocalsClearBtn')?.toggleAttribute('disabled', !state.create.vocalsBytes || busy);
   document.querySelector('label.create-file-btn')?.classList.toggle('is-disabled', !hasVideo || busy);
@@ -1285,6 +1294,112 @@ function updateCreateLineField(id, field, value) {
   line[field] = value;
   state.create.zipBytes = null;
   syncCreateActions();
+}
+
+function whisperLangCode() {
+  return state.create.lang === 'en' ? 'english' : 'portuguese';
+}
+
+async function getCreateWhisperTranscriber(onProgress) {
+  if (createWhisperTranscriber) return createWhisperTranscriber;
+  if (!createWhisperLoadPromise) {
+    createWhisperLoadPromise = (async () => {
+      const { pipeline, env } = await import(/* webpackIgnore: true */ CREATE_WHISPER_CDN);
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
+      const transcriber = await pipeline('automatic-speech-recognition', CREATE_WHISPER_MODEL, {
+        progress_callback: (data) => {
+          if (!onProgress) return;
+          if (data.status === 'progress' || data.status === 'download') {
+            onProgress(Math.round(data.progress || 0));
+          }
+        }
+      });
+      createWhisperTranscriber = transcriber;
+      return transcriber;
+    })();
+  }
+  return createWhisperLoadPromise;
+}
+
+async function resampleCreateAudioTo16k(audioSlice) {
+  const WHISPER_RATE = 16000;
+  const inRate = audioSlice.sampleRate;
+  const data = audioSlice.getChannelData(0);
+  if (inRate === WHISPER_RATE) return data;
+  const duration = data.length / inRate;
+  const offline = new OfflineAudioContext(1, Math.ceil(duration * WHISPER_RATE), WHISPER_RATE);
+  const buffer = offline.createBuffer(1, data.length, inRate);
+  buffer.copyToChannel(data, 0);
+  const source = offline.createBufferSource();
+  source.buffer = buffer;
+  source.connect(offline.destination);
+  source.start(0);
+  const rendered = await offline.startRendering();
+  return rendered.getChannelData(0);
+}
+
+function normalizeWhisperText(result) {
+  if (!result) return '';
+  if (typeof result === 'string') return result.trim();
+  if (typeof result.text === 'string') return result.text.trim();
+  if (Array.isArray(result.chunks)) {
+    return result.chunks.map((chunk) => chunk?.text || '').join(' ').trim();
+  }
+  return '';
+}
+
+async function transcribeCreateCaptions() {
+  if (state.create.busy) return;
+  if (!state.create.linesConfirmed || !state.create.lines.length) {
+    setCreateStatus(t('create.status.needConfirm'));
+    toast(t('create.status.needConfirm'));
+    return;
+  }
+
+  state.create.busy = true;
+  state.create.whisperBusy = true;
+  syncCreateActions();
+  setCreateStatus(t('create.whisper.loading'));
+  try {
+    const transcriber = await getCreateWhisperTranscriber((pct) => {
+      setCreateStatus(t('create.whisper.download', { pct }));
+    });
+    const fullAudio = await decodeCreateAudioBuffer();
+    const language = whisperLangCode();
+    const total = state.create.lines.length;
+
+    for (let index = 0; index < total; index += 1) {
+      const line = state.create.lines[index];
+      setCreateStatus(t('create.whisper.line', { n: index + 1, total }));
+      await wait(16);
+      const slice = sliceAudioBufferWindow(fullAudio, line.start, line.end);
+      const pcm = await resampleCreateAudioTo16k(slice);
+      if (pcm.length < 800) {
+        line.text = '';
+        continue;
+      }
+      const result = await transcriber(pcm, {
+        language,
+        task: 'transcribe',
+        return_timestamps: false
+      });
+      line.text = normalizeWhisperText(result);
+    }
+
+    state.create.zipBytes = null;
+    renderCreateLines();
+    setCreateStatus(t('create.whisper.done'));
+    toast(t('create.whisper.done'));
+  } catch (error) {
+    console.error('Whisper transcription failed:', error);
+    setCreateStatus(t('create.whisper.fail'));
+    toast(t('create.whisper.fail'));
+  } finally {
+    state.create.busy = false;
+    state.create.whisperBusy = false;
+    syncCreateActions();
+  }
 }
 
 function createVideoDuration() {
