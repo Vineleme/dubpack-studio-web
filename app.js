@@ -18,60 +18,6 @@ const WAVE_PREROLL_SEC = 3; // wait zone before first red (3-2-1 + white bar)
 const WAVE_POSTROLL_SEC = 3; // same width on the right so the speak window stays centered
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
-const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
-const EXPORT_WATERMARK_SRC = './assets/dubpack-logo-official.png';
-let exportWatermarkImage = null;
-let exportWatermarkLoad = null;
-let exportWatermarkStamp = null;
-
-function ensureExportWatermarkImage() {
-  if (exportWatermarkImage?.complete && exportWatermarkImage.naturalWidth) {
-    return Promise.resolve(exportWatermarkImage);
-  }
-  if (exportWatermarkLoad) return exportWatermarkLoad;
-  exportWatermarkLoad = new Promise((resolve) => {
-    const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => {
-      exportWatermarkImage = img;
-      exportWatermarkStamp = null;
-      resolve(img);
-    };
-    img.onerror = () => resolve(null);
-    img.src = EXPORT_WATERMARK_SRC;
-  });
-  return exportWatermarkLoad;
-}
-
-function getExportWatermarkStamp() {
-  const img = exportWatermarkImage;
-  if (!img?.complete || !img.naturalWidth) return null;
-  if (exportWatermarkStamp) return exportWatermarkStamp;
-  const srcW = img.naturalWidth;
-  const srcH = img.naturalHeight;
-  const crop = Math.min(srcW, Math.round(srcH * 0.56));
-  const sx = Math.max(0, (srcW - crop) / 2);
-  const sy = Math.max(0, Math.round(srcH * 0.03));
-  const px = 256;
-  const stamp = document.createElement('canvas');
-  stamp.width = px;
-  stamp.height = px;
-  const s = stamp.getContext('2d');
-  s.beginPath();
-  s.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2);
-  s.closePath();
-  s.clip();
-  s.drawImage(img, sx, sy, crop, crop, 0, 0, px, px);
-  const fade = s.createRadialGradient(px / 2, px / 2, px * 0.38, px / 2, px / 2, px / 2);
-  fade.addColorStop(0, 'rgba(0,0,0,1)');
-  fade.addColorStop(0.72, 'rgba(0,0,0,0.85)');
-  fade.addColorStop(1, 'rgba(0,0,0,0)');
-  s.globalCompositeOperation = 'destination-in';
-  s.fillStyle = fade;
-  s.fillRect(0, 0, px, px);
-  exportWatermarkStamp = stamp;
-  return stamp;
-}
 const PRO_MONTHLY_PRICE = 9.9;
 const PRO_MONTHLY_PRICE_USD = 2.99;
 const PRO_MONTHLY_CREDITS = 200;
@@ -6458,11 +6404,7 @@ function showFinalVideo(pack) {
     els.downloadMp4Btn.textContent = isMp4 ? t('dub.download.mp4') : t('dub.download.webm');
   }
   if (els.exportStatus && has) {
-    els.exportStatus.textContent = pack.watermarked
-      ? (isMp4
-        ? t('export.ready.watermark', { brand: EXPORT_WATERMARK_LABEL })
-        : t('export.ready.watermark.webm', { brand: EXPORT_WATERMARK_LABEL }))
-      : (isMp4 ? t('export.ready') : t('export.ready.webm'));
+    els.exportStatus.textContent = isMp4 ? t('export.ready') : t('export.ready.webm');
   } else if (els.exportStatus && !has) {
     els.exportStatus.textContent = t('dub.status.none');
   }
@@ -6518,13 +6460,6 @@ async function requestFinalMp4(layout) {
     toast('Já estou montando o MP4.');
     return;
   }
-  const watermarked = shouldWatermarkExport();
-  if (watermarked) {
-    await ensureExportWatermarkImage();
-    toast(getLang() === 'en'
-      ? `Free export includes a ${EXPORT_WATERMARK_LABEL} watermark. PRO removes it.`
-      : `Exportação grátis sai com marca d'água ${EXPORT_WATERMARK_LABEL}. PRO remove a marca.`);
-  }
   stopProjectPreview();
   abortCapture();
   state.exporting = true;
@@ -6549,7 +6484,7 @@ async function requestFinalMp4(layout) {
     if (pack.finalUrl) URL.revokeObjectURL(pack.finalUrl);
     pack.finalBlob = output;
     pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
-    pack.watermarked = watermarked;
+    pack.watermarked = false;
     pack.exportLayout = state.exportLayout;
     pack.exportVerticalPan = getPackVerticalPan(pack);
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
@@ -6557,17 +6492,9 @@ async function requestFinalMp4(layout) {
     scheduleSave();
     trackFunnel('export');
     const isMp4 = pack.finalExt === 'mp4';
-    toast(watermarked
-      ? (isMp4
-        ? (getLang() === 'en'
-          ? `Dub ready in MP4 with ${EXPORT_WATERMARK_LABEL} watermark.`
-          : `Dublagem pronta em MP4 com marca d'água ${EXPORT_WATERMARK_LABEL}.`)
-        : (getLang() === 'en'
-          ? `Dub ready in WebM with ${EXPORT_WATERMARK_LABEL} watermark.`
-          : `Dublagem pronta em WebM com marca d'água ${EXPORT_WATERMARK_LABEL}.`))
-      : (isMp4
-        ? (getLang() === 'en' ? 'Dub ready in MP4. Watch or download.' : 'Dublagem pronta em MP4. Assista ou baixe.')
-        : (getLang() === 'en' ? 'Dub ready in WebM. Watch or download.' : 'Dublagem pronta em WebM. Assista ou baixe.')));
+    toast(isMp4
+      ? (getLang() === 'en' ? 'Dub ready in MP4. Watch or download.' : 'Dublagem pronta em MP4. Assista ou baixe.')
+      : (getLang() === 'en' ? 'Dub ready in WebM. Watch or download.' : 'Dublagem pronta em WebM. Assista ou baixe.'));
     els.exportVideoBtn?.classList.remove('pulse-next');
     els.exportVideoBtnSide?.classList.remove('pulse-next');
     if (els.finalVideo) {
@@ -7080,10 +7007,6 @@ function coverDraw(ctx, media, width, height, panX = 0) {
   ctx.drawImage(media, dx, dy, dw, dh);
 }
 
-function shouldWatermarkExport() {
-  return !isOwner() && !isPro();
-}
-
 function canExportVideo() {
   return true;
 }
@@ -7123,34 +7046,8 @@ async function refundExportCredit() {
   if (response.ok && Number.isFinite(Number(data.credits))) setCredits(Number(data.credits));
 }
 
-function roundRectPath(ctx, x, y, w, h, r) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-}
-
-function drawExportWatermark(ctx, width, height) {
-  const stamp = getExportWatermarkStamp();
-  if (!stamp) {
-    void ensureExportWatermarkImage();
-    return;
-  }
-  const size = Math.max(52, Math.round(Math.min(width, height) * 0.17));
-  ctx.save();
-  ctx.globalAlpha = 0.2;
-  ctx.drawImage(stamp, (width - size) / 2, (height - size) / 2, size, size);
-  ctx.restore();
-}
-
 async function buildComposedVideoTrack(film) {
   const vertical = state.exportLayout === 'vertical';
-  const watermarked = shouldWatermarkExport();
-  if (watermarked) await ensureExportWatermarkImage();
   let width = 1280;
   let height = 720;
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -7182,7 +7079,6 @@ async function buildComposedVideoTrack(film) {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, width, height);
       coverDraw(ctx, source, width, height, panX);
-      if (watermarked) drawExportWatermark(ctx, width, height);
     }
     requestAnimationFrame(paint);
   };
@@ -7347,13 +7243,12 @@ async function composeDubbedVideo(pack, onProgress) {
       }
     }
 
-    const watermarked = shouldWatermarkExport();
-    const needsCompose = watermarked || state.exportLayout === 'vertical';
+    const needsCompose = state.exportLayout === 'vertical';
     const videoTrack = needsCompose
       ? (videoPipeline = await buildComposedVideoTrack(film)).track
       : film.getTrack();
     if (!videoTrack) throw new Error('Não deu para capturar o filme da cena.');
-    if (needsCompose) onProgress?.(24, state.exportLayout === 'vertical' ? 'Montando o formato 9:16' : 'Gravando a marca d\'água no vídeo');
+    if (needsCompose) onProgress?.(24, 'Montando o formato 9:16');
 
     const mixed = new MediaStream([
       videoTrack,
