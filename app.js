@@ -208,6 +208,7 @@ const state = {
   pendingCena: null,
   waveGen: 0,
   liveWave: null,
+  cdInserting: false,
   create: {
     videoFile: null,
     videoBytes: null,
@@ -4325,9 +4326,10 @@ function restoreEmptyMonitor() {
   if (els.clipPad) els.clipPad.textContent = '00';
   if (els.clipPadTotal) els.clipPadTotal.textContent = '0';
   if (els.tapeLamp) {
-    els.tapeLamp.textContent = 'No tape';
+    els.tapeLamp.textContent = 'No disc';
     els.tapeLamp.classList.remove('is-rec');
   }
+  syncCdTray(null);
   document.body.classList.remove('has-pack');
   document.querySelector('#studioIntro')?.classList.remove('is-compact');
 }
@@ -4674,6 +4676,91 @@ function packCover(pack) {
   return { type: 'empty' };
 }
 
+function fillCdDisc(disc, pack) {
+  disc.replaceChildren();
+  disc.classList.add('cd-disc');
+  const art = document.createElement('div');
+  art.className = 'cd-disc-art';
+  const cover = packCover(pack);
+  if (cover.type === 'img') {
+    const img = document.createElement('img');
+    img.src = cover.src;
+    img.alt = '';
+    art.append(img);
+  } else if (cover.type === 'video') {
+    const video = document.createElement('video');
+    video.src = cover.src;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    art.append(video);
+  } else {
+    art.classList.add('is-empty');
+    art.textContent = '🎙';
+  }
+  const hole = document.createElement('span');
+  hole.className = 'cd-disc-hole';
+  hole.setAttribute('aria-hidden', 'true');
+  disc.append(art, hole);
+  return disc;
+}
+
+function syncCdTray(pack) {
+  const deck = document.querySelector('#cdDeck');
+  const tray = document.querySelector('#cdTrayDisc');
+  const status = document.querySelector('#cdDeckStatus');
+  if (!deck || !tray) return;
+  deck.classList.toggle('is-loaded', Boolean(pack));
+  if (!pack) {
+    tray.hidden = true;
+    tray.replaceChildren();
+    if (status) status.textContent = t('studio.disc.empty');
+    return;
+  }
+  fillCdDisc(tray, pack);
+  tray.hidden = false;
+  if (status) status.textContent = t('studio.disc.loaded', { name: pack.name });
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+}
+
+function playCdInsert(pack) {
+  return new Promise((resolve) => {
+    const source = document.querySelector(`[data-pack-id="${pack.id}"] .cd-disc`);
+    const slot = document.querySelector('#cdSlot');
+    const deck = document.querySelector('#cdDeck');
+    if (!source || !slot || prefersReducedMotion()) {
+      syncCdTray(pack);
+      resolve();
+      return;
+    }
+    const from = source.getBoundingClientRect();
+    const to = slot.getBoundingClientRect();
+    const fly = source.cloneNode(true);
+    fly.classList.add('cd-fly');
+    fly.style.width = `${from.width}px`;
+    fly.style.height = `${from.height}px`;
+    fly.style.left = `${from.left}px`;
+    fly.style.top = `${from.top}px`;
+    document.body.append(fly);
+    deck?.classList.add('is-open');
+    requestAnimationFrame(() => {
+      const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+      const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+      const scale = Math.max(0.28, Math.min(0.55, (Math.min(to.height, 78) / from.height)));
+      fly.style.transform = `translate(${dx}px, ${dy}px) scale(${scale}) rotate(-18deg)`;
+    });
+    setTimeout(() => {
+      fly.remove();
+      deck?.classList.remove('is-open');
+      syncCdTray(pack);
+      resolve();
+    }, 720);
+  });
+}
+
 function renderPackSelect() {
   const sel = els.packSelect;
   if (!sel) return;
@@ -4703,7 +4790,8 @@ function renderPackGrid() {
     const recorded = pack.scenes.filter((scene) => pack.takes[scene.id]).length;
     const percent = pack.scenes.length ? Math.round((recorded / pack.scenes.length) * 100) : 0;
     const card = document.createElement('article');
-    card.className = `pack-card ${tones[index % 3]}${pack.id === state.activePackId ? ' active' : ''}`.trim();
+    card.className = `pack-card cd-pack ${tones[index % 3]}${pack.id === state.activePackId ? ' active' : ''}`.trim();
+    card.dataset.packId = pack.id;
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'pack-delete';
     deleteBtn.type = 'button';
@@ -4714,25 +4802,7 @@ function renderPackGrid() {
       event.stopPropagation();
       deletePack(pack.id);
     });
-    const preview = document.createElement('div');
-    preview.className = 'pack-preview';
-    const cover = packCover(pack);
-    if (cover.type === 'img') {
-      const img = document.createElement('img');
-      img.src = cover.src;
-      img.alt = '';
-      preview.append(img);
-    } else if (cover.type === 'video') {
-      const video = document.createElement('video');
-      video.src = cover.src;
-      video.muted = true;
-      video.playsInline = true;
-      video.preload = 'metadata';
-      preview.append(video);
-    } else {
-      preview.classList.add('is-empty');
-      preview.textContent = '🎙';
-    }
+    const disc = fillCdDisc(document.createElement('div'), pack);
     const title = document.createElement('h3');
     title.textContent = pack.name;
     const subtitle = document.createElement('p');
@@ -4745,13 +4815,13 @@ function renderPackGrid() {
     const button = document.createElement('button');
     button.className = 'primary wide';
     button.type = 'button';
-    button.textContent = recorded ? '▷ Continuar' : '▷ Começar';
+    button.textContent = recorded ? '▷ Continuar' : '▷ Inserir CD';
     button.addEventListener('click', (event) => {
       event.stopPropagation();
       openPack(pack.id);
     });
     card.addEventListener('click', () => openPack(pack.id));
-    card.append(deleteBtn, preview, title, subtitle, progress, button);
+    card.append(deleteBtn, disc, title, subtitle, progress, button);
     els.packGrid.append(card);
   });
   if (els.packRailNext) {
@@ -4759,20 +4829,40 @@ function renderPackGrid() {
   }
   renderActivity();
   updatePackDock();
+  syncCdTray(currentPack());
 }
 
 function openPack(id) {
   const pack = state.packs.find((item) => item.id === id);
-  if (pack && packIsExpired(pack)) {
+  if (!pack) return;
+  if (packIsExpired(pack)) {
     pruneExpiredPacks();
     toast('Este pack expirou depois de 2 dias. Importe o ZIP de novo.');
     return;
   }
-  state.activePackId = id;
-  state.activeIndex = 0;
-  renderPackGrid();
-  selectScene(0);
-  setTab('record');
+  if (state.cdInserting) return;
+  const alreadyOpen = state.activePackId === id && currentPack();
+  if (alreadyOpen) {
+    selectScene(state.activeIndex || 0);
+    setTab('record');
+    return;
+  }
+
+  const finish = () => {
+    state.activePackId = id;
+    state.activeIndex = 0;
+    renderPackGrid();
+    syncCdTray(pack);
+    selectScene(0);
+    setTab('record');
+  };
+
+  state.cdInserting = true;
+  playCdInsert(pack).then(() => {
+    finish();
+  }).finally(() => {
+    state.cdInserting = false;
+  });
 }
 
 function deletePack(id) {
