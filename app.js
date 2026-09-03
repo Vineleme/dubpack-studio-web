@@ -3560,7 +3560,6 @@ async function startTakeFlow() {
   if (els.recordingStatus) els.recordingStatus.textContent = 'Preparando';
 
   // Prefetch green guide waves during countdown so recording starts immersive.
-  const scene = currentScene();
   if (scene?.audioUrl) {
     void peaksFromUrl(scene.audioUrl).then((peaks) => {
       if (state.captureGen !== gen || state.recorder) return;
