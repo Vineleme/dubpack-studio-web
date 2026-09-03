@@ -6,6 +6,8 @@ const MAX_LINE_SECONDS = 600;
 const GUIDE_VOLUME = 0.08;
 const BED_VOLUME = 0.03;
 const BED_EXPORT = 0.06;
+const BACKING_EXPORT = 1;
+const ORIGINAL_LINE_EXPORT = 1;
 const BED_DUCK = 0.012;
 const BED_DUB_MUTE = 0.003;
 const TAKE_PEAK_TARGET = 0.62;
@@ -4625,7 +4627,9 @@ function timingMessage(scene, take) {
 
 function updateTimingDesk(scene, take) {
   if (!els.timingTakeBar && !els.waveEndLabel) return;
-  if (els.waveStartLabel) els.waveStartLabel.textContent = '0:00';
+  if (els.waveStartLabel) {
+    els.waveStartLabel.textContent = `${Math.max(0.1, Number(scene.duration) || 0).toFixed(1)}s`;
+  }
   if (els.waveEndLabel) els.waveEndLabel.textContent = formatClock(scene.duration);
   if (els.timingRefBar) els.timingRefBar.style.width = '100%';
   if (els.timingTakeBar) {
@@ -4651,7 +4655,7 @@ function updateTimingDesk(scene, take) {
   }
 }
 
-const WAVE_BINS = 168;
+const WAVE_BINS = 220;
 const wavePeakCache = new Map();
 
 function extractPeaks(buffer, bins = WAVE_BINS) {
@@ -4662,7 +4666,7 @@ function extractPeaks(buffer, bins = WAVE_BINS) {
     let max = 0;
     const start = i * size;
     const end = Math.min(data.length, start + size);
-    for (let j = start; j < end; j += 12) max = Math.max(max, Math.abs(data[j]));
+    for (let j = start; j < end; j += 8) max = Math.max(max, Math.abs(data[j]));
     peaks[i] = max;
   }
   return peaks;
@@ -4704,16 +4708,25 @@ async function peaksFromBlob(blob) {
   }
 }
 
-function drawWaveLayer(ctx, peaks, color, width, height, alpha = 1) {
-  if (!peaks?.length) return;
+function drawWaveLayerTimed(ctx, peaks, color, width, height, {
+  sceneDuration,
+  audioDuration,
+  startOffset = 0,
+  alpha = 1
+} = {}) {
+  if (!peaks?.length || !(sceneDuration > 0)) return;
   const mid = height / 2;
-  const gap = width / peaks.length;
+  const duration = Math.max(0.05, Number(audioDuration) || sceneDuration);
+  const startX = (Math.max(0, Number(startOffset) || 0) / sceneDuration) * width;
+  const spanX = Math.max(2, (duration / sceneDuration) * width);
+  const gap = spanX / peaks.length;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
   peaks.forEach((peak, index) => {
     const amp = Math.max(1.5, peak * (mid - 4));
-    const x = index * gap;
+    const x = startX + (index * gap);
+    if (x > width) return;
     ctx.fillRect(x, mid - amp, Math.max(1.2, gap * 0.72), amp * 2);
   });
   ctx.restore();
@@ -4735,19 +4748,44 @@ async function paintOverlapWave(scene, take) {
   const gen = ++state.waveGen;
   const { width, height } = sizeWaveCanvas(canvas);
   const ctx = canvas.getContext('2d');
+  const sceneDuration = Math.max(0.2, Number(scene?.duration) || 1);
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
   for (let y = 12; y < height; y += 12) ctx.fillRect(0, y, width, 1);
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
   ctx.fillRect(0, height / 2, width, 1);
+  // Vertical time marks so you can follow left → right while speaking.
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  const marks = 8;
+  for (let i = 1; i < marks; i += 1) {
+    const x = (width * i) / marks;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
   const refPeaks = scene?.audioUrl ? await peaksFromUrl(scene.audioUrl) : [];
   if (gen !== state.waveGen) return;
-  drawWaveLayer(ctx, refPeaks, '#f36aa8', width, height, 0.92);
+  drawWaveLayerTimed(ctx, refPeaks, '#f36aa8', width, height, {
+    sceneDuration,
+    audioDuration: sceneDuration,
+    startOffset: 0,
+    alpha: 0.92
+  });
   if (take?.blob || take?.url) {
     const takePeaks = take.peaks || await (take.blob ? peaksFromBlob(take.blob) : peaksFromUrl(take.url));
     if (takePeaks?.length) take.peaks = takePeaks;
     if (gen !== state.waveGen) return;
-    drawWaveLayer(ctx, takePeaks, '#5bff3a', width, height, 0.78);
+    const takeDuration = Number(take.duration) > 0.05
+      ? Number(take.duration)
+      : (Number(take.voiced) > 0.05 ? Number(take.voiced) : sceneDuration);
+    drawWaveLayerTimed(ctx, takePeaks, '#5bff3a', width, height, {
+      sceneDuration,
+      audioDuration: takeDuration,
+      startOffset: Math.max(0, Number(take.onset) || 0),
+      alpha: 0.82
+    });
   }
 }
 
@@ -6183,6 +6221,7 @@ async function composeDubbedVideo(pack, onProgress) {
 
     const takeWindows = pack.scenes.map((raw) => {
       const scene = decorateScene(raw);
+      if (!sceneIsAssigned(pack, scene)) return null;
       const take = pack.takes[scene.id];
       if (!take) return null;
       return {
@@ -6190,6 +6229,19 @@ async function composeDubbedVideo(pack, onProgress) {
         duration: Number(scene.duration) || 2,
         take,
         scene
+      };
+    }).filter(Boolean);
+
+    const keepOriginalWindows = pack.scenes.map((raw) => {
+      const scene = decorateScene(raw);
+      if (!scene?.audioUrl) return null;
+      // Assigned lines are replaced by the user's take; everyone else keeps the original voice.
+      if (sceneIsAssigned(pack, scene)) return null;
+      return {
+        offset: Number(scene.videoOffset) || 0,
+        duration: Number(scene.duration) || 2,
+        scene,
+        url: scene.audioUrl
       };
     }).filter(Boolean);
 
@@ -6207,7 +6259,7 @@ async function composeDubbedVideo(pack, onProgress) {
           useSceneBacking ? exportLen : exportEndTime
         );
         playBacking = (t0) => {
-          const node = startBufferAt(audioCtx, dest, backingBuf, t0, BED_EXPORT);
+          const node = startBufferAt(audioCtx, dest, backingBuf, t0, BACKING_EXPORT);
           stops.push(node.stop);
           return node.gain;
         };
@@ -6219,7 +6271,7 @@ async function composeDubbedVideo(pack, onProgress) {
     const takeBuffers = [];
     for (let index = 0; index < takeWindows.length; index += 1) {
       const win = takeWindows[index];
-      setExportProgress(20 + ((index + 1) / Math.max(1, takeWindows.length)) * 8, 'Preparando as vozes');
+      setExportProgress(20 + ((index + 1) / Math.max(1, takeWindows.length)) * 6, 'Preparando as vozes');
       try {
         takeBuffers.push({
           ...win,
@@ -6233,6 +6285,22 @@ async function composeDubbedVideo(pack, onProgress) {
       throw new Error(getLang() === 'en'
         ? 'Could not read your recorded takes. Re-record the lines and try again.'
         : 'Não consegui ler as gravações da dublagem. Grave as falas de novo e tente finalizar outra vez.');
+    }
+
+    const originalBuffers = [];
+    if (playBacking && keepOriginalWindows.length) {
+      for (let index = 0; index < keepOriginalWindows.length; index += 1) {
+        const win = keepOriginalWindows[index];
+        setExportProgress(26 + ((index + 1) / Math.max(1, keepOriginalWindows.length)) * 4, 'Preparando as vozes');
+        try {
+          originalBuffers.push({
+            ...win,
+            buffer: await decodeAudioFrom(audioCtx, null, win.url)
+          });
+        } catch (error) {
+          console.warn('Falha ao decodificar voz original', win.scene?.id, error);
+        }
+      }
     }
 
     if (!playBacking) {
@@ -6302,6 +6370,15 @@ async function composeDubbedVideo(pack, onProgress) {
         win.buffer,
         t0 + Math.max(0, win.offset - exportStart),
         gainForTake(win.buffer)
+      ).stop);
+    });
+    originalBuffers.forEach((win) => {
+      stops.push(startBufferAt(
+        audioCtx,
+        dest,
+        win.buffer,
+        t0 + Math.max(0, win.offset - exportStart),
+        ORIGINAL_LINE_EXPORT
       ).stop);
     });
 
