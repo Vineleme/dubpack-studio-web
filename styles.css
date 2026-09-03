@@ -1125,8 +1125,8 @@ body.needs-auth .dashboard {
   z-index: 90;
   pointer-events: none;
   margin: 0;
-  transition: transform 0.55s cubic-bezier(.2,.75,.15,1), opacity 0.12s linear;
-  will-change: transform;
+  transition: transform 0.52s cubic-bezier(.2,.75,.15,1);
+  will-change: transform, clip-path;
   box-shadow:
     0 0 0 2px rgba(18,18,24,0.92),
     0 18px 40px rgba(0,0,0,0.55),
@@ -1160,7 +1160,7 @@ body.needs-auth .dashboard {
   background: #3a3a42;
   box-shadow: inset 0 0 4px #000;
 }
-.cd-deck.is-open .cd-deck-led,
+.cd-deck.is-sucking .cd-deck-led,
 .cd-deck.is-loaded .cd-deck-led {
   background: #5bff3a;
   box-shadow: 0 0 10px #5bff3a;
@@ -1184,71 +1184,56 @@ body.needs-auth .dashboard {
 }
 .cd-drive {
   grid-column: 1 / -1;
-  position: relative;
-  height: 22px;
-  overflow: hidden;
-  border-radius: 5px;
-  background: #050508;
-  border: 1px solid rgba(0,0,0,0.7);
-  box-shadow:
-    inset 0 10px 14px rgba(0,0,0,0.7),
-    0 1px 0 rgba(255,255,255,0.12);
-  transition: height 0.58s cubic-bezier(.22,.7,.18,1);
-}
-.cd-deck.is-open .cd-drive {
-  height: 168px;
-  box-shadow:
-    inset 0 10px 14px rgba(0,0,0,0.7),
-    0 0 18px rgba(91,255,58,0.16);
+  display: grid;
+  place-items: center;
+  padding-top: 4px;
 }
 .cd-slot {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 22px;
-  z-index: 2;
-  pointer-events: none;
+  position: relative;
+  width: min(248px, 78%);
+  height: 18px;
+  border-radius: 3px;
+  background: #050508;
+  border: 1px solid rgba(0,0,0,0.75);
+  box-shadow:
+    inset 0 8px 10px rgba(0,0,0,0.72),
+    0 1px 0 rgba(255,255,255,0.14);
+  overflow: hidden;
+  perspective: 120px;
 }
 .cd-slot-lip {
   position: absolute;
-  left: 6%;
-  right: 6%;
+  left: 8%;
+  right: 8%;
   top: 0;
-  height: 6px;
-  background: linear-gradient(180deg, #7a7a84, #2a2a32);
-  box-shadow: 0 6px 10px rgba(0,0,0,0.45);
+  height: 5px;
+  background: linear-gradient(180deg, #8a8a94, #2e2e36);
+  z-index: 2;
 }
-.cd-tray {
+.cd-slot-door {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  top: 26px;
-  height: 132px;
-  display: grid;
-  place-items: center;
-  border-radius: 6px;
-  background:
-    linear-gradient(180deg, #4a4a54, #1c1c24 55%, #101016);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.16);
+  left: 10%;
+  right: 10%;
+  bottom: 0;
+  height: 7px;
+  transform-origin: top center;
+  background: linear-gradient(180deg, #5a5a64, #1a1a20);
+  border-radius: 0 0 2px 2px;
+  transition: transform 0.18s ease;
+  z-index: 3;
 }
-.cd-tray::before {
-  content: '';
+.cd-deck.is-sucking .cd-slot-door {
+  transform: rotateX(-75deg);
+}
+.cd-slot-edge {
   position: absolute;
-  width: 118px;
-  height: 118px;
-  border-radius: 50%;
-  border: 2px dashed rgba(255,255,255,0.12);
-  box-shadow: inset 0 0 18px rgba(0,0,0,0.45);
-}
-.cd-tray-disc.cd-disc {
-  position: relative;
-  left: auto;
-  top: auto;
-  width: 112px;
-  height: 112px;
-  margin: 0;
-  z-index: 1;
+  left: 12%;
+  right: 12%;
+  top: 7px;
+  height: 4px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #9ad4ff, #e8c4ff, #9dffc8, #9ad4ff);
+  box-shadow: 0 0 8px rgba(154, 212, 255, 0.45);
 }
 .cd-deck-hint {
   font-size: 10px;

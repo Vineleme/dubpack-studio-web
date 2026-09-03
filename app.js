@@ -4707,19 +4707,17 @@ function fillCdDisc(disc, pack) {
 
 function syncCdTray(pack) {
   const deck = document.querySelector('#cdDeck');
-  const tray = document.querySelector('#cdTrayDisc');
+  const edge = document.querySelector('#cdTrayDisc');
   const status = document.querySelector('#cdDeckStatus');
-  if (!deck || !tray) return;
+  if (!deck) return;
   deck.classList.toggle('is-loaded', Boolean(pack));
-  if (!pack) {
-    tray.hidden = true;
-    tray.replaceChildren();
-    if (status) status.textContent = t('studio.disc.empty');
-    return;
+  deck.classList.remove('is-open', 'is-sucking');
+  if (edge) edge.hidden = !pack;
+  if (status) {
+    status.textContent = pack
+      ? t('studio.disc.loaded', { name: pack.name })
+      : t('studio.disc.empty');
   }
-  fillCdDisc(tray, pack);
-  tray.hidden = false;
-  if (status) status.textContent = t('studio.disc.loaded', { name: pack.name });
 }
 
 function prefersReducedMotion() {
@@ -4731,59 +4729,68 @@ function playCdInsert(pack) {
     const card = document.querySelector(`[data-pack-id="${pack.id}"]`);
     const source = card?.querySelector('.cd-disc');
     const deck = document.querySelector('#cdDeck');
-    const tray = document.querySelector('#cdTray');
-    const trayDisc = document.querySelector('#cdTrayDisc');
-    if (!source || !deck || !tray || prefersReducedMotion()) {
+    const slot = document.querySelector('#cdSlot');
+    if (!source || !deck || !slot || prefersReducedMotion()) {
       syncCdTray(pack);
       resolve();
       return;
     }
 
+    let fly = null;
+    let suckRaf = 0;
     const finish = () => {
-      fly.remove();
+      if (suckRaf) cancelAnimationFrame(suckRaf);
+      fly?.remove();
       card.classList.remove('is-giving');
-      deck.classList.remove('is-open');
+      deck.classList.remove('is-sucking');
       syncCdTray(pack);
       resolve();
     };
 
     deck.scrollIntoView({ block: 'center', behavior: 'smooth' });
     card.classList.add('is-giving');
-    if (trayDisc) {
-      trayDisc.hidden = true;
-      trayDisc.replaceChildren();
-    }
+    deck.classList.remove('is-loaded');
+    const edge = document.querySelector('#cdTrayDisc');
+    if (edge) edge.hidden = true;
 
     const from = source.getBoundingClientRect();
-    const fly = source.cloneNode(true);
+    fly = source.cloneNode(true);
     fly.classList.add('cd-fly');
     fly.style.width = `${from.width}px`;
     fly.style.height = `${from.height}px`;
     fly.style.left = `${from.left}px`;
     fly.style.top = `${from.top}px`;
     document.body.append(fly);
-    deck.classList.add('is-open');
 
-    const land = () => {
-      const to = tray.getBoundingClientRect();
-      const target = 112;
-      const scale = target / Math.max(1, from.width);
-      const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
-      const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
-      fly.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-    };
+    const slotRect = () => slot.getBoundingClientRect();
+    const mouth = slotRect();
+    const target = Math.max(120, Math.min(mouth.width - 8, 188));
+    const scale = target / Math.max(1, from.width);
+    const discH = from.height * scale;
+    const dx = (mouth.left + mouth.width / 2) - (from.left + from.width / 2);
+    const dyApproach = (mouth.bottom + discH / 2 - 8) - (from.top + from.height / 2);
+
+    requestAnimationFrame(() => {
+      fly.style.transform = `translate(${dx}px, ${dyApproach}px) scale(${scale})`;
+    });
 
     window.setTimeout(() => {
-      land();
-      window.setTimeout(() => {
-        syncCdTray(pack);
-        fly.style.opacity = '0';
-        window.setTimeout(() => {
-          deck.classList.remove('is-open');
-          window.setTimeout(finish, 620);
-        }, 70);
-      }, 560);
-    }, 580);
+      deck.classList.add('is-sucking');
+      const dySuck = dyApproach - discH * 0.98;
+      fly.style.transition = 'transform 0.72s cubic-bezier(.45,0,.15,1)';
+      fly.style.transform = `translate(${dx}px, ${dySuck}px) scale(${scale})`;
+
+      const tick = () => {
+        if (!fly.isConnected) return;
+        const disc = fly.getBoundingClientRect();
+        const door = slotRect();
+        const cut = Math.max(0, door.top - disc.top + 1);
+        fly.style.clipPath = `inset(${cut}px 0 0 0)`;
+        suckRaf = requestAnimationFrame(tick);
+      };
+      suckRaf = requestAnimationFrame(tick);
+      window.setTimeout(finish, 760);
+    }, 540);
   });
 }
 
