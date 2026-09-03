@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=174" />
+    <link rel="stylesheet" href="./styles.css?v=175" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -388,44 +388,8 @@
             </label>
 
             <div class="create-video-block">
-              <div class="create-scene-box">
-                <div class="create-scene-head">
-                  <strong data-i18n="create.scene.title">Cena do pack</strong>
-                  <span id="createSceneLength" class="create-scene-length">0:00 / 1:20</span>
-                </div>
-                <p class="hint-copy" data-i18n="create.scene.hint">Arraste a faixa no vídeo (máx. 1:20). Depois rode Detectar falas só nesse trecho.</p>
-                <div class="create-times">
-                  <label class="create-field">
-                    <span data-i18n="create.scene.start">Início da cena (s)</span>
-                    <input id="createSceneStart" type="number" min="0" step="0.01" value="0" />
-                  </label>
-                  <label class="create-field">
-                    <span data-i18n="create.scene.end">Fim da cena (s)</span>
-                    <input id="createSceneEnd" type="number" min="0" step="0.01" value="80" />
-                  </label>
-                </div>
-                <div class="create-video-actions">
-                  <button id="createSceneFromPlayheadBtn" class="secondary" type="button" data-i18n="create.scene.fromPlayhead" disabled>1:20 a partir daqui</button>
-                  <button id="createMarkSceneStartBtn" class="secondary" type="button" data-i18n="create.scene.markStart" disabled>Marcar início da cena</button>
-                  <button id="createMarkSceneEndBtn" class="secondary" type="button" data-i18n="create.scene.markEnd" disabled>Marcar fim da cena</button>
-                </div>
-              </div>
-
               <div class="create-player-wrap">
                 <video id="createVideo" class="create-video" controls playsinline preload="metadata"></video>
-                <div id="createSceneScrub" class="create-scrub create-scrub-on-player" role="group" aria-label="Selecionar trecho da cena">
-                  <div class="create-scrub-track" id="createScrubTrack">
-                    <div id="createScrubSelection" class="create-scrub-selection"></div>
-                    <div id="createScrubPlayhead" class="create-scrub-playhead"></div>
-                    <button type="button" id="createScrubStart" class="create-scrub-handle is-start" aria-label="Início da cena"></button>
-                    <button type="button" id="createScrubEnd" class="create-scrub-handle is-end" aria-label="Fim da cena"></button>
-                  </div>
-                  <div class="create-scrub-labels">
-                    <span id="createScrubStartLabel">0:00</span>
-                    <span data-i18n="create.scene.dragHint">Arraste aqui pra escolher a cena</span>
-                    <span id="createScrubEndLabel">1:20</span>
-                  </div>
-                </div>
               </div>
               <p id="createVideoMeta" class="hint-copy" data-i18n="create.video.empty">Nenhum vídeo carregado.</p>
 
@@ -434,7 +398,7 @@
                 <button id="createMarkStartBtn" class="secondary" type="button" data-i18n="create.markStart" disabled>Marcar início da fala</button>
                 <button id="createMarkEndBtn" class="secondary" type="button" data-i18n="create.markEnd" disabled>Marcar fim da fala</button>
               </div>
-              <p class="hint-copy" data-i18n="create.detect.hint">Detectar falas junta o diálogo e parte trechos longos (~8s).</p>
+              <p class="hint-copy" data-i18n="create.detect.hint">Detectar falas acha o trecho com diálogo (até 1:20), junta as falas e parte trechos longos (~8s).</p>
             </div>
 
             <div id="createLineForm" class="create-line-form">
@@ -710,6 +674,6 @@
     <script src="./i18n.js?v=169"></script>
     <script src="./payments.js?v=169"></script>
     <script src="./ads.js?v=169"></script>
-    <script src="./app.js?v=174"></script>
+    <script src="./app.js?v=175"></script>
   </body>
 </html>
