@@ -186,41 +186,56 @@ body {
   box-shadow: inset 0 0 40px rgba(0,0,0,0.85);
   overflow: hidden;
 }
+.cv-monitor-bay {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  align-content: center;
+}
 .monitor-disc-slot {
-  position: absolute;
-  left: 50%;
-  bottom: 6px;
-  z-index: 8;
-  width: min(220px, 46%);
-  height: 12px;
-  transform: translateX(-50%);
-  border-radius: 2px;
+  position: relative;
+  width: 100%;
+  height: 14px;
+  border-radius: 3px;
   background: #030305;
-  border: 1px solid rgba(0,0,0,0.8);
+  border: 1px solid rgba(0,0,0,0.85);
   box-shadow:
-    inset 0 4px 8px rgba(0,0,0,0.8),
-    0 0 0 1px rgba(255,255,255,0.08);
+    inset 0 5px 8px rgba(0,0,0,0.85),
+    0 1px 0 rgba(255,255,255,0.1);
+  overflow: hidden;
+  perspective: 160px;
   pointer-events: none;
 }
 .monitor-disc-door {
   position: absolute;
-  left: 12%;
-  right: 12%;
+  left: 10%;
+  right: 10%;
   bottom: 0;
-  height: 5px;
+  height: 6px;
   display: block;
   transform-origin: top center;
-  background: linear-gradient(180deg, #6a6a74, #1c1c22);
-  transition: transform 0.18s ease;
+  background: linear-gradient(180deg, #7a7a84, #1c1c22);
+  transition: transform 0.28s ease;
+  z-index: 2;
 }
-.cv-monitor.is-sucking .monitor-disc-door,
-.cv-monitor.is-loaded .monitor-disc-slot {
-  box-shadow:
-    inset 0 4px 8px rgba(0,0,0,0.8),
-    0 0 10px rgba(91,255,58,0.25);
+.monitor-disc-edge {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 5px;
+  height: 3px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #9ad4ff, #e8c4ff, #9dffc8, #9ad4ff);
+  box-shadow: 0 0 8px rgba(154, 212, 255, 0.4);
 }
 .cv-monitor.is-sucking .monitor-disc-door {
-  transform: rotateX(-70deg);
+  transform: rotateX(-78deg);
+}
+.cv-monitor.is-loaded .monitor-disc-slot,
+.cv-monitor.is-sucking .monitor-disc-slot {
+  box-shadow:
+    inset 0 5px 8px rgba(0,0,0,0.85),
+    0 0 10px rgba(91,255,58,0.22);
 }
 .scene-ogv-host {
   position: absolute;
@@ -1172,121 +1187,6 @@ body.needs-auth .dashboard {
 }
 .cd-pack.is-giving .cd-disc {
   opacity: 0;
-}
-.cd-deck {
-  margin: 10px 0 4px;
-  padding: 0 2px;
-}
-.cd-deck-face {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 8px 12px;
-  align-items: center;
-  padding: 10px 14px 12px;
-  border-radius: 12px;
-  background:
-    linear-gradient(180deg, #3a3a44 0%, #1c1c24 42%, #121218 100%);
-  border: 1px solid rgba(255,255,255,0.14);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.18),
-    0 10px 28px rgba(0,0,0,0.35);
-}
-.cd-deck-led {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #3a3a42;
-  box-shadow: inset 0 0 4px #000;
-}
-.cd-deck.is-sucking .cd-deck-led,
-.cd-deck.is-loaded .cd-deck-led {
-  background: #5bff3a;
-  box-shadow: 0 0 10px #5bff3a;
-}
-.cd-deck-copy {
-  display: grid;
-  min-width: 0;
-}
-.cd-deck-copy small {
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #8f8ca8;
-}
-.cd-deck-copy strong {
-  font-size: 12px;
-  color: #e8e6f4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cd-drive {
-  grid-column: 1 / -1;
-  display: grid;
-  place-items: center;
-  padding-top: 4px;
-  position: relative;
-}
-.cd-slot {
-  position: relative;
-  width: min(248px, 78%);
-  height: 18px;
-  border-radius: 3px;
-  background: #050508;
-  border: 1px solid rgba(0,0,0,0.75);
-  box-shadow:
-    inset 0 8px 10px rgba(0,0,0,0.72),
-    0 1px 0 rgba(255,255,255,0.14);
-  overflow: hidden;
-  perspective: 160px;
-}
-.cd-slot-lip {
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  top: 0;
-  height: 5px;
-  background: linear-gradient(180deg, #8a8a94, #2e2e36);
-  z-index: 2;
-}
-.cd-slot-door {
-  position: absolute;
-  left: 10%;
-  right: 10%;
-  bottom: 0;
-  height: 7px;
-  transform-origin: top center;
-  background: linear-gradient(180deg, #5a5a64, #1a1a20);
-  border-radius: 0 0 2px 2px;
-  transition: transform 0.18s ease;
-  z-index: 3;
-}
-.cd-deck.is-sucking .cd-slot-door {
-  transform: rotateX(-75deg);
-}
-.cd-slot-edge {
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  top: 7px;
-  height: 4px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, #9ad4ff, #e8c4ff, #9dffc8, #9ad4ff);
-  box-shadow: 0 0 8px rgba(154, 212, 255, 0.45);
-}
-.cd-deck-hint {
-  font-size: 10px;
-  color: #6a6882;
-  font-style: normal;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-@media (max-width: 860px) {
-  .cd-deck-face {
-    grid-template-columns: auto 1fr;
-  }
-  .cd-deck-hint { justify-self: end; }
 }
 
 .progress-line {

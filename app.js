@@ -4706,24 +4706,13 @@ function fillCdDisc(disc, pack) {
 }
 
 function syncCdTray(pack) {
-  const deck = document.querySelector('#cdDeck');
   const monitor = document.querySelector('.cv-monitor');
   const edge = document.querySelector('#cdTrayDisc');
-  const status = document.querySelector('#cdDeckStatus');
-  if (deck) {
-    deck.classList.toggle('is-loaded', Boolean(pack));
-    deck.classList.remove('is-open', 'is-sucking');
-  }
   if (monitor) {
     monitor.classList.toggle('is-loaded', Boolean(pack));
     monitor.classList.remove('is-sucking');
   }
   if (edge) edge.hidden = !pack;
-  if (status) {
-    status.textContent = pack
-      ? t('studio.disc.loaded', { name: pack.name })
-      : t('studio.disc.empty');
-  }
 }
 
 function prefersReducedMotion() {
@@ -4735,9 +4724,9 @@ function playCdInsert(pack) {
     const card = document.querySelector(`[data-pack-id="${pack.id}"]`);
     const source = card?.querySelector('.cd-disc');
     const monitor = document.querySelector('.cv-monitor');
-    const screen = document.querySelector('#monitorScreen') || document.querySelector('.cv-bezel .video-shell');
-    const slot = document.querySelector('#monitorDiscSlot') || screen;
-    if (!source || !screen || prefersReducedMotion()) {
+    const bezel = document.querySelector('.cv-bezel') || monitor;
+    const slot = document.querySelector('#monitorDiscSlot');
+    if (!source || !slot || !bezel || prefersReducedMotion()) {
       syncCdTray(pack);
       resolve();
       return;
@@ -4769,22 +4758,24 @@ function playCdInsert(pack) {
     document.body.append(fly);
 
     const doorRect = () => slot.getBoundingClientRect();
-    const screenRect = () => screen.getBoundingClientRect();
     const mouth = doorRect();
-    const target = Math.max(126, Math.min(mouth.width - 4, 188));
+    const target = Math.max(120, Math.min(mouth.width - 8, 176));
     const scale = target / Math.max(1, from.width);
     const discH = from.height * scale;
     const dx = (mouth.left + mouth.width / 2) - (from.left + from.width / 2);
-    const dyWait = (mouth.bottom - 4 + discH / 2) - (from.top + from.height / 2);
-    const dySuck = (screenRect().top - discH / 2 - 8) - (from.top + from.height / 2);
+    // Wait just under the chassis slot (below the screen, in the monitor body).
+    const dyWait = (mouth.bottom - 2 + discH / 2) - (from.top + from.height / 2);
+    // Suck upward into the monitor chassis — not into the video screen.
+    const dySuck = dyWait - discH - mouth.height - 10;
 
     requestAnimationFrame(() => {
+      fly.style.transition = 'transform 0.72s cubic-bezier(.22,.7,.18,1)';
       fly.style.transform = `translate(${dx}px, ${dyWait}px) scale(${scale})`;
     });
 
     window.setTimeout(() => {
       monitor?.classList.add('is-sucking');
-      fly.style.transition = 'transform 0.9s cubic-bezier(.55,0,.1,1)';
+      fly.style.transition = 'transform 1.35s cubic-bezier(.45,.02,.12,1)';
       fly.style.transform = `translate(${dx}px, ${dySuck}px) scale(${scale})`;
 
       const tick = () => {
@@ -4796,8 +4787,8 @@ function playCdInsert(pack) {
         suckRaf = requestAnimationFrame(tick);
       };
       suckRaf = requestAnimationFrame(tick);
-      window.setTimeout(finish, 960);
-    }, 520);
+      window.setTimeout(finish, 1480);
+    }, 780);
   });
 }
 

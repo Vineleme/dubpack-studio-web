@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=187" />
+    <link rel="stylesheet" href="./styles.css?v=188" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -237,13 +237,16 @@
                     <span id="frameCharacter" class="cv-char-chip">Personagem</span>
                     <p id="frameSubtitle">A legenda aparece aqui.</p>
                   </div>
-                  <span id="monitorDiscSlot" class="monitor-disc-slot" aria-hidden="true">
-                    <i class="monitor-disc-door"></i>
-                  </span>
                 </div>
                 <div class="cv-monitor-meta">
                   <span>Frame hold <b id="elapsedLabel">00:00</b></span>
-                  <i class="cv-progress"><b id="videoProgress"></b></i>
+                  <div class="cv-monitor-bay">
+                    <i class="cv-progress"><b id="videoProgress"></b></i>
+                    <div id="monitorDiscSlot" class="monitor-disc-slot" aria-hidden="true">
+                      <i class="monitor-disc-door"></i>
+                      <span id="cdTrayDisc" class="monitor-disc-edge" hidden></span>
+                    </div>
+                  </div>
                   <span>Master <b id="durationLabel">00:00</b></span>
                   <span id="tapeLamp" class="cv-lamp">No tape</span>
                 </div>
@@ -325,24 +328,6 @@
               </div>
             </div>
           </aside>
-        </div>
-
-        <div id="cdDeck" class="cd-deck" aria-hidden="true">
-          <div class="cd-deck-face">
-            <span class="cd-deck-led" aria-hidden="true"></span>
-            <div class="cd-deck-copy">
-              <small data-i18n="studio.disc.brand">DubPack Disc · DP-G4</small>
-              <strong id="cdDeckStatus" data-i18n="studio.disc.empty">SEM DISCO</strong>
-            </div>
-            <em class="cd-deck-hint" data-i18n="studio.disc.hint">Insira um CD da prateleira</em>
-            <div class="cd-drive">
-              <div id="cdSlot" class="cd-slot">
-                <span class="cd-slot-door" aria-hidden="true"></span>
-                <span class="cd-slot-lip" aria-hidden="true"></span>
-                <span id="cdTrayDisc" class="cd-slot-edge" hidden></span>
-              </div>
-            </div>
-          </div>
         </div>
 
         <section id="packsTab" class="tab-view active cv-packs">
@@ -757,6 +742,6 @@
     <script src="./i18n.js?v=182"></script>
     <script src="./payments.js?v=169"></script>
     <script src="./ads.js?v=169"></script>
-    <script src="./app.js?v=187"></script>
+    <script src="./app.js?v=188"></script>
   </body>
 </html>
