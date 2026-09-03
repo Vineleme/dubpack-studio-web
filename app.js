@@ -232,7 +232,7 @@ const state = {
 let createWhisperTranscriber = null;
 let createWhisperLoadPromise = null;
 const CREATE_WHISPER_MODEL = 'Xenova/whisper-base';
-const CREATE_WHISPER_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+const CREATE_WHISPER_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm';
 
 const els = {
   packInput: document.querySelector('#packInput'),
@@ -1315,17 +1315,25 @@ async function getCreateWhisperTranscriber(onProgress) {
       const { pipeline, env } = await import(/* webpackIgnore: true */ CREATE_WHISPER_CDN);
       env.allowLocalModels = false;
       env.useBrowserCache = true;
+      // Avoid SharedArrayBuffer / multi-thread crashes on static hosts.
+      if (env.backends?.onnx?.wasm) {
+        env.backends.onnx.wasm.numThreads = 1;
+      }
       const transcriber = await pipeline('automatic-speech-recognition', CREATE_WHISPER_MODEL, {
         progress_callback: (data) => {
           if (!onProgress) return;
           if (data.status === 'progress' || data.status === 'download') {
-            onProgress(Math.round(data.progress || 0));
+            onProgress(Math.round(Number(data.progress) || 0));
           }
         }
       });
       createWhisperTranscriber = transcriber;
       return transcriber;
-    })();
+    })().catch((error) => {
+      createWhisperLoadPromise = null;
+      createWhisperTranscriber = null;
+      throw error;
+    });
   }
   return createWhisperLoadPromise;
 }
@@ -1333,10 +1341,10 @@ async function getCreateWhisperTranscriber(onProgress) {
 async function resampleCreateAudioTo16k(audioSlice) {
   const WHISPER_RATE = 16000;
   const inRate = audioSlice.sampleRate;
-  const data = audioSlice.getChannelData(0);
+  const data = new Float32Array(audioSlice.getChannelData(0));
   if (inRate === WHISPER_RATE) return data;
-  const duration = data.length / inRate;
-  const offline = new OfflineAudioContext(1, Math.ceil(duration * WHISPER_RATE), WHISPER_RATE);
+  const duration = Math.max(0.05, data.length / inRate);
+  const offline = new OfflineAudioContext(1, Math.max(1, Math.ceil(duration * WHISPER_RATE)), WHISPER_RATE);
   const buffer = offline.createBuffer(1, data.length, inRate);
   buffer.copyToChannel(data, 0);
   const source = offline.createBufferSource();
@@ -1344,7 +1352,7 @@ async function resampleCreateAudioTo16k(audioSlice) {
   source.connect(offline.destination);
   source.start(0);
   const rendered = await offline.startRendering();
-  return rendered.getChannelData(0);
+  return new Float32Array(rendered.getChannelData(0));
 }
 
 function normalizeWhisperText(result) {
@@ -1355,6 +1363,31 @@ function normalizeWhisperText(result) {
     return result.chunks.map((chunk) => chunk?.text || '').join(' ').trim();
   }
   return '';
+}
+
+/** Decode audio for Whisper; vocals stems are scene-relative, so return time offset. */
+async function decodeCreateAudioForWhisper() {
+  const sceneStart = Number(state.create.sceneStart) || 0;
+  const sceneEnd = Number(state.create.sceneEnd) || 0;
+  const sceneLen = Math.max(0.2, sceneEnd - sceneStart);
+
+  if (state.create.vocalsBytes?.length) {
+    try {
+      const buffer = await decodeCreateAudioBuffer();
+      const looksLikeSceneStem = Math.abs(Number(buffer.duration) - sceneLen) < 2.5;
+      return {
+        buffer,
+        offsetSec: looksLikeSceneStem ? sceneStart : 0
+      };
+    } catch (error) {
+      console.warn('Whisper vocals decode failed, using video audio', error);
+    }
+  }
+
+  return {
+    buffer: await decodeCreateVideoAudioBuffer(),
+    offsetSec: 0
+  };
 }
 
 async function transcribeCreateCaptions() {
@@ -1373,30 +1406,46 @@ async function transcribeCreateCaptions() {
     const transcriber = await getCreateWhisperTranscriber((pct) => {
       setCreateStatus(t('create.whisper.download', { pct }));
     });
-    const fullAudio = await decodeCreateAudioBuffer();
+    const { buffer: fullAudio, offsetSec } = await decodeCreateAudioForWhisper();
     const language = whisperLangCode();
     const total = state.create.lines.length;
+    let filled = 0;
 
     for (let index = 0; index < total; index += 1) {
       const line = state.create.lines[index];
       setCreateStatus(t('create.whisper.line', { n: index + 1, total }));
       await wait(16);
-      const slice = sliceAudioBufferWindow(fullAudio, line.start, line.end);
-      const pcm = await resampleCreateAudioTo16k(slice);
-      if (pcm.length < 800) {
-        line.text = '';
-        continue;
+      try {
+        const sliceStart = Math.max(0, (Number(line.start) || 0) - offsetSec);
+        const sliceEnd = Math.max(sliceStart + 0.2, (Number(line.end) || 0) - offsetSec);
+        const slice = sliceAudioBufferWindow(fullAudio, sliceStart, sliceEnd);
+        const pcm = await resampleCreateAudioTo16k(slice);
+        if (pcm.length < 1600) {
+          continue;
+        }
+        const result = await transcriber(pcm, {
+          language,
+          task: 'transcribe',
+          return_timestamps: false,
+          sampling_rate: 16000,
+          chunk_length_s: 30,
+          stride_length_s: 5
+        });
+        const text = normalizeWhisperText(result);
+        if (text) {
+          line.text = text;
+          filled += 1;
+        }
+      } catch (lineError) {
+        console.warn('Whisper line failed', index + 1, lineError);
       }
-      const result = await transcriber(pcm, {
-        language,
-        task: 'transcribe',
-        return_timestamps: false
-      });
-      line.text = normalizeWhisperText(result);
     }
 
     state.create.zipBytes = null;
     renderCreateLines();
+    if (!filled) {
+      throw new Error('whisper-empty');
+    }
     setCreateStatus(t('create.whisper.done'));
     toast(t('create.whisper.done'));
   } catch (error) {
