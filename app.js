@@ -4,12 +4,13 @@ const VIDEO_EXTS = ['mp4', 'mov', 'webm', 'ogv', 'm4v'];
 const CREATE_SCENE_MAX_SEC = 80;
 const MAX_LINE_SECONDS = 600;
 const GUIDE_VOLUME = 0.08;
-const BED_VOLUME = 0.03;
 const BED_EXPORT = 0.06;
 const BACKING_EXPORT = 1;
+const BACKING_PREVIEW = 0.95;
 const ORIGINAL_LINE_EXPORT = 1;
 const BED_DUCK = 0.012;
 const BED_DUB_MUTE = 0.003;
+const PLAY_ORIGINAL_KEY = 'dubpack-play-original-audio';
 const TAKE_PEAK_TARGET = 0.62;
 const PACK_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
@@ -197,6 +198,7 @@ const state = {
   tipTimer: 0,
   exportLayout: 'original',
   exportVerticalPan: 50,
+  playOriginalAudio: false,
   pendingCena: null,
   waveGen: 0,
   liveWave: null,
@@ -471,6 +473,10 @@ function bindUi() {
   els.downloadTakeBtn?.addEventListener('click', downloadTake);
   els.previewBtn?.addEventListener('click', playCurrentTake);
   els.listenTakeBtn?.addEventListener('click', playCurrentTake);
+  document.querySelector('#playOriginalAudioToggle')?.addEventListener('change', (event) => {
+    state.playOriginalAudio = Boolean(event.target.checked);
+    try { localStorage.setItem(PLAY_ORIGINAL_KEY, state.playOriginalAudio ? '1' : '0'); } catch { /* ignore */ }
+  });
   els.previewBtnAlt?.addEventListener('click', playProjectPreview);
   els.stopPreviewBtn?.addEventListener('click', stopProjectPreview);
   els.exportVideoBtn?.addEventListener('click', () => void requestFinalMp4());
@@ -587,6 +593,7 @@ function bindUi() {
 
 async function bootApp() {
   applyI18n();
+  syncPlayOriginalToggle();
   initAuthRememberUi();
   revealStudio();
   refreshAccountUi();
@@ -1978,7 +1985,7 @@ function scheduleCreateStemSeparation() {
 
 async function runCreateStemSeparation(token, sceneKey) {
   const { start, end } = getCreateSceneWindow();
-  const { separateCreateStems } = await import(/* webpackIgnore: true */ './create-separator.js?v=174');
+  const { separateCreateStems } = await import(/* webpackIgnore: true */ './create-separator.js?v=180');
   const sliceCtx = new (window.AudioContext || window.webkitAudioContext)();
   try {
     setCreateStatus(t('create.stems.loading'));
@@ -3863,10 +3870,11 @@ async function playProjectPreview() {
     const take = pack.takes[scene.id];
     playSceneMedia(scene, scene.duration);
     animateProgress(scene.duration);
-    const layers = take && !(isIOS() && takeLooksLikeWebm(take))
-      ? [{ url: take.url, volume: 1 }, { url: scene.audioUrl, volume: BED_VOLUME }]
-      : [{ url: scene.audioUrl, volume: 1 }];
-    playLayersHtml(layers, scene.duration);
+    if (take && !(isIOS() && takeLooksLikeWebm(take))) {
+      await playTakeWithMix(pack, scene, take);
+    } else {
+      playClickAudio([{ url: scene.audioUrl, volume: 1 }], scene.duration);
+    }
     await wait((scene.duration * 1000) + 180);
   }
 
@@ -3893,14 +3901,91 @@ function playCurrentTake() {
     toast('Este take não toca no iPhone. Grave esta fala de novo.');
     return;
   }
+  void playTakeWithMix(pack, scene, take);
+}
+
+function syncPlayOriginalToggle() {
+  const toggle = document.querySelector('#playOriginalAudioToggle');
+  if (!toggle) return;
+  try {
+    state.playOriginalAudio = localStorage.getItem(PLAY_ORIGINAL_KEY) === '1';
+  } catch {
+    state.playOriginalAudio = false;
+  }
+  toggle.checked = Boolean(state.playOriginalAudio);
+}
+
+/** Preview take over ambience (backing), not the original dialogue bed. */
+async function playTakeWithMix(pack, scene, take) {
   void unlockAudio();
   stopActivePlayback();
-  playSceneMedia(scene, scene.duration);
-  animateProgress(scene.duration);
-  playClickAudio([
-    { url: take.url, blob: take.blob, volume: 1 },
-    { url: scene.audioUrl, volume: BED_VOLUME }
-  ], Math.max(scene.duration, Number(take.duration) || 1));
+  const duration = Math.max(Number(scene.duration) || 1, Number(take.duration) || 1);
+  playSceneMedia(scene, duration);
+  animateProgress(duration);
+
+  const layers = [{ url: take.url, blob: take.blob, volume: 1 }];
+  if (state.playOriginalAudio && scene.audioUrl) {
+    // A/B with original line (Choicer-style "Play original audio").
+    layers.push({ url: scene.audioUrl, volume: 0.55 });
+    playClickAudio(layers, duration);
+    return;
+  }
+
+  playClickAudio(layers, duration);
+  if (pack?.backingUrl) {
+    try {
+      await playBackingUnderScene(pack, scene, duration, BACKING_PREVIEW);
+    } catch (error) {
+      console.warn('Backing preview failed', error);
+    }
+  }
+}
+
+async function ensurePackBackingBuffer(pack) {
+  if (!pack?.backingUrl) return null;
+  if (pack._backingBuffer) return pack._backingBuffer;
+  const ctx = await ensurePlaybackAudio();
+  if (!ctx) return null;
+  const blob = state.blobByUrl.get(pack.backingUrl);
+  pack._backingBuffer = await decodeAudioFrom(ctx, blob, pack.backingUrl);
+  return pack._backingBuffer;
+}
+
+async function playBackingUnderScene(pack, scene, durationSec, volume = BACKING_PREVIEW) {
+  const ctx = await ensurePlaybackAudio();
+  const full = await ensurePackBackingBuffer(pack);
+  if (!ctx || !full) return;
+
+  const { start: exportStart, end: exportEnd } = resolvePackExportWindow(pack);
+  const exportLen = Math.max(
+    0.05,
+    (exportEnd == null ? full.duration : exportEnd) - exportStart
+  );
+  const useSceneBacking = Math.abs(full.duration - exportLen) < 2.5;
+  const sceneOffset = Number(scene.videoOffset) || 0;
+  const sliceStart = useSceneBacking
+    ? Math.max(0, sceneOffset - exportStart)
+    : Math.max(0, sceneOffset);
+  const sliceEnd = sliceStart + Math.max(0.2, Number(durationSec) || Number(scene.duration) || 1);
+  const slice = sliceToAudioBuffer(ctx, full, sliceStart, sliceEnd);
+
+  const gain = ctx.createGain();
+  gain.gain.value = Math.min(1, Math.max(0, Number(volume) || BACKING_PREVIEW));
+  // Light presence chain so the take sits clearer over ambience.
+  const highpass = ctx.createBiquadFilter();
+  highpass.type = 'highpass';
+  highpass.frequency.value = 40;
+  highpass.Q.value = 0.7;
+
+  const source = ctx.createBufferSource();
+  source.buffer = slice;
+  source.connect(highpass);
+  highpass.connect(gain);
+  gain.connect(ctx.destination);
+  source.start();
+  state.playbackStops.push(() => {
+    try { source.stop(0); } catch { /* ignore */ }
+  });
 }
 
 function bindSceneVisual(scene) {
@@ -6131,6 +6216,44 @@ function startBufferAt(audioCtx, dest, buffer, when, gainValue) {
   };
 }
 
+/** Sit dubbed voice over ambience: cut rumble, light presence, soft air. */
+function startTakeBufferAt(audioCtx, dest, buffer, when, gainValue) {
+  const highpass = audioCtx.createBiquadFilter();
+  highpass.type = 'highpass';
+  highpass.frequency.value = 90;
+  highpass.Q.value = 0.7;
+  const presence = audioCtx.createBiquadFilter();
+  presence.type = 'peaking';
+  presence.frequency.value = 2800;
+  presence.Q.value = 0.85;
+  presence.gain.value = 2.4;
+  const air = audioCtx.createBiquadFilter();
+  air.type = 'highshelf';
+  air.frequency.value = 7000;
+  air.gain.value = 1.4;
+  const gain = audioCtx.createGain();
+  gain.gain.value = gainValue;
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(highpass);
+  highpass.connect(presence);
+  presence.connect(air);
+  air.connect(gain);
+  gain.connect(dest);
+  source.start(Math.max(when, audioCtx.currentTime));
+  return {
+    gain,
+    stop: () => {
+      try { source.stop(); } catch { /* already stopped */ }
+      try { source.disconnect(); } catch { /* ignore */ }
+      try { highpass.disconnect(); } catch { /* ignore */ }
+      try { presence.disconnect(); } catch { /* ignore */ }
+      try { air.disconnect(); } catch { /* ignore */ }
+      try { gain.disconnect(); } catch { /* ignore */ }
+    }
+  };
+}
+
 function duckDuringTakes(gainNode, t0, windows, duckLevel = BED_DUCK) {
   const param = gainNode.gain;
   param.setValueAtTime(BED_EXPORT, t0);
@@ -6611,7 +6734,7 @@ async function composeDubbedVideo(pack, onProgress) {
       duckDuringTakes(bedGain, t0, relativeTakeWindows, BED_DUB_MUTE);
     }
     takeBuffers.forEach((win) => {
-      stops.push(startBufferAt(
+      stops.push(startTakeBufferAt(
         audioCtx,
         dest,
         win.buffer,

@@ -176,9 +176,9 @@ function karaokeSeparate(mix) {
     const side = (left - right) * 0.5;
     vocals[0][sample] = mid;
     vocals[1][sample] = mid;
-    // Keep stereo ambience / effects; attenuate centered dialogue.
-    backing[0][sample] = side + (mid * 0.08);
-    backing[1][sample] = (-side) + (mid * 0.08);
+    // Keep stereo ambience / effects; strongly attenuate centered dialogue.
+    backing[0][sample] = side + (mid * 0.015);
+    backing[1][sample] = (-side) + (mid * 0.015);
   }
   return { vocals, backing };
 }
