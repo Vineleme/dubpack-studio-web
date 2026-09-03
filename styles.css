@@ -134,6 +134,15 @@ body {
   color: #cbb8ff;
   background: rgba(123, 92, 255, 0.12);
 }
+.cv-chip-gamebanana {
+  border-color: #e6c200;
+  color: #111;
+  background: linear-gradient(180deg, #ffe44d, #f0c400);
+  box-shadow: 0 0 12px rgba(240, 196, 0, 0.28);
+}
+.cv-chip-gamebanana:hover {
+  background: linear-gradient(180deg, #fff06a, #f5cc14);
+}
 .cv-intro.is-compact h1 { font-size: 18px; }
 .cv-intro.is-compact .cv-intro-actions { display: none; }
 

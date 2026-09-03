@@ -445,6 +445,7 @@ function bindUi() {
     if (els.packSelect.value) openPack(els.packSelect.value);
   });
   document.querySelector('#helpIntroBtn')?.addEventListener('click', () => els.helpModal?.classList.remove('is-hidden'));
+  document.querySelector('#introImportBtn')?.addEventListener('click', openImportModal);
   window.addEventListener('keydown', (event) => {
     if (event.key !== 'r' && event.key !== 'R') return;
     const tag = event.target?.tagName;
