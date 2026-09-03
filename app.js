@@ -217,7 +217,11 @@ const state = {
     backingName: '',
     linesConfirmed: false,
     lang: 'pt',
-    whisperBusy: false
+    whisperBusy: false,
+    stemBusy: false,
+    stemSceneKey: '',
+    stemPromise: null,
+    stemToken: 0
   }
 };
 
@@ -483,10 +487,6 @@ function bindUi() {
   document.querySelector('#createVideoInput')?.addEventListener('change', onCreateVideoPicked);
   document.querySelector('#createZipInput')?.addEventListener('change', onCreateZipPicked);
   document.querySelector('#createDetectBtn')?.addEventListener('click', () => void detectCreateSpeechLines());
-  document.querySelector('#createVocalsInput')?.addEventListener('change', onCreateVocalsPicked);
-  document.querySelector('#createVocalsClearBtn')?.addEventListener('click', clearCreateVocals);
-  document.querySelector('#createBackingInput')?.addEventListener('change', onCreateBackingPicked);
-  document.querySelector('#createBackingClearBtn')?.addEventListener('click', clearCreateBacking);
   document.querySelector('#createMarkStartBtn')?.addEventListener('click', () => markCreateTime('start'));
   document.querySelector('#createMarkEndBtn')?.addEventListener('click', () => markCreateTime('end'));
   document.querySelector('#createSceneFromPlayheadBtn')?.addEventListener('click', setCreateSceneFromPlayhead);
@@ -1219,7 +1219,7 @@ function syncCreateActions() {
   const hasLines = state.create.lines.length > 0;
   const confirmed = Boolean(state.create.linesConfirmed);
   const captionsReady = createCaptionsReady();
-  const busy = state.create.busy;
+  const busy = state.create.busy || state.create.stemBusy;
   showCreateLanding(!hasVideo);
   document.querySelector('#createDetectBtn')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createMarkStartBtn')?.toggleAttribute('disabled', !hasVideo || busy);
@@ -1232,16 +1232,7 @@ function syncCreateActions() {
   document.querySelector('#createAddLineBtn')?.toggleAttribute('disabled', busy || confirmed);
   document.querySelector('#createConfirmLinesBtn')?.toggleAttribute('disabled', !hasLines || busy);
   document.querySelector('#createTranscribeBtn')?.toggleAttribute('disabled', !confirmed || !hasLines || busy);
-  document.querySelector('#createVocalsInput')?.toggleAttribute('disabled', !hasVideo || busy);
-  document.querySelector('#createVocalsClearBtn')?.toggleAttribute('disabled', !state.create.vocalsBytes || busy);
-  document.querySelector('#createBackingInput')?.toggleAttribute('disabled', !hasVideo || busy);
-  document.querySelector('#createBackingClearBtn')?.toggleAttribute('disabled', !state.create.backingBytes || busy);
-  document.querySelectorAll('label.create-file-btn').forEach((label) => {
-    label.classList.toggle('is-disabled', !hasVideo || busy);
-  });
   document.querySelector('#createLineForm')?.classList.toggle('is-hidden', confirmed);
-  syncCreateVocalsUi();
-  syncCreateBackingUi();
   syncCreateCaptionsUi();
   syncCreateSceneUi();
 }
@@ -1596,6 +1587,7 @@ function onCreateSceneInputsChanged() {
   state.create.sceneEnd = Number(document.querySelector('#createSceneEnd')?.value || 0);
   syncCreateSceneUi(true);
   state.create.zipBytes = null;
+  scheduleCreateStemSeparation();
 }
 
 function markCreateSceneBoundary(which) {
@@ -1616,6 +1608,7 @@ function markCreateSceneBoundary(which) {
   }
   syncCreateSceneUi(true);
   state.create.zipBytes = null;
+  scheduleCreateStemSeparation();
 }
 
 function setCreateSceneFromPlayhead() {
@@ -1630,6 +1623,7 @@ function setCreateSceneFromPlayhead() {
   state.create.sceneEnd = Math.min(duration || start + CREATE_SCENE_MAX_SEC, start + CREATE_SCENE_MAX_SEC);
   syncCreateSceneUi(true);
   state.create.zipBytes = null;
+  scheduleCreateStemSeparation();
 }
 
 function renderCreateLines() {
@@ -1737,8 +1731,11 @@ async function loadCreateVideo(file) {
   state.create.zipBytes = null;
   state.create.lines = [];
   state.create.linesConfirmed = false;
-  clearCreateVocals({ silent: true });
-  clearCreateBacking({ silent: true });
+  state.create.stemToken += 1;
+  state.create.stemPromise = null;
+  state.create.stemBusy = false;
+  state.create.stemSceneKey = '';
+  clearCreateStemTracks();
   const video = document.querySelector('#createVideo');
   if (video) {
     video.src = state.create.videoUrl;
@@ -1777,6 +1774,7 @@ async function loadCreateVideo(file) {
   syncCreateActions();
   setCreateStatus('');
   setTab('create');
+  scheduleCreateStemSeparation();
 }
 
 function markCreateTime(which) {
@@ -1841,6 +1839,108 @@ async function decodeCreateAudioBuffer() {
     throw new Error(state.create.vocalsBytes?.length ? t('create.vocals.fail') : t('create.detect.fail'));
   } finally {
     if (ctx.state !== 'closed') await ctx.close().catch(() => undefined);
+  }
+}
+
+async function decodeCreateVideoAudioBuffer() {
+  if (!state.create.videoBytes?.length) {
+    throw new Error(t('create.status.needVideo'));
+  }
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    const copy = state.create.videoBytes.buffer.slice(
+      state.create.videoBytes.byteOffset,
+      state.create.videoBytes.byteOffset + state.create.videoBytes.byteLength
+    );
+    return await ctx.decodeAudioData(copy);
+  } finally {
+    if (ctx.state !== 'closed') await ctx.close().catch(() => undefined);
+  }
+}
+
+function createStemSceneKey() {
+  const { start, end } = getCreateSceneWindow();
+  const size = state.create.videoBytes?.length || 0;
+  const name = state.create.videoFile?.name || '';
+  return `${name}:${size}:${start.toFixed(3)}:${end.toFixed(3)}`;
+}
+
+function clearCreateStemTracks({ silent = true } = {}) {
+  state.create.vocalsFile = null;
+  state.create.vocalsBytes = null;
+  state.create.vocalsName = '';
+  state.create.backingFile = null;
+  state.create.backingBytes = null;
+  state.create.backingName = '';
+  if (!silent) state.create.zipBytes = null;
+}
+
+function scheduleCreateStemSeparation() {
+  if (!state.create.videoBytes?.length) return;
+  const sceneKey = createStemSceneKey();
+  if (sceneKey === state.create.stemSceneKey && state.create.backingBytes?.length && state.create.vocalsBytes?.length) {
+    return;
+  }
+  state.create.stemToken += 1;
+  const token = state.create.stemToken;
+  clearCreateStemTracks();
+  state.create.stemSceneKey = '';
+  state.create.zipBytes = null;
+  state.create.stemBusy = true;
+  syncCreateActions();
+  state.create.stemPromise = runCreateStemSeparation(token, sceneKey).finally(() => {
+    if (token === state.create.stemToken) {
+      state.create.stemBusy = false;
+      state.create.stemPromise = null;
+      syncCreateActions();
+    }
+  });
+}
+
+async function runCreateStemSeparation(token, sceneKey) {
+  const { start, end } = getCreateSceneWindow();
+  const { separateCreateStems } = await import(/* webpackIgnore: true */ './create-separator.js?v=172');
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    const fullBuffer = await decodeCreateVideoAudioBuffer();
+    if (token !== state.create.stemToken) return;
+    const sceneBuffer = sliceToAudioBuffer(audioCtx, fullBuffer, start, end);
+    const result = await separateCreateStems(sceneBuffer, {
+      onProgress: () => {
+        if (token !== state.create.stemToken) return;
+      }
+    });
+    if (token !== state.create.stemToken) return;
+    state.create.vocalsBytes = result.vocalsBytes;
+    state.create.vocalsName = 'auto-vocals.wav';
+    state.create.backingBytes = result.backingBytes;
+    state.create.backingName = 'auto-backing.wav';
+    state.create.stemSceneKey = sceneKey;
+    state.create.zipBytes = null;
+    if (!state.create.busy) setCreateStatus('');
+  } catch (error) {
+    if (token !== state.create.stemToken) return;
+    console.warn('Stem separation failed', error);
+    clearCreateStemTracks();
+    state.create.stemSceneKey = '';
+    throw error;
+  } finally {
+    if (audioCtx.state !== 'closed') await audioCtx.close().catch(() => undefined);
+  }
+}
+
+async function ensureCreateStemsReady({ showStatus = false } = {}) {
+  const sceneKey = createStemSceneKey();
+  if (sceneKey === state.create.stemSceneKey && state.create.backingBytes?.length && state.create.vocalsBytes?.length) {
+    return true;
+  }
+  if (!state.create.stemPromise) scheduleCreateStemSeparation();
+  if (showStatus) setCreateStatus(t('create.stems.working', { n: 1, total: 1 }));
+  try {
+    await state.create.stemPromise;
+    return Boolean(state.create.backingBytes?.length && state.create.vocalsBytes?.length);
+  } catch {
+    return false;
   }
 }
 
@@ -2319,8 +2419,11 @@ async function detectCreateSpeechLines() {
   setCreateStatus(t('create.detect.working'));
   try {
     await wait(30);
+    await ensureCreateStemsReady();
     const audioBuffer = await decodeCreateAudioBuffer();
-    const windowBuffer = sliceAudioBufferWindow(audioBuffer, sceneStart, sceneEnd);
+    const windowBuffer = state.create.vocalsBytes?.length
+      ? audioBuffer
+      : sliceAudioBufferWindow(audioBuffer, sceneStart, sceneEnd);
     const segments = detectSpeechSegments(windowBuffer, {
       minSpeechSec: 0.55,
       mergeGapSec: 1.05,
@@ -2346,7 +2449,7 @@ async function detectCreateSpeechLines() {
     state.create.zipBytes = null;
     stopCreatePreview();
     renderCreateLines();
-    const doneKey = state.create.vocalsBytes?.length ? 'create.detect.doneVocals' : 'create.detect.done';
+    const doneKey = 'create.detect.done';
     setCreateStatus(t(doneKey, { n: segments.length }));
     toast(t(doneKey, { n: segments.length }));
   } catch (error) {
@@ -2422,7 +2525,12 @@ function resetCreatePack() {
     backingBytes: null,
     backingName: '',
     linesConfirmed: false,
-    lang: 'pt'
+    lang: 'pt',
+    whisperBusy: false,
+    stemBusy: false,
+    stemSceneKey: '',
+    stemPromise: null,
+    stemToken: 0
   };
   const video = document.querySelector('#createVideo');
   if (video) {
@@ -2447,8 +2555,6 @@ function resetCreatePack() {
   if (title) title.textContent = '—';
   const meta = document.querySelector('#createVideoMeta');
   if (meta) meta.textContent = t('create.video.empty');
-  syncCreateVocalsUi();
-  syncCreateBackingUi();
   renderCreateLines();
   syncCreateActions();
   setCreateStatus(t('create.status.ready'));
@@ -2659,6 +2765,11 @@ async function buildCreatePackZip() {
 
   const video = document.querySelector('#createVideo');
   if (!video?.src) throw new Error(t('create.status.needVideo'));
+
+  const stemsReady = await ensureCreateStemsReady({ showStatus: true });
+  if (!stemsReady) {
+    throw new Error(t('create.stems.fail'));
+  }
 
   const videoExt = (state.create.videoFile.name.split('.').pop() || 'mp4').toLowerCase();
   const safeExt = VIDEO_EXTS.includes(videoExt) ? videoExt : 'mp4';
@@ -6087,7 +6198,14 @@ async function composeDubbedVideo(pack, onProgress) {
     if (pack.backingUrl) {
       try {
         const backingFull = await decodeAudioFrom(audioCtx, null, pack.backingUrl);
-        const backingBuf = sliceToAudioBuffer(audioCtx, backingFull, exportStart, exportEndTime);
+        const exportLen = Math.max(0.05, exportEndTime - exportStart);
+        const useSceneBacking = Math.abs(backingFull.duration - exportLen) < 2.5;
+        const backingBuf = sliceToAudioBuffer(
+          audioCtx,
+          backingFull,
+          useSceneBacking ? 0 : exportStart,
+          useSceneBacking ? exportLen : exportEndTime
+        );
         playBacking = (t0) => {
           const node = startBufferAt(audioCtx, dest, backingBuf, t0, BED_EXPORT);
           stops.push(node.stop);
