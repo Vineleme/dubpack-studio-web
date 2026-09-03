@@ -5393,7 +5393,7 @@ function drawWaveLayerTimed(ctx, peaks, color, width, height, {
   ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
   peaks.forEach((peak, index) => {
-    const amp = Math.max(1.5, peak * (mid - 4));
+    const amp = Math.max(1.1, peak * (mid - 4) * 0.48);
     const x = startX + (index * gap);
     if (x > width) return;
     ctx.fillRect(x, mid - amp, Math.max(1.2, gap * 0.72), amp * 2);

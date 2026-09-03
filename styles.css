@@ -595,12 +595,8 @@ body.has-pack .cv-wave .timing-labels { display: flex; }
   line-height: 1.4;
 }
 .cv-meter {
-  display: grid;
-  justify-items: center;
-  gap: 4px;
-  padding-top: 6px;
+  display: none !important;
 }
-.cv-meter strong { font-size: 22px; color: #f52e83; }
 
 .cv-packs {
   margin-top: 28px;
