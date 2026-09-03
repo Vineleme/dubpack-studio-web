@@ -4769,13 +4769,13 @@ function playCdInsert(pack) {
     const dySuck = dyWait - discH - mouth.height - 10;
 
     requestAnimationFrame(() => {
-      fly.style.transition = 'transform 0.72s cubic-bezier(.22,.7,.18,1)';
+      fly.style.transition = 'transform 0.95s cubic-bezier(.22,.65,.18,1)';
       fly.style.transform = `translate(${dx}px, ${dyWait}px) scale(${scale})`;
     });
 
     window.setTimeout(() => {
       monitor?.classList.add('is-sucking');
-      fly.style.transition = 'transform 1.35s cubic-bezier(.45,.02,.12,1)';
+      fly.style.transition = 'transform 1.85s cubic-bezier(.42,.02,.1,1)';
       fly.style.transform = `translate(${dx}px, ${dySuck}px) scale(${scale})`;
 
       const tick = () => {
@@ -4787,8 +4787,8 @@ function playCdInsert(pack) {
         suckRaf = requestAnimationFrame(tick);
       };
       suckRaf = requestAnimationFrame(tick);
-      window.setTimeout(finish, 1480);
-    }, 780);
+      window.setTimeout(finish, 1980);
+    }, 1020);
   });
 }
 
