@@ -5607,14 +5607,18 @@ function drawWaveLayerTimed(ctx, peaks, color, width, height, {
   const startX = (Math.max(0, Number(startOffset) || 0) / sceneDuration) * width;
   const spanX = Math.max(2, (duration / sceneDuration) * width);
   const gap = spanX / peaks.length;
+  const maxPeak = peaks.reduce((max, peak) => Math.max(max, peak || 0), 0.001);
+  const ampScale = (mid - 3) * 0.88;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
   peaks.forEach((peak, index) => {
-    const amp = Math.max(1.1, peak * (mid - 4) * 0.48);
+    const norm = Math.min(1, Math.max(0, (peak || 0) / maxPeak));
+    const shaped = Math.pow(norm, 0.7);
+    const amp = Math.max(2, shaped * ampScale);
     const x = startX + (index * gap);
     if (x > width) return;
-    ctx.fillRect(x, mid - amp, Math.max(1.2, gap * 0.72), amp * 2);
+    ctx.fillRect(x, mid - amp, Math.max(1.4, gap * 0.78), amp * 2);
   });
   ctx.restore();
 }
@@ -5633,8 +5637,8 @@ function drawWaveStrokeTimed(ctx, peaks, color, width, height, {
   const spanX = Math.max(2, (duration / sceneDuration) * width);
   const gap = spanX / Math.max(1, peaks.length);
   const maxPeak = peaks.reduce((max, peak) => Math.max(max, peak || 0), 0.001);
-  const ampScale = (mid - 5) * 0.96;
-  const barW = Math.max(1, Math.min(2.4, gap * 0.62));
+  const ampScale = (mid - 2) * 0.98;
+  const barW = Math.max(1.4, Math.min(3.2, gap * 0.72));
 
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -5642,7 +5646,7 @@ function drawWaveStrokeTimed(ctx, peaks, color, width, height, {
   ctx.lineWidth = barW;
   ctx.lineCap = 'round';
 
-  ctx.globalAlpha = alpha * 0.2;
+  ctx.globalAlpha = alpha * 0.18;
   ctx.beginPath();
   ctx.moveTo(startX, mid);
   ctx.lineTo(startX + spanX, mid);
@@ -5651,9 +5655,9 @@ function drawWaveStrokeTimed(ctx, peaks, color, width, height, {
 
   peaks.forEach((peak, index) => {
     const norm = Math.min(1, Math.max(0, (peak || 0) / maxPeak));
-    const shaped = Math.pow(norm, 0.62);
-    const amp = Math.max(1.2, shaped * ampScale);
-    if (amp < 1.6 && norm < 0.04) return;
+    const shaped = Math.pow(norm, 0.72);
+    const amp = Math.max(2.2, shaped * ampScale);
+    if (amp < 2.4 && norm < 0.03) return;
     const x = startX + (index * gap) + gap * 0.5;
     if (x < -2 || x > width + 2) return;
     ctx.beginPath();
