@@ -184,6 +184,43 @@ body {
   background: #050508;
   border: 1px solid #000;
   box-shadow: inset 0 0 40px rgba(0,0,0,0.85);
+  overflow: hidden;
+}
+.monitor-disc-slot {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  z-index: 8;
+  width: min(220px, 46%);
+  height: 12px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: #030305;
+  border: 1px solid rgba(0,0,0,0.8);
+  box-shadow:
+    inset 0 4px 8px rgba(0,0,0,0.8),
+    0 0 0 1px rgba(255,255,255,0.08);
+  pointer-events: none;
+}
+.monitor-disc-door {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  height: 5px;
+  display: block;
+  transform-origin: top center;
+  background: linear-gradient(180deg, #6a6a74, #1c1c22);
+  transition: transform 0.18s ease;
+}
+.cv-monitor.is-sucking .monitor-disc-door,
+.cv-monitor.is-loaded .monitor-disc-slot {
+  box-shadow:
+    inset 0 4px 8px rgba(0,0,0,0.8),
+    0 0 10px rgba(91,255,58,0.25);
+}
+.cv-monitor.is-sucking .monitor-disc-door {
+  transform: rotateX(-70deg);
 }
 .scene-ogv-host {
   position: absolute;
