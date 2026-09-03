@@ -194,6 +194,7 @@ const state = {
   tipIndex: 0,
   tipTimer: 0,
   exportLayout: 'original',
+  exportVerticalPan: 50,
   pendingCena: null,
   waveGen: 0,
   create: {
@@ -471,6 +472,8 @@ function bindUi() {
   els.downloadMp4Btn?.addEventListener('click', () => void downloadFinalMp4());
   document.querySelector('#exportOriginalBtn')?.addEventListener('click', () => void requestFinalMp4('original'));
   document.querySelector('#exportVerticalBtn')?.addEventListener('click', () => void requestFinalMp4('vertical'));
+  document.querySelector('#exportVerticalPan')?.addEventListener('input', onExportVerticalPanInput);
+  document.querySelector('#exportVerticalApplyBtn')?.addEventListener('click', () => void requestFinalMp4('vertical'));
   document.querySelector('#copySceneLinkBtn')?.addEventListener('click', () => void copySceneLink());
   document.querySelector('#shareSceneBtn')?.addEventListener('click', () => void shareSceneLink());
   document.querySelector('#redubBtn')?.addEventListener('click', () => {
@@ -5276,6 +5279,7 @@ function showFinalVideo(pack) {
   document.querySelector('#exportOriginalBtn')?.classList.toggle('is-active', layout !== 'vertical');
   document.querySelector('#exportVerticalBtn')?.classList.toggle('is-active', layout === 'vertical');
   els.finalVideoWrap?.classList.toggle('is-vertical', layout === 'vertical');
+  syncVerticalFramingUi(pack);
   if (els.finalVideo) {
     els.finalVideo.loop = false;
     els.finalVideo.muted = false;
@@ -5335,6 +5339,10 @@ async function requestFinalMp4(layout) {
     toast('Importe um pack e grave as falas primeiro.');
     return;
   }
+  if (layout === 'vertical') {
+    pack.exportVerticalPan = getPackVerticalPan(pack);
+    state.exportVerticalPan = pack.exportVerticalPan;
+  }
   const recorded = pack.scenes.filter((scene) => pack.takes[scene.id]).length;
   if (!packIsComplete(pack)) {
     toast(`Grave todas as falas para gerar o MP4. Faltam ${pack.scenes.length - recorded}.`);
@@ -5377,6 +5385,7 @@ async function requestFinalMp4(layout) {
     pack.finalExt = output.type.includes('mp4') ? 'mp4' : 'webm';
     pack.watermarked = watermarked;
     pack.exportLayout = state.exportLayout;
+    pack.exportVerticalPan = getPackVerticalPan(pack);
     pack.finalUrl = rememberUrl(URL.createObjectURL(output));
     showFinalVideo(pack);
     scheduleSave();
@@ -5766,13 +5775,105 @@ function resolveFilmUrl(pack) {
   return filmCandidates(pack)[0] || '';
 }
 
-function coverDraw(ctx, media, width, height) {
+function getPackVerticalPan(pack) {
+  const pan = pack?.exportVerticalPan ?? state.exportVerticalPan;
+  const value = Number(pan);
+  if (!Number.isFinite(value)) return 50;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function verticalPanNormalized(pan = state.exportVerticalPan) {
+  return (getPackVerticalPan({ exportVerticalPan: pan }) - 50) / 50;
+}
+
+function verticalPanObjectPosition(pan = state.exportVerticalPan) {
+  return `${getPackVerticalPan({ exportVerticalPan: pan })}% center`;
+}
+
+function applyVerticalFramingPreview(pan = state.exportVerticalPan) {
+  const video = document.querySelector('#exportFramingPreview');
+  if (!video) return;
+  video.style.objectPosition = verticalPanObjectPosition(pan);
+}
+
+function syncVerticalFramingUi(pack = currentPack()) {
+  const layout = pack?.exportLayout || state.exportLayout || 'original';
+  const isVertical = layout === 'vertical';
+  const pan = getPackVerticalPan(pack);
+  state.exportVerticalPan = pan;
+  document.querySelector('#verticalFramingBox')?.classList.toggle('is-hidden', !isVertical);
+  const slider = document.querySelector('#exportVerticalPan');
+  if (slider) slider.value = String(pan);
+  applyVerticalFramingPreview(pan);
+  if (isVertical) void startVerticalFramingPreview(pack);
+  else stopVerticalFramingPreview();
+}
+
+function onExportVerticalPanInput(event) {
+  const pan = getPackVerticalPan({ exportVerticalPan: event.target?.value });
+  state.exportVerticalPan = pan;
+  const pack = currentPack();
+  if (pack) pack.exportVerticalPan = pan;
+  applyVerticalFramingPreview(pan);
+  scheduleSave();
+}
+
+let verticalFramingPreviewToken = 0;
+
+async function startVerticalFramingPreview(pack) {
+  const video = document.querySelector('#exportFramingPreview');
+  const src = filmCandidates(pack)[0];
+  if (!video || !src) return;
+  const token = ++verticalFramingPreviewToken;
+  try {
+    if (video.dataset.src !== src) {
+      video.dataset.src = src;
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.playsInline = true;
+      video.loop = true;
+      video.preload = 'auto';
+      video.src = src;
+      video.load();
+      await new Promise((resolve, reject) => {
+        const done = () => {
+          video.removeEventListener('loadeddata', done);
+          resolve();
+        };
+        video.addEventListener('loadeddata', done);
+        video.onerror = () => reject(new Error('preview'));
+        if (video.readyState >= 2) done();
+      });
+    }
+    if (token !== verticalFramingPreviewToken) return;
+    const start = Math.max(0, Number(pack?.sceneStart) || 0);
+    if (Math.abs((video.currentTime || 0) - start) > 0.35) video.currentTime = start;
+    applyVerticalFramingPreview(getPackVerticalPan(pack));
+    await video.play().catch(() => undefined);
+  } catch {
+    // Prévia opcional: falha silenciosa.
+  }
+}
+
+function stopVerticalFramingPreview() {
+  verticalFramingPreviewToken += 1;
+  const video = document.querySelector('#exportFramingPreview');
+  video?.pause?.();
+}
+
+function coverDraw(ctx, media, width, height, panX = 0) {
   const mw = media.videoWidth || media.naturalWidth || media.width || width;
   const mh = media.videoHeight || media.naturalHeight || media.height || height;
   const scale = Math.max(width / mw, height / mh);
   const dw = mw * scale;
   const dh = mh * scale;
-  ctx.drawImage(media, (width - dw) / 2, (height - dh) / 2, dw, dh);
+  let dx = (width - dw) / 2;
+  const dy = (height - dh) / 2;
+  const overflowX = dw - width;
+  if (overflowX > 0 && panX) {
+    dx -= panX * (overflowX / 2);
+  }
+  ctx.drawImage(media, dx, dy, dw, dh);
 }
 
 function shouldWatermarkExport() {
@@ -5887,6 +5988,7 @@ async function buildComposedVideoTrack(film) {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  const panX = vertical ? verticalPanNormalized(state.exportVerticalPan) : 0;
   let painting = true;
   const paint = () => {
     if (!painting) return;
@@ -5894,7 +5996,7 @@ async function buildComposedVideoTrack(film) {
     if (source) {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, width, height);
-      coverDraw(ctx, source, width, height);
+      coverDraw(ctx, source, width, height, panX);
       if (watermarked) drawExportWatermark(ctx, width, height);
     }
     requestAnimationFrame(paint);
@@ -6278,6 +6380,7 @@ async function persistSession() {
       finalExt: pack.finalExt || '',
       watermarked: Boolean(pack.watermarked),
       exportLayout: pack.exportLayout || 'original',
+      exportVerticalPan: getPackVerticalPan(pack),
       dubRoles: Array.isArray(pack.dubRoles) ? pack.dubRoles : [],
       takes: Object.fromEntries(await Promise.all(Object.entries(pack.takes).map(async ([id, take]) => {
         const blob = take.blob || await fetch(take.url).then((response) => response.blob());
@@ -6347,12 +6450,14 @@ async function restoreSession() {
           pack.finalExt = 'mp4';
           pack.watermarked = Boolean(saved.watermarked);
           pack.exportLayout = saved.exportLayout || 'original';
+          pack.exportVerticalPan = getPackVerticalPan(saved);
           pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
         } else if (savedType.includes('webm') || savedExt.includes('webm')) {
           pack.finalBlob = saved.finalBlob;
           pack.finalExt = 'webm';
           pack.watermarked = Boolean(saved.watermarked);
           pack.exportLayout = saved.exportLayout || 'original';
+          pack.exportVerticalPan = getPackVerticalPan(saved);
           pack.finalUrl = rememberUrl(URL.createObjectURL(saved.finalBlob));
         }
       }

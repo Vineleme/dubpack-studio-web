@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=170" />
+    <link rel="stylesheet" href="./styles.css?v=171" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -531,6 +531,18 @@
               <button id="exportOriginalBtn" class="ready-format is-active" type="button" data-export-layout="original" data-i18n="ready.format.original">Vídeo original · 16:9</button>
               <button id="exportVerticalBtn" class="ready-format" type="button" data-export-layout="vertical" data-i18n="ready.format.vertical">TikTok / Reels / Shorts · 9:16</button>
             </div>
+            <div id="verticalFramingBox" class="vertical-framing is-hidden">
+              <p class="hint-copy" data-i18n="ready.framing.hint">Ajuste o enquadramento horizontal do recorte 9:16. A prévia mostra o filme original; depois clique em atualizar para gerar o vídeo com a dublagem.</p>
+              <div class="vertical-framing-preview-wrap" aria-hidden="true">
+                <video id="exportFramingPreview" muted playsinline loop></video>
+              </div>
+              <label class="vertical-framing-control">
+                <span data-i18n="ready.framing.left">Esquerda</span>
+                <input id="exportVerticalPan" type="range" min="0" max="100" value="50" step="1" aria-label="Enquadramento horizontal" />
+                <span data-i18n="ready.framing.right">Direita</span>
+              </label>
+              <button id="exportVerticalApplyBtn" class="secondary" type="button" data-i18n="ready.framing.apply">Atualizar enquadramento</button>
+            </div>
             <div class="ready-share">
               <button id="copySceneLinkBtn" class="secondary" type="button" data-i18n="ready.copy">Copiar link da cena</button>
               <button id="shareSceneBtn" class="secondary" type="button" data-i18n="ready.share">Compartilhar</button>
@@ -726,6 +738,6 @@
     <script src="./i18n.js?v=169"></script>
     <script src="./payments.js?v=169"></script>
     <script src="./ads.js?v=169"></script>
-    <script src="./app.js?v=170"></script>
+    <script src="./app.js?v=171"></script>
   </body>
 </html>
