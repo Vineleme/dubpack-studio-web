@@ -366,7 +366,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '166';
+  const swVersion = '167';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -2724,7 +2724,7 @@ async function buildPack(name, zipBytes) {
     .filter((entry) => AUDIO_EXTS.includes(entry.ext) && !/backing/i.test(entry.name))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   const images = entries.filter((entry) => IMAGE_EXTS.includes(entry.ext));
-  const videos = entries.filter((entry) => VIDEO_EXTS.includes(entry.ext));
+  const videos = packVideoEntries(entries, audio);
   const backing = findBackingTrack(entries);
   const sharedVideo = findSharedVideo(videos) || (videos.length === 1 ? videos[0] : null);
   const meta = readPackMeta(entries);
@@ -2790,7 +2790,7 @@ async function buildPack(name, zipBytes) {
       durationLabel: formatSeconds(duration),
       audioUrl,
       imageUrl,
-      videoUrl: matchedVideo || sharedUrl || firstVideo,
+      videoUrl: sharedUrl || matchedVideo || firstVideo,
       videoOffset: Number(stamp ?? line?.start ?? line?.offset ?? 0)
     };
     loaded += 1;
@@ -5358,11 +5358,11 @@ async function urlLooksLikeOgg(url) {
 }
 
 function filmCandidates(pack) {
+  if (pack.filmUrl) return [pack.filmUrl];
   const urls = [];
   const add = (url) => {
     if (url && !urls.includes(url)) urls.push(url);
   };
-  add(pack.filmUrl);
   pack.scenes.forEach((scene) => add(scene.videoUrl));
   return urls;
 }
@@ -6202,6 +6202,18 @@ function findSharedVideo(videos) {
     || videos.find((entry) => /full[_-]?video|^video$/i.test(normalizeBaseName(entry.name)))
     || videos.find((entry) => playable.includes(entry.ext))
     || null;
+}
+
+/** Speech-line webm clips are audio-only — never treat them as scene/film video. */
+function packVideoEntries(entries, audioEntries) {
+  const audioBases = new Set(audioEntries.map((entry) => normalizeBaseName(entry.name)));
+  return entries.filter((entry) => {
+    if (!VIDEO_EXTS.includes(entry.ext)) return false;
+    const file = entry.name.split('/').pop() || '';
+    if (/^\d{2}-/.test(file)) return false;
+    if (audioBases.has(normalizeBaseName(entry.name))) return false;
+    return true;
+  });
 }
 
 function findBackingTrack(entries) {
