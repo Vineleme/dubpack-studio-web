@@ -5632,27 +5632,28 @@ function drawWaveStrokeTimed(ctx, peaks, color, width, height, {
   const startX = (Math.max(0, Number(startOffset) || 0) / sceneDuration) * width;
   const spanX = Math.max(2, (duration / sceneDuration) * width);
   const gap = spanX / Math.max(1, peaks.length - 1);
+  const ampScale = Math.min(mid - 4, (mid - 5) * 1.12);
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(1.2, height * 0.018);
+  ctx.lineWidth = Math.max(1.6, height * 0.024);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.beginPath();
   peaks.forEach((peak, index) => {
-    const amp = Math.max(0.8, peak * (mid - 6) * 0.78);
+    const amp = Math.max(1.4, peak * ampScale);
     const x = startX + (index * gap);
     const y = mid - amp;
     if (index === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
   for (let index = peaks.length - 1; index >= 0; index -= 1) {
-    const amp = Math.max(0.8, peaks[index] * (mid - 6) * 0.78);
+    const amp = Math.max(1.4, peaks[index] * ampScale);
     const x = startX + (index * gap);
     ctx.lineTo(x, mid + amp);
   }
   ctx.closePath();
-  ctx.globalAlpha = alpha * 0.22;
+  ctx.globalAlpha = alpha * 0.28;
   ctx.fillStyle = color;
   ctx.fill();
   ctx.globalAlpha = alpha;
