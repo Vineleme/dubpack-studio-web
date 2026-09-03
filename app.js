@@ -22,6 +22,7 @@ const EXPORT_WATERMARK_LABEL = 'DubPack Studio';
 const EXPORT_WATERMARK_SRC = './assets/dubpack-logo-official.png';
 let exportWatermarkImage = null;
 let exportWatermarkLoad = null;
+let exportWatermarkStamp = null;
 
 function ensureExportWatermarkImage() {
   if (exportWatermarkImage?.complete && exportWatermarkImage.naturalWidth) {
@@ -33,12 +34,43 @@ function ensureExportWatermarkImage() {
     img.decoding = 'async';
     img.onload = () => {
       exportWatermarkImage = img;
+      exportWatermarkStamp = null;
       resolve(img);
     };
     img.onerror = () => resolve(null);
     img.src = EXPORT_WATERMARK_SRC;
   });
   return exportWatermarkLoad;
+}
+
+function getExportWatermarkStamp() {
+  const img = exportWatermarkImage;
+  if (!img?.complete || !img.naturalWidth) return null;
+  if (exportWatermarkStamp) return exportWatermarkStamp;
+  const srcW = img.naturalWidth;
+  const srcH = img.naturalHeight;
+  const crop = Math.min(srcW, Math.round(srcH * 0.56));
+  const sx = Math.max(0, (srcW - crop) / 2);
+  const sy = Math.max(0, Math.round(srcH * 0.03));
+  const px = 256;
+  const stamp = document.createElement('canvas');
+  stamp.width = px;
+  stamp.height = px;
+  const s = stamp.getContext('2d');
+  s.beginPath();
+  s.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2);
+  s.closePath();
+  s.clip();
+  s.drawImage(img, sx, sy, crop, crop, 0, 0, px, px);
+  const fade = s.createRadialGradient(px / 2, px / 2, px * 0.38, px / 2, px / 2, px / 2);
+  fade.addColorStop(0, 'rgba(0,0,0,1)');
+  fade.addColorStop(0.72, 'rgba(0,0,0,0.85)');
+  fade.addColorStop(1, 'rgba(0,0,0,0)');
+  s.globalCompositeOperation = 'destination-in';
+  s.fillStyle = fade;
+  s.fillRect(0, 0, px, px);
+  exportWatermarkStamp = stamp;
+  return stamp;
 }
 const PRO_MONTHLY_PRICE = 9.9;
 const PRO_MONTHLY_PRICE_USD = 2.99;
@@ -7103,22 +7135,15 @@ function roundRectPath(ctx, x, y, w, h, r) {
 }
 
 function drawExportWatermark(ctx, width, height) {
-  const img = exportWatermarkImage;
-  if (!img?.complete || !img.naturalWidth) {
+  const stamp = getExportWatermarkStamp();
+  if (!stamp) {
     void ensureExportWatermarkImage();
     return;
   }
-  // Small, low-contrast mark in the corner — readable, not a banner.
-  const maxW = Math.max(64, Math.round(width * 0.16));
-  const scale = maxW / img.naturalWidth;
-  const w = img.naturalWidth * scale;
-  const h = img.naturalHeight * scale;
-  const pad = Math.max(8, Math.round(Math.min(width, height) * 0.02));
-  const x = width - w - pad;
-  const y = height - h - pad;
+  const size = Math.max(52, Math.round(Math.min(width, height) * 0.17));
   ctx.save();
-  ctx.globalAlpha = 0.34;
-  ctx.drawImage(img, x, y, w, h);
+  ctx.globalAlpha = 0.2;
+  ctx.drawImage(stamp, (width - size) / 2, (height - size) / 2, size, size);
   ctx.restore();
 }
 
