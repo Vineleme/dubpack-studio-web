@@ -1835,9 +1835,22 @@ async function decodeCreateAudioBuffer() {
       sourceBytes.byteOffset,
       sourceBytes.byteOffset + sourceBytes.byteLength
     );
-    return await ctx.decodeAudioData(copy);
+    const decoded = await ctx.decodeAudioData(copy);
+    const offline = new OfflineAudioContext(
+      decoded.numberOfChannels,
+      decoded.length,
+      decoded.sampleRate
+    );
+    const clone = offline.createBuffer(
+      decoded.numberOfChannels,
+      decoded.length,
+      decoded.sampleRate
+    );
+    for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) {
+      clone.copyToChannel(new Float32Array(decoded.getChannelData(channel)), channel);
+    }
+    return clone;
   } catch {
-    await ctx.close().catch(() => undefined);
     throw new Error(state.create.vocalsBytes?.length ? t('create.vocals.fail') : t('create.detect.fail'));
   } finally {
     if (ctx.state !== 'closed') await ctx.close().catch(() => undefined);
@@ -1854,7 +1867,22 @@ async function decodeCreateVideoAudioBuffer() {
       state.create.videoBytes.byteOffset,
       state.create.videoBytes.byteOffset + state.create.videoBytes.byteLength
     );
-    return await ctx.decodeAudioData(copy);
+    const decoded = await ctx.decodeAudioData(copy);
+    // Copy PCM out before closing the context — closed AudioBuffers can go empty.
+    const offline = new OfflineAudioContext(
+      decoded.numberOfChannels,
+      decoded.length,
+      decoded.sampleRate
+    );
+    const clone = offline.createBuffer(
+      decoded.numberOfChannels,
+      decoded.length,
+      decoded.sampleRate
+    );
+    for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) {
+      clone.copyToChannel(new Float32Array(decoded.getChannelData(channel)), channel);
+    }
+    return clone;
   } finally {
     if (ctx.state !== 'closed') await ctx.close().catch(() => undefined);
   }
@@ -1893,7 +1921,6 @@ function scheduleCreateStemSeparation() {
   state.create.stemPromise = runCreateStemSeparation(token, sceneKey).finally(() => {
     if (token === state.create.stemToken) {
       state.create.stemBusy = false;
-      state.create.stemPromise = null;
       syncCreateActions();
     }
   });
@@ -1901,22 +1928,34 @@ function scheduleCreateStemSeparation() {
 
 async function runCreateStemSeparation(token, sceneKey) {
   const { start, end } = getCreateSceneWindow();
-  const { separateCreateStems } = await import(/* webpackIgnore: true */ './create-separator.js?v=172');
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const { separateCreateStems } = await import(/* webpackIgnore: true */ './create-separator.js?v=174');
+  const sliceCtx = new (window.AudioContext || window.webkitAudioContext)();
   try {
+    setCreateStatus(t('create.stems.loading'));
     const fullBuffer = await decodeCreateVideoAudioBuffer();
     if (token !== state.create.stemToken) return;
-    const sceneBuffer = sliceToAudioBuffer(audioCtx, fullBuffer, start, end);
+    const sceneBuffer = sliceToAudioBuffer(sliceCtx, fullBuffer, start, end);
     const result = await separateCreateStems(sceneBuffer, {
-      onProgress: () => {
+      onProgress: (pct, stage, meta) => {
         if (token !== state.create.stemToken) return;
+        if (stage === 'load' || stage === 'fallback') {
+          setCreateStatus(t('create.stems.loading'));
+          return;
+        }
+        if (stage === 'run' && meta?.total) {
+          setCreateStatus(t('create.stems.working', { n: meta.chunk, total: meta.total }));
+          return;
+        }
+        if (stage === 'prepare' || stage === 'encode') {
+          setCreateStatus(t('create.stems.working', { n: 1, total: 1 }));
+        }
       }
     });
     if (token !== state.create.stemToken) return;
     state.create.vocalsBytes = result.vocalsBytes;
-    state.create.vocalsName = 'auto-vocals.wav';
+    state.create.vocalsName = result.mode === 'karaoke' ? 'auto-vocals-lite.wav' : 'auto-vocals.wav';
     state.create.backingBytes = result.backingBytes;
-    state.create.backingName = 'auto-backing.wav';
+    state.create.backingName = result.mode === 'karaoke' ? 'auto-backing-lite.wav' : 'auto-backing.wav';
     state.create.stemSceneKey = sceneKey;
     state.create.zipBytes = null;
     if (!state.create.busy) setCreateStatus('');
@@ -1927,7 +1966,8 @@ async function runCreateStemSeparation(token, sceneKey) {
     state.create.stemSceneKey = '';
     throw error;
   } finally {
-    if (audioCtx.state !== 'closed') await audioCtx.close().catch(() => undefined);
+    if (token === state.create.stemToken) state.create.stemPromise = null;
+    if (sliceCtx.state !== 'closed') await sliceCtx.close().catch(() => undefined);
   }
 }
 
@@ -1940,10 +1980,14 @@ async function ensureCreateStemsReady({ showStatus = false } = {}) {
   if (showStatus) setCreateStatus(t('create.stems.working', { n: 1, total: 1 }));
   try {
     await state.create.stemPromise;
-    return Boolean(state.create.backingBytes?.length && state.create.vocalsBytes?.length);
   } catch {
-    return false;
+    // Fall through — caller may allow export without stems.
   }
+  return Boolean(
+    state.create.stemSceneKey === sceneKey
+    && state.create.backingBytes?.length
+    && state.create.vocalsBytes?.length
+  );
 }
 
 function syncCreateVocalsUi() {
@@ -2770,7 +2814,9 @@ async function buildCreatePackZip() {
 
   const stemsReady = await ensureCreateStemsReady({ showStatus: true });
   if (!stemsReady) {
-    throw new Error(t('create.stems.fail'));
+    // Soft fail: still build the pack. Studio will duck original audio on dubbed lines.
+    console.warn('Pack export continuing without separated backing track');
+    setCreateStatus(t('create.stems.softFail'));
   }
 
   const videoExt = (state.create.videoFile.name.split('.').pop() || 'mp4').toLowerCase();

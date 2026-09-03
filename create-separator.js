@@ -1,4 +1,5 @@
 const DEMUCS_ORT_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.mjs';
+const DEMUCS_WASM_PATHS = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
 const DEMUCS_MODEL_URL = 'https://huggingface.co/StemSplitio/htdemucs-ft-vocals-onnx/resolve/main/htdemucs_ft_vocals_fp16weights.onnx';
 const DEMUCS_SAMPLE_RATE = 44100;
 const DEMUCS_SEGMENT_S = 7.8;
@@ -24,17 +25,36 @@ function makeTransitionWindow(segment, overlap) {
   return window;
 }
 
+function copyChannel(data) {
+  return data instanceof Float32Array ? new Float32Array(data) : Float32Array.from(data);
+}
+
 async function loadOrt() {
   if (ortModule) return ortModule;
   if (!ortLoadPromise) {
-    ortLoadPromise = import(/* webpackIgnore: true */ DEMUCS_ORT_CDN).then((mod) => {
-      ortModule = mod;
-      const threads = Math.min(navigator.hardwareConcurrency || 2, 4);
-      if (ortModule?.env?.wasm) ortModule.env.wasm.numThreads = threads;
-      return ortModule;
-    });
+    ortLoadPromise = import(/* webpackIgnore: true */ DEMUCS_ORT_CDN)
+      .then((mod) => {
+        ortModule = mod;
+        if (ortModule?.env?.wasm) {
+          // Without COOP/COEP, multi-thread WASM can crash — keep single-thread.
+          ortModule.env.wasm.numThreads = 1;
+          ortModule.env.wasm.wasmPaths = DEMUCS_WASM_PATHS;
+        }
+        return ortModule;
+      })
+      .catch((error) => {
+        ortLoadPromise = null;
+        throw error;
+      });
   }
   return ortLoadPromise;
+}
+
+async function createOrtSession(ort, providers) {
+  return ort.InferenceSession.create(DEMUCS_MODEL_URL, {
+    executionProviders: providers,
+    graphOptimizationLevel: 'all'
+  });
 }
 
 async function loadDemucsSession(onProgress) {
@@ -43,47 +63,53 @@ async function loadDemucsSession(onProgress) {
     demucsSessionPromise = (async () => {
       onProgress?.(4, 'load');
       const ort = await loadOrt();
-      const providers = [];
-      if (typeof navigator !== 'undefined' && 'gpu' in navigator) providers.push('webgpu');
-      providers.push('wasm');
-      demucsSession = await ort.InferenceSession.create(DEMUCS_MODEL_URL, {
-        executionProviders: providers,
-        graphOptimizationLevel: 'all'
-      });
-      return demucsSession;
-    })();
+      const attempts = [];
+      if (typeof navigator !== 'undefined' && 'gpu' in navigator) attempts.push(['webgpu']);
+      attempts.push(['wasm']);
+      let lastError = null;
+      for (const providers of attempts) {
+        try {
+          demucsSession = await createOrtSession(ort, providers);
+          return demucsSession;
+        } catch (error) {
+          lastError = error;
+          console.warn('Demucs session failed with', providers, error);
+        }
+      }
+      throw lastError || new Error('demucs-session-failed');
+    })().catch((error) => {
+      demucsSession = null;
+      demucsSessionPromise = null;
+      throw error;
+    });
   }
   return demucsSessionPromise;
 }
 
 async function resampleTo44100Stereo(audioBuffer) {
-  const leftIn = audioBuffer.getChannelData(0);
-  const rightIn = audioBuffer.numberOfChannels > 1
-    ? audioBuffer.getChannelData(1)
-    : audioBuffer.getChannelData(0);
-  if (audioBuffer.sampleRate === DEMUCS_SAMPLE_RATE
-    && audioBuffer.numberOfChannels >= 2
-    && leftIn.length === audioBuffer.length) {
+  const leftIn = copyChannel(audioBuffer.getChannelData(0));
+  const rightIn = copyChannel(
+    audioBuffer.numberOfChannels > 1
+      ? audioBuffer.getChannelData(1)
+      : audioBuffer.getChannelData(0)
+  );
+  if (audioBuffer.sampleRate === DEMUCS_SAMPLE_RATE) {
     return [leftIn, rightIn];
   }
   const length = Math.max(1, Math.ceil(audioBuffer.duration * DEMUCS_SAMPLE_RATE));
   const offline = new OfflineAudioContext(2, length, DEMUCS_SAMPLE_RATE);
-  const buffer = offline.createBuffer(
-    audioBuffer.numberOfChannels,
-    audioBuffer.length,
-    audioBuffer.sampleRate
-  );
-  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
-    buffer.copyToChannel(audioBuffer.getChannelData(channel), channel);
-  }
+  const buffer = offline.createBuffer(2, leftIn.length, audioBuffer.sampleRate);
+  buffer.copyToChannel(leftIn, 0);
+  buffer.copyToChannel(rightIn, 1);
   const source = offline.createBufferSource();
   source.buffer = buffer;
   source.connect(offline.destination);
   source.start(0);
   const rendered = await offline.startRendering();
-  const left = rendered.getChannelData(0);
-  const right = rendered.numberOfChannels > 1 ? rendered.getChannelData(1) : rendered.getChannelData(0);
-  return [left, right];
+  return [
+    copyChannel(rendered.getChannelData(0)),
+    copyChannel(rendered.numberOfChannels > 1 ? rendered.getChannelData(1) : rendered.getChannelData(0))
+  ];
 }
 
 async function separateVocalsStereo(session, mix, ort, onChunk) {
@@ -106,7 +132,8 @@ async function separateVocalsStereo(session, mix, ort, onChunk) {
     }
     const inputTensor = new ort.Tensor('float32', chunkBuf, [1, DEMUCS_N_CHANNELS, DEMUCS_N_SAMPLES]);
     const result = await session.run({ mix: inputTensor });
-    const stems = result.stems.data;
+    const stems = result.stems?.data || result.output?.data || Object.values(result)[0]?.data;
+    if (!stems) throw new Error('demucs-empty-output');
     const vocalsOffset = (DEMUCS_VOCALS_ROW * DEMUCS_N_CHANNELS) * DEMUCS_N_SAMPLES;
     const chunkLen = end - start;
     for (let channel = 0; channel < DEMUCS_N_CHANNELS; channel += 1) {
@@ -135,6 +162,25 @@ function subtractStereo(mix, vocals) {
     }
   }
   return backing;
+}
+
+/** Lightweight mid/side fallback when Demucs cannot load (no download, instant). */
+function karaokeSeparate(mix) {
+  const totalLen = mix[0].length;
+  const vocals = [new Float32Array(totalLen), new Float32Array(totalLen)];
+  const backing = [new Float32Array(totalLen), new Float32Array(totalLen)];
+  for (let sample = 0; sample < totalLen; sample += 1) {
+    const left = mix[0][sample];
+    const right = mix[1][sample];
+    const mid = (left + right) * 0.5;
+    const side = (left - right) * 0.5;
+    vocals[0][sample] = mid;
+    vocals[1][sample] = mid;
+    // Keep stereo ambience / effects; attenuate centered dialogue.
+    backing[0][sample] = side + (mid * 0.08);
+    backing[1][sample] = (-side) + (mid * 0.08);
+  }
+  return { vocals, backing };
 }
 
 function encodeStereoWav(left, right, sampleRate) {
@@ -168,7 +214,7 @@ function encodeStereoWav(left, right, sampleRate) {
   return new Uint8Array(buffer);
 }
 
-export async function separateCreateStems(audioBuffer, { onProgress } = {}) {
+async function separateWithDemucs(audioBuffer, onProgress) {
   const ort = await loadOrt();
   const session = await loadDemucsSession((pct, stage) => {
     if (stage === 'load') onProgress?.(pct, 'load');
@@ -180,10 +226,36 @@ export async function separateCreateStems(audioBuffer, { onProgress } = {}) {
     onProgress?.(pct, 'run', { chunk, total });
   });
   const backing = subtractStereo(mix, vocals);
+  return { vocals, backing, sampleRate: DEMUCS_SAMPLE_RATE, mode: 'demucs' };
+}
+
+async function separateWithKaraoke(audioBuffer, onProgress) {
+  onProgress?.(20, 'prepare');
+  const mix = await resampleTo44100Stereo(audioBuffer);
+  onProgress?.(70, 'run', { chunk: 1, total: 1 });
+  const separated = karaokeSeparate(mix);
+  return {
+    vocals: separated.vocals,
+    backing: separated.backing,
+    sampleRate: DEMUCS_SAMPLE_RATE,
+    mode: 'karaoke'
+  };
+}
+
+export async function separateCreateStems(audioBuffer, { onProgress } = {}) {
+  let separated;
+  try {
+    separated = await separateWithDemucs(audioBuffer, onProgress);
+  } catch (error) {
+    console.warn('Demucs unavailable, using local karaoke fallback', error);
+    onProgress?.(15, 'fallback');
+    separated = await separateWithKaraoke(audioBuffer, onProgress);
+  }
   onProgress?.(98, 'encode');
   return {
-    sampleRate: DEMUCS_SAMPLE_RATE,
-    vocalsBytes: encodeStereoWav(vocals[0], vocals[1], DEMUCS_SAMPLE_RATE),
-    backingBytes: encodeStereoWav(backing[0], backing[1], DEMUCS_SAMPLE_RATE)
+    sampleRate: separated.sampleRate,
+    mode: separated.mode,
+    vocalsBytes: encodeStereoWav(separated.vocals[0], separated.vocals[1], separated.sampleRate),
+    backingBytes: encodeStereoWav(separated.backing[0], separated.backing[1], separated.sampleRate)
   };
 }
