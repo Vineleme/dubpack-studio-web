@@ -4747,7 +4747,6 @@ function playCdInsert(pack) {
       resolve();
     };
 
-    deck.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     card.classList.add('is-giving');
     deck.classList.remove('is-loaded');
     const edge = document.querySelector('#cdTrayDisc');
@@ -4764,35 +4763,34 @@ function playCdInsert(pack) {
 
     const slotRect = () => slot.getBoundingClientRect();
     const mouth = slotRect();
-    const target = Math.max(110, Math.min(mouth.width - 6, 176));
+    const target = Math.max(118, Math.min(mouth.width - 4, 168));
     const scale = target / Math.max(1, from.width);
+    const discH = from.height * scale;
     const dx = (mouth.left + mouth.width / 2) - (from.left + from.width / 2);
-    const dy = (mouth.top + mouth.height / 2) - (from.top + from.height / 2);
+    // Park the disc just under the door, top edge already kissing the slot.
+    const dyWait = (mouth.bottom - 6 + discH / 2) - (from.top + from.height / 2);
+    const dySuck = dyWait - discH - 16;
 
     requestAnimationFrame(() => {
-      fly.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+      fly.style.transform = `translate(${dx}px, ${dyWait}px) scale(${scale})`;
     });
 
     window.setTimeout(() => {
       deck.classList.add('is-sucking');
-      const thin = Math.max(0.045, mouth.height / from.height);
-      fly.style.transition = 'transform 0.55s cubic-bezier(.18,.12,.1,1)';
-      fly.style.transform = `translate(${dx}px, ${dy}px) scale(${scale * 0.16}, ${thin})`;
+      fly.style.transition = 'transform 0.78s cubic-bezier(.55,0,.12,1)';
+      fly.style.transform = `translate(${dx}px, ${dySuck}px) scale(${scale})`;
 
       const tick = () => {
         if (!fly.isConnected) return;
         const disc = fly.getBoundingClientRect();
         const door = slotRect();
-        const topCut = Math.max(0, door.top - disc.top);
-        const botCut = Math.max(0, disc.bottom - door.bottom);
-        const leftCut = Math.max(0, door.left - disc.left);
-        const rightCut = Math.max(0, disc.right - door.right);
-        fly.style.clipPath = `inset(${topCut}px ${rightCut}px ${botCut}px ${leftCut}px)`;
+        const cut = Math.max(0, door.top - disc.top);
+        fly.style.clipPath = `inset(${cut}px 0 0 0)`;
         suckRaf = requestAnimationFrame(tick);
       };
       suckRaf = requestAnimationFrame(tick);
-      window.setTimeout(finish, 680);
-    }, 520);
+      window.setTimeout(finish, 820);
+    }, 480);
   });
 }
 
