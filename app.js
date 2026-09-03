@@ -211,6 +211,9 @@ const state = {
     vocalsFile: null,
     vocalsBytes: null,
     vocalsName: '',
+    backingFile: null,
+    backingBytes: null,
+    backingName: '',
     linesConfirmed: false,
     lang: 'pt',
     whisperBusy: false
@@ -479,6 +482,8 @@ function bindUi() {
   document.querySelector('#createDetectBtn')?.addEventListener('click', () => void detectCreateSpeechLines());
   document.querySelector('#createVocalsInput')?.addEventListener('change', onCreateVocalsPicked);
   document.querySelector('#createVocalsClearBtn')?.addEventListener('click', clearCreateVocals);
+  document.querySelector('#createBackingInput')?.addEventListener('change', onCreateBackingPicked);
+  document.querySelector('#createBackingClearBtn')?.addEventListener('click', clearCreateBacking);
   document.querySelector('#createMarkStartBtn')?.addEventListener('click', () => markCreateTime('start'));
   document.querySelector('#createMarkEndBtn')?.addEventListener('click', () => markCreateTime('end'));
   document.querySelector('#createSceneFromPlayheadBtn')?.addEventListener('click', setCreateSceneFromPlayhead);
@@ -1226,9 +1231,14 @@ function syncCreateActions() {
   document.querySelector('#createTranscribeBtn')?.toggleAttribute('disabled', !confirmed || !hasLines || busy);
   document.querySelector('#createVocalsInput')?.toggleAttribute('disabled', !hasVideo || busy);
   document.querySelector('#createVocalsClearBtn')?.toggleAttribute('disabled', !state.create.vocalsBytes || busy);
-  document.querySelector('label.create-file-btn')?.classList.toggle('is-disabled', !hasVideo || busy);
+  document.querySelector('#createBackingInput')?.toggleAttribute('disabled', !hasVideo || busy);
+  document.querySelector('#createBackingClearBtn')?.toggleAttribute('disabled', !state.create.backingBytes || busy);
+  document.querySelectorAll('label.create-file-btn').forEach((label) => {
+    label.classList.toggle('is-disabled', !hasVideo || busy);
+  });
   document.querySelector('#createLineForm')?.classList.toggle('is-hidden', confirmed);
   syncCreateVocalsUi();
+  syncCreateBackingUi();
   syncCreateCaptionsUi();
   syncCreateSceneUi();
 }
@@ -1725,6 +1735,7 @@ async function loadCreateVideo(file) {
   state.create.lines = [];
   state.create.linesConfirmed = false;
   clearCreateVocals({ silent: true });
+  clearCreateBacking({ silent: true });
   const video = document.querySelector('#createVideo');
   if (video) {
     video.src = state.create.videoUrl;
@@ -1840,30 +1851,39 @@ function syncCreateVocalsUi() {
   meta.textContent = t('create.vocals.empty');
 }
 
-async function onCreateVocalsPicked(event) {
-  const file = event.target?.files?.[0];
-  event.target.value = '';
-  if (!file) return;
+function syncCreateBackingUi() {
+  const meta = document.querySelector('#createBackingMeta');
+  if (!meta) return;
+  if (state.create.backingBytes?.length) {
+    meta.textContent = t('create.backing.ready', { name: state.create.backingName || 'backing' });
+    return;
+  }
+  meta.textContent = t('create.backing.empty');
+}
+
+function isCreateAudioFile(file) {
+  const name = String(file?.name || '').toLowerCase();
+  const type = String(file?.type || '').toLowerCase();
+  return type.startsWith('audio/')
+    || /\.(wav|mp3|flac|m4a|ogg|aac|wma|aiff|aif)$/i.test(name);
+}
+
+async function loadCreateAudioAsset(file, { loadingKey, readyKey, failKey, badFileKey }) {
   if (!state.create.videoFile) {
     setCreateStatus(t('create.status.needVideo'));
     toast(t('create.status.needVideo'));
-    return;
+    return null;
   }
-  const name = String(file.name || '').toLowerCase();
-  const type = String(file.type || '').toLowerCase();
-  const ok = type.startsWith('audio/')
-    || /\.(wav|mp3|flac|m4a|ogg|aac|wma|aiff|aif)$/i.test(name);
-  if (!ok) {
-    setCreateStatus(t('create.vocals.badFile'));
-    toast(t('create.vocals.badFile'));
-    return;
+  if (!isCreateAudioFile(file)) {
+    setCreateStatus(t(badFileKey));
+    toast(t(badFileKey));
+    return null;
   }
+  state.create.busy = true;
+  syncCreateActions();
+  setCreateStatus(t(loadingKey));
   try {
-    state.create.busy = true;
-    syncCreateActions();
-    setCreateStatus(t('create.vocals.loading'));
     const bytes = new Uint8Array(await file.arrayBuffer());
-    // Decode once to validate browser support before locking it in.
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     try {
       const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
@@ -1871,33 +1891,108 @@ async function onCreateVocalsPicked(event) {
     } finally {
       if (ctx.state !== 'closed') await ctx.close().catch(() => undefined);
     }
-    state.create.vocalsFile = file;
-    state.create.vocalsBytes = bytes;
-    state.create.vocalsName = file.name;
     state.create.zipBytes = null;
-    syncCreateVocalsUi();
-    setCreateStatus(t('create.vocals.ready', { name: file.name }));
-    toast(t('create.vocals.ready', { name: file.name }));
+    setCreateStatus(t(readyKey, { name: file.name }));
+    toast(t(readyKey, { name: file.name }));
+    return { file, bytes, name: file.name };
   } catch {
-    clearCreateVocals({ silent: true });
-    setCreateStatus(t('create.vocals.fail'));
-    toast(t('create.vocals.fail'));
+    setCreateStatus(t(failKey));
+    toast(t(failKey));
+    return null;
   } finally {
     state.create.busy = false;
     syncCreateActions();
   }
 }
 
+async function onCreateVocalsPicked(event) {
+  const file = event.target?.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  const loaded = await loadCreateAudioAsset(file, {
+    loadingKey: 'create.vocals.loading',
+    readyKey: 'create.vocals.ready',
+    failKey: 'create.vocals.fail',
+    badFileKey: 'create.vocals.badFile'
+  });
+  if (!loaded) {
+    clearCreateVocals({ silent: true });
+    return;
+  }
+  state.create.vocalsFile = loaded.file;
+  state.create.vocalsBytes = loaded.bytes;
+  state.create.vocalsName = loaded.name;
+  syncCreateVocalsUi();
+}
+
+async function onCreateBackingPicked(event) {
+  const file = event.target?.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  const loaded = await loadCreateAudioAsset(file, {
+    loadingKey: 'create.backing.loading',
+    readyKey: 'create.backing.ready',
+    failKey: 'create.backing.fail',
+    badFileKey: 'create.backing.badFile'
+  });
+  if (!loaded) {
+    clearCreateBacking({ silent: true });
+    return;
+  }
+  state.create.backingFile = loaded.file;
+  state.create.backingBytes = loaded.bytes;
+  state.create.backingName = loaded.name;
+  syncCreateBackingUi();
+}
+
 function clearCreateVocals({ silent = false } = {}) {
   state.create.vocalsFile = null;
   state.create.vocalsBytes = null;
   state.create.vocalsName = '';
+  state.create.zipBytes = null;
   syncCreateVocalsUi();
   if (!silent) {
     setCreateStatus(t('create.vocals.cleared'));
     toast(t('create.vocals.cleared'));
   }
   syncCreateActions();
+}
+
+function clearCreateBacking({ silent = false } = {}) {
+  state.create.backingFile = null;
+  state.create.backingBytes = null;
+  state.create.backingName = '';
+  state.create.zipBytes = null;
+  syncCreateBackingUi();
+  if (!silent) {
+    setCreateStatus(t('create.backing.cleared'));
+    toast(t('create.backing.cleared'));
+  }
+  syncCreateActions();
+}
+
+function createBackingZipName(fileName) {
+  const ext = (String(fileName || '').split('.').pop() || 'wav').toLowerCase();
+  const safe = ['wav', 'mp3', 'flac', 'm4a', 'ogg', 'aac'].includes(ext) ? ext : 'wav';
+  return `dub_backing.${safe}`;
+}
+
+function sliceToAudioBuffer(audioCtx, audioBuffer, startSec, endSec) {
+  const sampleRate = audioBuffer.sampleRate;
+  const start = Math.max(0, Math.floor(startSec * sampleRate));
+  const end = Math.min(audioBuffer.length, Math.floor(endSec * sampleRate));
+  const length = Math.max(1, end - start);
+  const out = audioCtx.createBuffer(audioBuffer.numberOfChannels, length, sampleRate);
+  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
+    out.copyToChannel(audioBuffer.getChannelData(channel).subarray(start, end), channel);
+  }
+  return out;
+}
+
+function isBackingAudioName(name) {
+  return /backing|instrumental|no[_ -]?vocals|karaoke|accompaniment|dub[_ -]?backing/i.test(
+    String(name || '').split('/').pop() || ''
+  );
 }
 
 function mixAudioBufferMono(audioBuffer) {
@@ -2320,6 +2415,9 @@ function resetCreatePack() {
     vocalsFile: null,
     vocalsBytes: null,
     vocalsName: '',
+    backingFile: null,
+    backingBytes: null,
+    backingName: '',
     linesConfirmed: false,
     lang: 'pt'
   };
@@ -2347,6 +2445,7 @@ function resetCreatePack() {
   const meta = document.querySelector('#createVideoMeta');
   if (meta) meta.textContent = t('create.video.empty');
   syncCreateVocalsUi();
+  syncCreateBackingUi();
   renderCreateLines();
   syncCreateActions();
   setCreateStatus(t('create.status.ready'));
@@ -2563,6 +2662,9 @@ async function buildCreatePackZip() {
   const files = {
     [`dub_video.${safeExt}`]: state.create.videoBytes
   };
+  if (state.create.backingBytes?.length) {
+    files[createBackingZipName(state.create.backingName)] = state.create.backingBytes;
+  }
   const linesMeta = [];
 
   for (let index = 0; index < state.create.lines.length; index += 1) {
@@ -2726,7 +2828,7 @@ async function buildPack(name, zipBytes) {
     }));
 
   const audio = entries
-    .filter((entry) => AUDIO_EXTS.includes(entry.ext) && !/backing/i.test(entry.name))
+    .filter((entry) => AUDIO_EXTS.includes(entry.ext) && !isBackingAudioName(entry.name))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   const images = entries.filter((entry) => IMAGE_EXTS.includes(entry.ext));
   const videos = packVideoEntries(entries, audio);
@@ -5882,7 +5984,8 @@ async function composeDubbedVideo(pack, onProgress) {
     let playBacking = null;
     if (pack.backingUrl) {
       try {
-        const backingBuf = await decodeAudioFrom(audioCtx, null, pack.backingUrl);
+        const backingFull = await decodeAudioFrom(audioCtx, null, pack.backingUrl);
+        const backingBuf = sliceToAudioBuffer(audioCtx, backingFull, exportStart, exportEndTime);
         playBacking = (t0) => {
           const node = startBufferAt(audioCtx, dest, backingBuf, t0, BED_EXPORT);
           stops.push(node.stop);
@@ -5969,7 +6072,7 @@ async function composeDubbedVideo(pack, onProgress) {
       offset: Math.max(0, win.offset - exportStart),
       duration: win.duration
     }));
-    if (bedGain && relativeTakeWindows.length) {
+    if (bedGain && relativeTakeWindows.length && !pack.backingUrl) {
       duckDuringTakes(bedGain, t0, relativeTakeWindows, BED_DUB_MUTE);
     }
     takeBuffers.forEach((win) => {
@@ -6338,7 +6441,7 @@ function packVideoEntries(entries, audioEntries) {
 function findBackingTrack(entries) {
   return entries.find((entry) => (
     AUDIO_EXTS.includes(entry.ext)
-    && /backing/i.test(entry.name.split('/').pop() || '')
+    && isBackingAudioName(entry.name)
   )) || null;
 }
 

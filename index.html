@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=169" />
+    <link rel="stylesheet" href="./styles.css?v=170" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -448,7 +448,21 @@
                 </div>
                 <p id="createVocalsMeta" class="hint-copy" data-i18n="create.vocals.empty">Nenhuma faixa de voz limpa. A detecção usa o áudio do vídeo.</p>
               </div>
-              <p class="hint-copy" data-i18n="create.detect.hint">Detectar falas junta o diálogo e parte trechos longos (~8s). Com voz limpa do UVR, fica bem mais preciso.</p>
+              <div class="create-vocals-box">
+                <div class="create-scene-head">
+                  <strong data-i18n="create.backing.title">Fundo sem voz (opcional)</strong>
+                </div>
+                <p class="hint-copy" data-i18n="create.backing.hint">No UVR, exporte também o instrumental (sem voz) e importe aqui. Na dublagem final, o som ambiente continua e só a sua voz entra no lugar da original.</p>
+                <div class="create-video-actions">
+                  <label class="secondary create-file-btn">
+                    <span data-i18n="create.backing.choose">Importar instrumental do UVR</span>
+                    <input id="createBackingInput" type="file" accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg,.aac" hidden disabled />
+                  </label>
+                  <button id="createBackingClearBtn" class="ghost" type="button" data-i18n="create.backing.clear" disabled>Remover instrumental</button>
+                </div>
+                <p id="createBackingMeta" class="hint-copy" data-i18n="create.backing.empty">Nenhum instrumental. Na exportação, o áudio original é abaixado nas falas (pode sumir o ambiente).</p>
+              </div>
+              <p class="hint-copy" data-i18n="create.detect.hint">Detectar falas junta o diálogo e parte trechos longos (~8s). Com voz limpa do UVR, fica bem mais preciso. Com instrumental, a dublagem no estúdio mantém o fundo.</p>
             </div>
 
             <div id="createLineForm" class="create-line-form">
@@ -712,6 +726,6 @@
     <script src="./i18n.js?v=169"></script>
     <script src="./payments.js?v=169"></script>
     <script src="./ads.js?v=169"></script>
-    <script src="./app.js?v=169"></script>
+    <script src="./app.js?v=170"></script>
   </body>
 </html>
