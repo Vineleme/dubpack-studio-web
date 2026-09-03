@@ -366,7 +366,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '167';
+  const swVersion = '168';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -2590,6 +2590,10 @@ async function buildCreatePackZip() {
   const meta = {
     name: createPackName(),
     lang: state.create.lang === 'en' ? 'en' : 'pt',
+    scene: {
+      start: Number(getCreateSceneWindow().start.toFixed(3)),
+      end: Number(getCreateSceneWindow().end.toFixed(3))
+    },
     lines: linesMeta
   };
   files['pack.json'] = new TextEncoder().encode(JSON.stringify(meta, null, 2));
@@ -2727,7 +2731,8 @@ async function buildPack(name, zipBytes) {
   const videos = packVideoEntries(entries, audio);
   const backing = findBackingTrack(entries);
   const sharedVideo = findSharedVideo(videos) || (videos.length === 1 ? videos[0] : null);
-  const meta = readPackMeta(entries);
+  const packDoc = readPackDocument(entries);
+  const meta = packDoc?.lines || null;
 
   if (!audio.length && !meta?.length) {
     throw new Error('Este ZIP não tem áudios de fala (mp3, wav, ogg ou m4a).');
@@ -2808,6 +2813,9 @@ async function buildPack(name, zipBytes) {
     });
   }
 
+  const sceneStart = Number(packDoc?.scene?.start ?? packDoc?.sceneStart ?? 0) || 0;
+  const sceneEnd = Number(packDoc?.scene?.end ?? packDoc?.sceneEnd ?? 0) || 0;
+
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : `pack-${Date.now()}`,
     name,
@@ -2817,7 +2825,9 @@ async function buildPack(name, zipBytes) {
     dubRoles: [],
     importedAt: Date.now(),
     filmUrl: sharedVideo ? objectUrl(sharedVideo) : '',
-    backingUrl: backing ? objectUrl(backing) : ''
+    backingUrl: backing ? objectUrl(backing) : '',
+    sceneStart,
+    sceneEnd
   };
 }
 
@@ -5459,6 +5469,14 @@ async function openOgvFilm(url, onProgress) {
     duration: Number(player.duration) || 0,
     srcUrl: url,
     currentTime: () => Number(player.currentTime) || 0,
+    seek: async (time) => {
+      try { player.currentTime = Math.max(0, time); } catch { return; }
+      await new Promise((resolve) => {
+        const done = () => resolve();
+        player.addEventListener('seeked', done, { once: true });
+        setTimeout(done, 500);
+      });
+    },
     play: () => player.play(),
     pause: () => player.pause(),
     ended: new Promise((resolve) => player.addEventListener('ended', resolve, { once: true })),
@@ -5481,6 +5499,14 @@ async function openNativeFilm(url) {
     duration: Number(video.duration) || 0,
     srcUrl: url,
     currentTime: () => Number(video.currentTime) || 0,
+    seek: async (time) => {
+      try { video.currentTime = Math.max(0, time); } catch { return; }
+      await new Promise((resolve) => {
+        const done = () => resolve();
+        video.addEventListener('seeked', done, { once: true });
+        setTimeout(done, 500);
+      });
+    },
     play: () => video.play(),
     pause: () => video.pause(),
     ended: new Promise((resolve) => {
@@ -5743,6 +5769,23 @@ async function buildComposedVideoTrack(film) {
   };
 }
 
+function resolvePackExportWindow(pack) {
+  let start = Math.max(0, Number(pack?.sceneStart) || 0);
+  let end = Number(pack?.sceneEnd) || 0;
+  if ((!end || end <= start) && pack?.scenes?.length) {
+    const starts = pack.scenes.map((scene) => Number(scene.videoOffset) || 0);
+    const ends = pack.scenes.map((scene) => (Number(scene.videoOffset) || 0) + (Number(scene.duration) || 0));
+    const min = Math.min(...starts);
+    const max = Math.max(...ends);
+    if (max > min + 0.5) {
+      start = min;
+      end = max + 0.35;
+    }
+  }
+  if (!end || end <= start) return { start: 0, end: null };
+  return { start, end };
+}
+
 async function composeDubbedVideo(pack, onProgress) {
   const candidates = filmCandidates(pack);
   if (!candidates.length) {
@@ -5769,11 +5812,20 @@ async function composeDubbedVideo(pack, onProgress) {
   try {
     onProgress?.(4, 'Carregando o vídeo da cena');
     film = await openFilmPlayback(candidates, setExportProgress);
+    const { start: exportStart, end: exportEnd } = resolvePackExportWindow(pack);
+    if (film.seek && exportStart > 0.01) {
+      onProgress?.(8, 'Posicionando o início da cena');
+      await film.seek(exportStart);
+    }
 
     const lastLineEnd = pack.scenes.reduce((max, raw) => {
       const scene = decorateScene(raw);
       return Math.max(max, (Number(scene.videoOffset) || 0) + (Number(scene.duration) || 0));
     }, 0);
+
+    const filmDuration = Number(film.duration) || 0;
+    const exportEndTime = exportEnd ?? (filmDuration > 0 ? filmDuration : lastLineEnd + 0.5);
+    const exportDuration = Math.max(0.5, exportEndTime - exportStart);
 
     const takeWindows = pack.scenes.map((raw) => {
       const scene = decorateScene(raw);
@@ -5853,7 +5905,7 @@ async function composeDubbedVideo(pack, onProgress) {
       recorder.onstop = resolve;
     });
 
-    if (bed) bed.el.currentTime = 0;
+    if (bed) bed.el.currentTime = exportStart;
     await film.play()?.catch?.(() => undefined);
     if (bed) await bed.el.play().catch(() => undefined);
     const ready = await waitForFilmReady(film);
@@ -5866,19 +5918,28 @@ async function composeDubbedVideo(pack, onProgress) {
     recordingStarted = true;
     const t0 = audioCtx.currentTime + 0.05;
     const bedGain = playBacking?.(t0) || bed?.gain;
-    if (bedGain && takeBuffers.length) duckDuringTakes(bedGain, t0, takeBuffers);
+    const relativeTakeWindows = takeBuffers.map((win) => ({
+      offset: Math.max(0, win.offset - exportStart),
+      duration: win.duration
+    }));
+    if (bedGain && relativeTakeWindows.length) duckDuringTakes(bedGain, t0, relativeTakeWindows);
     takeBuffers.forEach((win) => {
-      stops.push(startBufferAt(audioCtx, dest, win.buffer, t0 + win.offset, gainForTake(win.buffer)).stop);
+      stops.push(startBufferAt(
+        audioCtx,
+        dest,
+        win.buffer,
+        t0 + Math.max(0, win.offset - exportStart),
+        gainForTake(win.buffer)
+      ).stop);
     });
 
-    const duration = film.duration > 0 ? film.duration : Math.max(lastLineEnd, 8);
     let finished = false;
     film.ended.then(() => { finished = true; });
     const startedAt = performance.now();
-    while (!finished && performance.now() - startedAt < duration * 1000 + 1000) {
+    while (!finished && performance.now() - startedAt < exportDuration * 1000 + 1000) {
       const t = film.currentTime?.() || 0;
-      setExportProgress(30 + Math.min(60, (t / duration) * 60), 'Gerando o vídeo');
-      if (t >= duration - 0.12) break;
+      setExportProgress(30 + Math.min(60, ((t - exportStart) / exportDuration) * 60), 'Gerando o vídeo');
+      if (t >= exportEndTime - 0.12) break;
       await wait(200);
     }
     setExportProgress(90, 'Finalizando');
@@ -6223,21 +6284,25 @@ function findBackingTrack(entries) {
   )) || null;
 }
 
-function readPackMeta(entries) {
+function readPackDocument(entries) {
   const jsonFiles = entries.filter((entry) => entry.ext === 'json');
   for (const json of jsonFiles) {
     try {
       const parsed = JSON.parse(new TextDecoder().decode(json.data));
       if (Array.isArray(parsed) && parsed.some((item) => item && (item.text || item.line || item.subtitle))) {
-        return parsed;
+        return { lines: parsed };
       }
       const lines = parsed.lines || parsed.clips || parsed.scenes || parsed.dialogues || parsed.takes;
-      if (Array.isArray(lines) && lines.length) return lines;
+      if (Array.isArray(lines) && lines.length) return { ...parsed, lines };
     } catch {
       // Tenta o próximo JSON do pack.
     }
   }
   return null;
+}
+
+function readPackMeta(entries) {
+  return readPackDocument(entries)?.lines || null;
 }
 
 function readSidecarText(audioEntry, entries) {
