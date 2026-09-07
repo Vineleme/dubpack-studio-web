@@ -3265,8 +3265,9 @@ function selectScene(index, { keepCapture = false } = {}) {
   const scene = currentScene();
   const take = pack.takes[scene.id];
   const counter = `Fala ${state.activeIndex + 1} de ${pack.scenes.length}`;
-  const canGoPrev = state.activeIndex > 0;
-  const canGoNext = state.activeIndex < pack.scenes.length - 1;
+  const assigned = assignedSceneIndexes(pack);
+  const canGoPrev = assigned.some((index) => index < state.activeIndex);
+  const canGoNext = assigned.some((index) => index > state.activeIndex);
 
   els.topCounter.textContent = counter;
   els.counter.textContent = counter;

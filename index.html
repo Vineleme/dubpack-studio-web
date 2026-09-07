@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=204" />
+    <link rel="stylesheet" href="./styles.css?v=205" />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1677516942518019"
      crossorigin="anonymous"></script>
     <script type="application/ld+json">
@@ -289,6 +289,10 @@
             <button id="referenceBtn" class="cv-key" type="button" data-i18n="studio.hear">Hear clip</button>
             <button id="recordBtn" class="cv-key cv-key-rec mic stop-ready" type="button" data-i18n="studio.record">Start recording R</button>
             <button id="listenTakeBtn" class="cv-key" type="button" data-i18n="studio.play">Play recording</button>
+            <div class="cv-nav-row">
+              <button id="prevSceneBtn" class="cv-key" type="button" data-i18n="studio.prev">Voltar</button>
+              <button id="nextBtn" class="cv-key" type="button" data-i18n="studio.next">Next clip</button>
+            </div>
             <button id="previewBtn" class="cv-key preview-mini" type="button" data-i18n="studio.play">Play recording</button>
             <label class="cv-pref-toggle" for="playOriginalAudioToggle">
               <input id="playOriginalAudioToggle" type="checkbox" />
@@ -322,7 +326,6 @@
               <p class="mic-settings-hint" data-i18n="studio.micSettings.volumeHint">Ajusta o volume ao ouvir o mic e na prévia do seu take.</p>
               <p class="mic-settings-hint" data-i18n="studio.micSettings.hint">Aplicado ao preview do take. O export usa a voz original gravada.</p>
             </div>
-            <button id="nextBtn" class="cv-key" type="button" data-i18n="studio.next">Next clip</button>
             <button id="rolesBtn" class="cv-key" type="button" data-i18n="roles.btn">Escolher funções</button>
             <button id="exportVideoBtn" class="cv-key cv-key-watch" type="button" disabled data-i18n="studio.watch">Watch dub</button>
             <div class="cv-meter">
@@ -672,7 +675,6 @@
       <div class="cv-sr" hidden>
         <button id="profileNavBtn" type="button" data-tab="profile">Perfil</button>
         <button id="prevBtn" type="button">Voltar</button>
-        <button id="prevSceneBtn" type="button">Anterior</button>
         <button id="nextSceneBtn" type="button">Próxima</button>
         <span id="previewHint"></span>
         <span id="welcomeTitle"></span>
@@ -734,9 +736,9 @@
     <script src="./vendor/fflate.min.js?v=169"></script>
     <script src="./payments.config.js?v=169"></script>
     <script src="./ads.config.js?v=169"></script>
-    <script src="./i18n.js?v=204"></script>
+    <script src="./i18n.js?v=205"></script>
     <script src="./payments.js?v=169"></script>
     <script src="./ads.js?v=169"></script>
-    <script src="./app.js?v=204"></script>
+    <script src="./app.js?v=205"></script>
   </body>
 </html>
