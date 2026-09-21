@@ -3225,6 +3225,7 @@ function applyTab(tab) {
   document.querySelector('#studioFloor')?.classList.toggle('is-hidden', !studioMode);
   document.querySelector('#studioIntro')?.classList.toggle('is-compact', Boolean(currentPack()) || tab === 'create');
   document.body.classList.toggle('has-pack', Boolean(currentPack()));
+  document.body.classList.toggle('ads-screen', studioMode && Boolean(currentPack()));
   document.querySelectorAll('.tab-view').forEach((view) => view.classList.remove('active'));
   if (studioMode) {
     document.querySelector('#packsTab')?.classList.add('active');
@@ -3255,6 +3256,7 @@ function applyTab(tab) {
     document.querySelector('.content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+  window.DubpackAds?.refresh();
 }
 
 function selectScene(index, { keepCapture = false } = {}) {
@@ -3341,6 +3343,7 @@ function selectScene(index, { keepCapture = false } = {}) {
   updateScoreCard();
   updatePackDock();
   els.topbarHint.textContent = `${pack.name} · ${pack.scenes.filter((item) => pack.takes[item.id]).length}/${pack.scenes.length} gravadas`;
+  window.DubpackAds?.refresh();
 }
 
 function packRoles(pack) {
@@ -4348,6 +4351,8 @@ function restoreEmptyMonitor() {
   }
   syncCdTray(null);
   document.body.classList.remove('has-pack');
+  document.body.classList.remove('ads-screen');
+  window.DubpackAds?.refresh();
   document.querySelector('#studioIntro')?.classList.remove('is-compact');
 }
 

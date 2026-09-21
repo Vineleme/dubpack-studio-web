@@ -10,7 +10,9 @@
 //    - bottomLeader / masthead / footer: Leaderboard (~728×90) ou responsivo
 //    - mobileBanner: Banner responsivo (só celular)
 // 4) Copie este arquivo para ads.config.js e preencha clientId + slots.
-// 5) enabled: true só depois da aprovação do AdSense.
+// 5) NÃO ligue Anúncios automáticos no painel enquanto o site for um app/estúdio.
+//    Auto ads em tela vazia, login ou navegação viola a política de conteúdo do editor.
+// 6) enabled: true só com o site Pronto no AdSense e unidades manuais (slots preenchidos).
 //
 window.DUBPACK_ADS = {
   enabled: false,

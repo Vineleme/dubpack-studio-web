@@ -15,6 +15,15 @@
     return Boolean(cfg.enabled && /^ca-pub-\d+$/i.test(String(cfg.clientId || '').trim()));
   }
 
+  function authGateOpen() {
+    const gate = document.getElementById('authGate');
+    return Boolean(gate && !gate.classList.contains('is-hidden'));
+  }
+
+  function hasPublisherScreen() {
+    return document.body.classList.contains('ads-screen') && !authGateOpen();
+  }
+
   function slotId(key) {
     return String(config().slots?.[key] || '').trim();
   }
@@ -90,7 +99,7 @@
   }
 
   async function renderAll() {
-    if (state.hidden || !isConfigured()) return;
+    if (state.hidden || !isConfigured() || !hasPublisherScreen()) return;
     try {
       await loadScript();
     } catch {
