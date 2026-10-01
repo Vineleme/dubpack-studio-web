@@ -198,6 +198,7 @@ const state = {
   exporting: false,
   user: null,
   authMode: 'login',
+  pilotIntent: false,
   tipIndex: 0,
   tipTimer: 0,
   exportLayout: 'original',
@@ -430,6 +431,7 @@ function bindUi() {
     void importRehearsalPdf(event.target.files?.[0]);
   });
   document.querySelector('#pilotInterestBtn')?.addEventListener('click', () => {
+    state.pilotIntent = true;
     state.authMode = 'signup';
     showAuthGate(true);
     setAuthMode('signup');
@@ -1121,6 +1123,7 @@ async function submitAuth(event) {
       if (!owner) localStorage.setItem(`dubpack-credits:${email}`, '1');
       clearAuthError();
       await finishLogin(accountFromFirebase(cred.user), { signup: true });
+      if (state.pilotIntent) await applyForPilot(cred.user, name);
       return;
     }
 
@@ -3042,6 +3045,25 @@ async function importRehearsalPdf(file) {
     if (status) status.textContent = `Não foi possível abrir o leitor de PDF: ${error.message}`;
   } finally {
     if (input) { input.disabled = false; input.value = ''; }
+  }
+}
+
+async function applyForPilot(user, name) {
+  state.pilotIntent = false;
+  try {
+    const token = await user.getIdToken();
+    const response = await fetch('https://us-central1-dub-pack-studio.cloudfunctions.net/pilotApply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, email: user.email })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'pilot-apply-failed');
+    toast(result.status === 'waitlist'
+      ? 'As 10 vagas foram preenchidas. Você entrou na lista de espera.'
+      : 'Cadastro recebido. Você está na lista do piloto de 15 dias.');
+  } catch (error) {
+    console.error(error);
+    toast('Conta criada, mas não conseguimos registrar o piloto. Tente pelo botão novamente.');
   }
 }
 

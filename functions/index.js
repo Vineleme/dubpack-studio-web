@@ -333,6 +333,98 @@ const OWNER_EMAILS = new Set([
   'viniciusleme@icloud.com'
 ]);
 
+const PILOT_LIMIT = 10;
+const PILOT_DAYS = 15;
+
+async function requirePilotAdmin(req) {
+  const email = await requireAccountEmail(req);
+  if (!OWNER_EMAILS.has(email)) {
+    const error = new Error('forbidden');
+    error.status = 403;
+    throw error;
+  }
+  return email;
+}
+
+exports.pilotApply = onRequest({ cors: false }, async (req, res) => {
+  withCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
+  const email = normalizeEmail(req.body?.email);
+  const name = String(req.body?.name || '').trim().slice(0, 120);
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'invalid-email' });
+  try {
+    const ref = db.collection('pilotApplicants').doc(email);
+    const result = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(ref);
+      if (existing.exists) return existing.data();
+      const approved = await db.collection('pilotApplicants').where('status', '==', 'approved').get();
+      const status = approved.size < PILOT_LIMIT ? 'pending' : 'waitlist';
+      const data = { email, name, status, createdAt: admin.firestore.FieldValue.serverTimestamp() };
+      tx.set(ref, data);
+      return data;
+    });
+    return res.json({ ok: true, status: result.status, remaining: Math.max(0, PILOT_LIMIT - (await db.collection('pilotApplicants').where('status', '==', 'approved').get()).size) });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'pilot-apply-failed' });
+  }
+});
+
+exports.pilotAdminList = onRequest({ cors: false }, async (req, res) => {
+  withCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  try {
+    await requirePilotAdmin(req);
+    const snap = await db.collection('pilotApplicants').orderBy('createdAt', 'asc').limit(100).get();
+    return res.json({ ok: true, applicants: snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) });
+  } catch (error) {
+    if (error.status === 401) return res.status(401).json({ error: 'unauthenticated' });
+    if (error.status === 403) return res.status(403).json({ error: 'forbidden' });
+    console.error(error);
+    return res.status(500).json({ error: 'pilot-list-failed' });
+  }
+});
+
+exports.pilotAdminApprove = onRequest({ cors: false }, async (req, res) => {
+  withCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
+  try {
+    await requirePilotAdmin(req);
+    const email = normalizeEmail(req.body?.email);
+    if (!email) return res.status(400).json({ error: 'invalid-email' });
+    const user = await admin.auth().getUserByEmail(email);
+    const now = new Date();
+    const expires = new Date(now.getTime() + PILOT_DAYS * 24 * 60 * 60 * 1000);
+    await admin.auth().setCustomUserClaims(user.uid, { pilotPro: true });
+    await db.collection('pilotApplicants').doc(email).set({ email, uid: user.uid, status: 'approved', startedAt: now, expiresAt: expires, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return res.json({ ok: true, email, startedAt: now.toISOString(), expiresAt: expires.toISOString() });
+  } catch (error) {
+    if (error.status === 401) return res.status(401).json({ error: 'unauthenticated' });
+    if (error.status === 403) return res.status(403).json({ error: 'forbidden' });
+    if (error.code === 'auth/user-not-found') return res.status(404).json({ error: 'user-not-found' });
+    console.error(error);
+    return res.status(500).json({ error: 'pilot-approve-failed' });
+  }
+});
+
+exports.pilotStatus = onRequest({ cors: false }, async (req, res) => {
+  withCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  try {
+    const email = await requireAccountEmail(req);
+    const snap = await db.collection('pilotApplicants').doc(email).get();
+    const data = snap.data() || {};
+    const active = data.status === 'approved' && data.expiresAt?.toDate?.() > new Date();
+    return res.json({ ok: true, active, status: data.status || 'none', expiresAt: data.expiresAt?.toDate?.()?.toISOString() || null });
+  } catch (error) {
+    if (error.status === 401) return res.status(401).json({ error: 'unauthenticated' });
+    console.error(error);
+    return res.status(500).json({ error: 'pilot-status-failed' });
+  }
+});
+
 async function requireAccountEmail(req) {
   const header = String(req.get('authorization') || '');
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
