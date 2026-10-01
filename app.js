@@ -3058,7 +3058,7 @@ function waitForRehearsalModule(timeoutMs = 12000) {
       }
       if (!fallbackStarted && Date.now() - started >= 1200) {
         fallbackStarted = true;
-        const moduleUrl = new URL('/rehearsal.js?v=214', window.location.origin).href;
+        const moduleUrl = new URL('/rehearsal.js?v=215', window.location.origin).href;
         import(moduleUrl).catch(() => undefined);
       }
       timer = setTimeout(check, 100);

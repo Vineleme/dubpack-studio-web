@@ -119,7 +119,9 @@ function runLine() {
   const generation = rehearsal.generation;
   const utterance = new SpeechSynthesisUtterance(line.text);
   utterance.lang = 'pt-BR';
-  utterance.rate = Number(ui.rehearsalRate.value);
+  utterance.rate = Math.min(1.05, Number(ui.rehearsalRate.value) || 0.94);
+  utterance.pitch = 1;
+  utterance.volume = 0.92;
   utterance.voice = rehearsal.voices.find((voice) => voice.voiceURI === rehearsal.selectedVoices.get(line.character)) || null;
   rehearsal.utterance = utterance;
   utterance.onend = () => {
@@ -209,27 +211,62 @@ function refreshVoices() {
   ui.rehearsalVoices.replaceChildren();
   const cast = [...new Set(rehearsal.scenes.flatMap((scene) => scene.lines.map((line) => line.character)))];
   const portuguese = rehearsal.voices.filter((voice) => /^pt\b/i.test(voice.lang));
-  const available = portuguese.length ? portuguese : rehearsal.voices;
+  const available = (portuguese.length ? portuguese : rehearsal.voices).slice().sort((a, b) => voiceQuality(b) - voiceQuality(a));
   cast.filter((character) => character !== ui.actorRole.value && character !== 'TODOS').forEach((character, index) => {
     const label = document.createElement('label');
     label.append(document.createTextNode(character));
+    const profile = document.createElement('select');
+    profile.setAttribute('aria-label', `Perfil da voz de ${character}`);
+    profile.append(option('', 'Perfil automático'), option('female', 'Voz feminina'), option('male', 'Voz masculina'));
     const select = document.createElement('select');
     select.setAttribute('aria-label', `Voz de ${character}`);
     select.append(option('', 'Voz padrão do aparelho'));
     for (const voice of available) select.append(option(voice.voiceURI, `${voice.name} (${voice.lang})`));
     if (!rehearsal.selectedVoices.has(character) && portuguese.length) {
-      rehearsal.selectedVoices.set(character, portuguese[index % portuguese.length].voiceURI);
+      rehearsal.selectedVoices.set(character, available[index % available.length].voiceURI);
     }
     select.value = rehearsal.selectedVoices.get(character) || '';
+    profile.value = inferVoiceProfile(select.value);
+    profile.onchange = () => {
+      const filtered = available.filter((voice) => profileMatches(voice, profile.value));
+      const chosen = filtered[0] || available[0];
+      if (chosen) {
+        select.value = chosen.voiceURI;
+        rehearsal.selectedVoices.set(character, chosen.voiceURI);
+      }
+      halt(); render();
+      status('Perfil de voz alterado. Retome o ensaio.');
+    };
     select.onchange = () => {
       halt(); render();
       rehearsal.selectedVoices.set(character, select.value);
+      profile.value = inferVoiceProfile(select.value);
       status('Voz alterada. Retome o ensaio.');
     };
+    label.append(profile);
     label.append(select);
     ui.rehearsalVoices.append(label);
   });
 }
+
+function voiceQuality(voice) {
+  const name = `${voice.name} ${voice.voiceURI}`.toLowerCase();
+  let score = 0;
+  if (/natural|neural|online|premium|enhanced|google/.test(name)) score += 8;
+  if (/pt[-_ ]?br|portuguese brazil/.test(`${voice.lang} ${voice.name}`.toLowerCase())) score += 4;
+  if (/default|espeak|compact/.test(name)) score -= 4;
+  return score;
+}
+
+function voiceGender(voice) {
+  const name = `${voice.name} ${voice.voiceURI}`.toLowerCase();
+  if (/female|feminina|woman|mulher|maria|helena|francisca|camila|luciana/.test(name)) return 'female';
+  if (/male|masculina|man|homem|daniel|joao|jorge|ricardo/.test(name)) return 'male';
+  return '';
+}
+
+function profileMatches(voice, profile) { return !profile || voiceGender(voice) === profile; }
+function inferVoiceProfile(uri) { return voiceGender(rehearsal.voices.find((voice) => voice.voiceURI === uri) || {}); }
 
 function renderReview() {
   ui.scriptReview.replaceChildren();
