@@ -19,6 +19,7 @@ test('partial phrase or silence never concludes an actor turn', () => {
   assert.equal(compareSpeech('Então precisamos avisar alguém antes que seja tarde.', '').complete, false);
   assert.equal(compareSpeech('Então precisamos avisar alguém antes que seja tarde.', 'então precisamos avisar alguém').complete, false);
   assert.equal(compareSpeech('Sonserina, não. Sonserina, não.', 'sonserina não').complete, false);
+  assert.deepEqual(compareSpeech('Sonserina, não. Sonserina, não.', 'sonserina não').matched, [0, 1]);
 });
 
 test('completion needs ordered coverage and the closing words', () => {

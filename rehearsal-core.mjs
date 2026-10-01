@@ -73,9 +73,15 @@ export function compareSpeech(expectedText, transcript) {
   const ending = expected.slice(-tailLength).join(' ');
   const hasEnding = heard.slice(-tailLength).join(' ') === ending;
   const threshold = expected.length <= 6 ? 1 : 0.9;
+  // Repeated words should illuminate the first occurrence before later repetitions.
+  let earliest = 0;
+  const orderedMatched = matched.reverse().map((index) => {
+    while (expected[earliest] !== expected[index]) earliest++;
+    return earliest++;
+  });
   const negationWords = new Set(['nao', 'nunca', 'jamais', 'nem']);
-  const negationsMatched = expected.every((word, index) => !negationWords.has(word) || matched.includes(index));
-  return { coverage, complete: coverage >= threshold && hasEnding && negationsMatched, matched: matched.reverse() };
+  const negationsMatched = expected.every((word, index) => !negationWords.has(word) || orderedMatched.includes(index));
+  return { coverage, complete: coverage >= threshold && hasEnding && negationsMatched, matched: orderedMatched };
 }
 
 export function textLinesFromItems(items) {
