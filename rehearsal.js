@@ -1,4 +1,4 @@
-import { parseScript, compareSpeech, textLinesFromItems } from './rehearsal-core.mjs';
+import { parseScript, compareSpeech, textLinesFromItems } from './rehearsal-core.mjs?v=210';
 
 const ui = Object.fromEntries([
   'scriptInput', 'rehearsalStatus', 'rehearsalWorkspace', 'actorRole', 'rehearsalScene',
@@ -10,6 +10,7 @@ const ui = Object.fromEntries([
 ].map((id) => [id, document.getElementById(id)]));
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const synthesis = window.speechSynthesis;
+let importSequence = 0;
 const rehearsal = {
   scenes: [], scene: 0, line: 0, running: false, generation: 0,
   recognition: null, utterance: null, timer: null, restartTimer: null,
@@ -258,26 +259,35 @@ function renderReview() {
   });
 }
 
-ui.scriptInput.addEventListener('change', async () => {
-  const file = ui.scriptInput.files[0];
+export async function importScript(file) {
   if (!file) return;
   halt();
-  const importGeneration = rehearsal.generation;
+  const importGeneration = ++importSequence;
   ui.scriptInput.disabled = true;
-  status('Lendo roteiro...');
+  status(`Lendo PDF: ${file.name}...`);
   let document;
+  let loadingTask;
+  let timeout;
   try {
-    const pdfjs = await import('./vendor/pdf.mjs');
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.mjs', import.meta.url).href;
-    document = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+    const read = async () => {
+      const pdfjs = await import('./vendor/pdf.mjs?v=210');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.mjs?v=210', import.meta.url).href;
+      loadingTask = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false });
+      return loadingTask.promise;
+    };
+    document = await Promise.race([read(), new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error('A leitura do PDF demorou demais. Verifique sua conexão e tente novamente.')), 30000);
+    })]);
+    clearTimeout(timeout);
     const pages = [];
     for (let number = 1; number <= document.numPages; number++) {
+      status(`Lendo ${file.name}: página ${number} de ${document.numPages}...`);
       const page = await document.getPage(number);
       pages.push(textLinesFromItems((await page.getTextContent()).items));
     }
     const scenes = parseScript(pages);
     if (!scenes.length) throw new Error('Não encontrei cenas e falas no formato PERSONAGEM: texto. Um PDF escaneado precisa primeiro de reconhecimento de texto.');
-    if (importGeneration !== rehearsal.generation) return;
+    if (importGeneration !== importSequence) return;
     rehearsal.scenes = scenes;
     rehearsal.selectedVoices.clear();
     ui.rehearsalWorkspace.hidden = false;
@@ -290,13 +300,16 @@ ui.scriptInput.addEventListener('change', async () => {
     refreshVoices(); renderReview(); resetPosition(0);
     status(`${file.name} · ${scenes.length} cenas · ${cast.length} personagens. Confira o roteiro antes de ensaiar.`);
   } catch (error) {
-    status(`Não foi possível importar: ${error.message}`);
+    if (importGeneration === importSequence) status(`Não foi possível importar: ${error.message}`);
   } finally {
-    await document?.destroy();
-    ui.scriptInput.disabled = false;
-    ui.scriptInput.value = '';
+    clearTimeout(timeout);
+    try { await loadingTask?.destroy(); } catch { /* Keep the chooser usable after a reader failure. */ }
+    if (importGeneration === importSequence) {
+      ui.scriptInput.disabled = false;
+      ui.scriptInput.value = '';
+    }
   }
-});
+}
 
 ui.startRehearsal.onclick = start;
 ui.pauseRehearsal.onclick = () => { halt(); render(); status('Ensaio pausado.'); };

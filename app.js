@@ -389,7 +389,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '209';
+  const swVersion = '210';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -426,6 +426,9 @@ function bindUi() {
   });
   els.packInput?.addEventListener('change', importPack);
   els.packInputEmpty?.addEventListener('change', importPack);
+  document.querySelector('#scriptInput')?.addEventListener('change', (event) => {
+    void importRehearsalPdf(event.target.files?.[0]);
+  });
   document.querySelector('#openImportBtn')?.addEventListener('click', openImportModal);
   document.querySelector('#importCloseBtn')?.addEventListener('click', closeImportModal);
   document.querySelector('#importModal')?.addEventListener('click', (event) => {
@@ -3019,8 +3022,27 @@ function setImportProgress(current, total, label) {
   if (text) text.textContent = label || `${t('studio.import.reading')} ${current}/${total}`;
 }
 
+async function importRehearsalPdf(file) {
+  if (!file) return;
+  closeImportModal();
+  applyTab('rehearsal');
+  const status = document.querySelector('#rehearsalStatus');
+  const input = document.querySelector('#scriptInput');
+  if (status) status.textContent = `Abrindo PDF: ${file.name}...`;
+  if (input) input.disabled = true;
+  try {
+    const rehearsal = await import('./rehearsal.js?v=210');
+    await rehearsal.importScript(file);
+  } catch (error) {
+    if (status) status.textContent = `Não foi possível abrir o leitor de PDF: ${error.message}`;
+  } finally {
+    if (input) { input.disabled = false; input.value = ''; }
+  }
+}
+
 async function importPackFile(file) {
   if (!file) return;
+  if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') return importRehearsalPdf(file);
   openImportModal();
   setImportProgress(0, 1, t('studio.import.reading.zip'));
   toast('Abrindo o ZIP…');

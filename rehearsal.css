@@ -2,6 +2,7 @@ body.tab-rehearsal .right-rail { display: none; }
 body.tab-rehearsal .cv-nav a[href*="gamebanana.com"] { display: none; }
 body.tab-rehearsal .content { padding: 12px 0; }
 body.tab-rehearsal #studioIntro, body.tab-rehearsal #publisherGuide { display: none; }
+.script-import { color: #f52e83; font-weight: 800; cursor: pointer; }
 .rehearsal-setup > summary { cursor: pointer; color: #d3cedc; padding-block: 12px; }
 #rehearsalWorkspace[hidden], #revealActorLine[hidden] { display: none; }
 #rehearsalStatus { color: #c9c6d8; line-height: 1.5; min-height: 24px; }
