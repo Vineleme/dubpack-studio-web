@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <base href="/" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#090817" />
+    <title>DubPack Studio — Your voice in the scene</title>
+    <meta name="description" content="Your voice in the scene — record, finish, share. Dub in the browser and export your video." />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://dubpackstudio.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://dubpackstudio.com/" />
+    <meta property="og:title" content="DubPack Studio" />
+    <meta property="og:description" content="Your voice in the scene — record, finish, share." />
+    <meta property="og:image" content="https://dubpackstudio.com/assets/dubpack-logo-brand.jpg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="DubPack Studio" />
+    <meta name="twitter:description" content="Your voice in the scene — record, finish, share." />
+    <meta name="twitter:image" content="https://dubpackstudio.com/assets/dubpack-logo-brand.jpg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./assets/dubpack-logo-brand.jpg" type="image/jpeg" />
+    <link rel="apple-touch-icon" href="./assets/dubpack-logo-brand.jpg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css?v=206" />
+    <link rel="stylesheet" href="./rehearsal.css?v=217" />
+    <meta name="google-adsense-account" content="ca-pub-1677516942518019" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "DubPack Studio",
+        "url": "https://dubpackstudio.com/",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Web",
+        "description": "Your voice in the scene — record, finish, and share.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "BRL"
+        },
+        "email": "contact@dubpackstudio.com"
+      }
+    </script>
+  </head>
+  <body class="in-studio">
+    <div id="appToast" class="app-toast" hidden role="status"></div>
+
+    <div id="authGate" class="auth-gate is-hidden">
+      <form id="authForm" class="auth-card" novalidate>
+        <div class="auth-brand">
+          <strong>Dub<span>Pack</span> Studio</strong>
+          <em data-i18n="brand.tagline">Sua voz no filme da cena. Grave, finalize e compartilhe.</em>
+        </div>
+        <h1 id="authTitle" data-i18n="auth.title.login">Entrar</h1>
+        <p id="authLead" data-i18n="auth.lead.login">Entre para assinar o PRO ou guardar a conta. Dublar e exportar o básico não precisa de login.</p>
+        <label id="authNameWrap" class="is-hidden"><span data-i18n="auth.name">Nome</span>
+          <input id="authName" type="text" autocomplete="nickname" data-i18n-placeholder="auth.name.placeholder" placeholder="Como você quer ser chamado?" />
+        </label>
+        <label><span data-i18n="auth.email">E-mail</span>
+          <input id="authEmail" type="text" inputmode="email" autocomplete="email" data-i18n-placeholder="auth.email.placeholder" placeholder="voce@icloud.com" required />
+        </label>
+        <label id="authRememberWrap" class="auth-remember">
+          <input id="authRememberMe" type="checkbox" checked />
+          <span id="authRememberLabel" data-i18n="auth.remember">Continuar conectado</span>
+        </label>
+        <label id="authPasswordWrap"><span id="authPasswordLabel" data-i18n="auth.password">Senha</span>
+          <span class="auth-password-field">
+            <input id="authPassword" type="password" autocomplete="current-password" data-i18n-placeholder="auth.password.placeholder" placeholder="Sua senha" />
+            <button id="authPasswordToggle" class="auth-password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="auth-eye auth-eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="auth-eye auth-eye-closed" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-6.5 0-10-7-10-7a20.3 20.3 0 0 1 5.06-5.94"/><path d="M1 1l22 22"/><path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"/><path d="M10.73 5.08A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a20.3 20.3 0 0 1-3.17 4.19"/></svg>
+            </button>
+          </span>
+        </label>
+        <p id="authError" class="auth-error is-hidden" role="alert" data-i18n="auth.error">Senha errada.</p>
+        <button id="authForgotBtn" class="auth-forgot" type="button" data-i18n="auth.forgot">Esqueci a senha</button>
+        <button id="authSubmitBtn" class="primary wide" type="button" data-i18n="auth.submit.login">Entrar</button>
+        <button id="authSwitchBtn" class="ghost wide" type="button" data-i18n="auth.switch.signup">Criar conta nova</button>
+        <p class="auth-partnership" data-i18n-html="auth.partnership">Parcerias: <a href="mailto:contact@dubpackstudio.com">contact@dubpackstudio.com</a></p>
+      </form>
+    </div>
+    <div id="helpModal" class="help-modal is-hidden" role="dialog" aria-labelledby="helpTitle" aria-modal="true">
+      <div class="help-card">
+        <h2 id="helpTitle" data-i18n="help.title">Como jogar</h2>
+        <ol class="help-steps">
+          <li data-i18n-html="help.1">Baixe um pack no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.</li>
+          <li data-i18n="help.2">Importe o ZIP em Meus Packs.</li>
+          <li data-i18n="help.3">Ouça a referência, grave no microfone e finalize a dublagem.</li>
+        </ol>
+        <p data-i18n="help.footer">Dublar e exportar o básico é grátis. Packs ficam 2 dias neste aparelho.</p>
+        <a class="secondary wide help-gamebanana" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="help.gamebanana">Abrir GameBanana</a>
+        <button id="helpCloseBtn" class="primary" type="button" data-i18n="help.close">Entendi</button>
+      </div>
+    </div>
+    <div id="rolesModal" class="import-modal is-hidden" role="dialog" aria-labelledby="rolesTitle" aria-modal="true">
+      <div class="import-card roles-card">
+        <button id="rolesCloseBtn" class="import-close" type="button" aria-label="Fechar">✕</button>
+        <h2 id="rolesTitle" data-i18n="roles.title">Escolher funções</h2>
+        <p data-i18n="roles.lead">Marque quem você quer dublar. Os outros personagens ficam com a voz original.</p>
+        <div id="rolesList" class="roles-list"></div>
+        <div class="roles-actions">
+          <button id="rolesAllBtn" class="secondary" type="button" data-i18n="roles.all">Todos</button>
+          <button id="rolesApplyBtn" class="primary" type="button" data-i18n="roles.apply">Começar a dublar</button>
+        </div>
+      </div>
+    </div>
+    <div id="importModal" class="import-modal is-hidden" role="dialog" aria-labelledby="importTitle" aria-modal="true">
+      <div class="import-card">
+        <button id="importCloseBtn" class="import-close" type="button" aria-label="Fechar">✕</button>
+        <h2 id="importTitle" data-i18n="studio.import.title">Import a pack ZIP</h2>
+        <p data-i18n-html="studio.import.lead">Selecione o arquivo ZIP do seu pack.</p>
+        <div id="importDrop" class="import-drop">
+          <span class="import-reel" aria-hidden="true"></span>
+          <strong data-i18n="studio.import.drop">Solte o ZIP aqui</strong>
+        </div>
+        <label class="import-choose">
+          <span data-i18n="studio.import.choose">Escolher ZIP</span>
+          <input id="packInputEmpty" type="file" accept=".zip,application/zip" hidden />
+        </label>
+        <div id="importProgressWrap" class="import-progress is-hidden">
+          <span id="importProgressText">Reading audio clips</span>
+          <i><b id="importProgressBar"></b></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="studio-layout">
+      <aside class="studio-ad studio-ad-left" aria-label="Advertisement">
+        <div class="studio-ad-unit" data-ad-key="leftTop">
+          <div class="studio-ad-slot"></div>
+          <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+          <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+        </div>
+        <div class="studio-ad-unit" data-ad-key="leftBottom">
+          <div class="studio-ad-slot"></div>
+          <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+          <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+        </div>
+      </aside>
+    <main id="studioApp" class="dashboard cv-shell">
+      <header class="cv-masthead">
+        <a class="cv-brand" href="#packsTab" data-tab="packs">
+          <img src="./assets/dubpack-logo-official.png" alt="" width="40" height="40" />
+          <strong>DubPack <span>Studio</span></strong>
+        </a>
+        <label class="cv-now">
+          <span data-i18n="studio.now">Now dubbing</span>
+          <select id="packSelect" aria-label="Pack">
+            <option value="" data-i18n="studio.nopack">No pack loaded</option>
+          </select>
+        </label>
+        <nav class="cv-nav" aria-label="Studio">
+          <a class="cv-nav-link" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>
+          <button class="cv-nav-link active" type="button" data-tab="packs" data-i18n="studio.nav">Studio</button>
+          <button class="cv-nav-link" type="button" data-tab="create" data-i18n="nav.create">Dub Maker</button>
+          <button class="cv-nav-link" type="button" data-tab="rehearsal">Ensaio de atores</button>
+          <button id="howToPlayBtn" class="cv-nav-link" type="button" data-i18n="nav.howto">Como jogar</button>
+          <div class="lang-switch" role="group" aria-label="Language">
+            <button type="button" class="lang-btn active" data-lang="pt" aria-pressed="true">PT</button>
+            <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+          </div>
+          <button id="helpBtn" class="ghost cv-icon-btn" type="button" aria-label="Ajuda">?</button>
+          <button id="bellBtn" class="ghost cv-icon-btn" type="button" data-tab="credits" aria-label="Créditos">⌾</button>
+          <button id="userChip" class="user-chip" type="button" data-tab="profile">
+            <span class="avatar-shell user-chip-avatar" id="userChipAvatar" aria-hidden="true">
+              <span class="avatar-fallback">👤</span>
+              <img alt="" hidden />
+            </span>
+            <span class="user-chip-meta">
+              <strong id="userChipName">Conta</strong>
+              <small id="creditBadge">1 crédito</small>
+            </span>
+          </button>
+          <button id="userLogoutBtn" class="user-logout-btn is-hidden" type="button" data-i18n="profile.logout.short" aria-label="Sair da conta">Sair</button>
+        </nav>
+      </header>
+
+      <div class="studio-ad studio-ad-masthead" aria-label="Advertisement">
+        <div class="studio-ad-unit studio-ad-unit-wide" data-ad-key="masthead">
+          <div class="studio-ad-slot"></div>
+          <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+          <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+        </div>
+      </div>
+
+      <section id="studioIntro" class="cv-intro">
+        <div id="cenaBanner" class="cena-banner is-hidden" role="status">
+          <strong id="cenaBannerTitle" data-i18n="cena.banner.title">Dublar esta cena</strong>
+          <p id="cenaBannerBody"></p>
+          <button id="cenaImportBtn" class="cv-chip" type="button" data-i18n="studio.import">Import a pack ZIP</button>
+        </div>
+        <h1 data-i18n="studio.hero.title">Faça sua dublagem — no navegador</h1>
+        <p id="topbarHint" data-i18n-html="studio.hero.body">Importe um pack, grave cada fala na sua voz e assista o vídeo final. Comece no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.</p>
+        <div class="cv-intro-actions">
+          <button id="helpIntroBtn" class="cv-chip" type="button" data-i18n="nav.howto">Como jogar</button>
+          <button id="introImportBtn" class="cv-chip cv-chip-alt" type="button" data-i18n="packs.downloadZip">Baixar pack</button>
+          <a class="cv-chip cv-chip-gamebanana" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer" data-i18n="packs.gamebanana">GameBanana</a>
+        </div>
+      </section>
+
+      <article id="publisherGuide" class="cv-guide">
+        <h2 data-i18n="guide.title">O que é o DubPack Studio</h2>
+        <p data-i18n="guide.p1">DubPack Studio é um estúdio de dublagem no navegador. Você importa um pack (vídeo da cena + áudio original + falas), ouve a referência, grava a sua voz no tempo de cada linha e gera o vídeo dublado no próprio aparelho. O básico — importar, gravar e exportar — é gratuito e não exige login.</p>
+        <p data-i18n="guide.p2">Um pack não é um anúncio nem uma tela vazia: é o material da cena. Cada fala tem personagem, legenda e duração. O monitor mostra o filme, a onda do original e o seu take, para você acertar emoção e timing. Packs oficiais ficam no GameBanana; você também pode montar o seu no Dub Maker, com vídeo que você tem direito de usar.</p>
+        <h3 data-i18n="guide.steps.title">Como funciona, na prática</h3>
+        <ol>
+          <li data-i18n-html="guide.steps.1">Baixe um pack ZIP no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a> (jogo DubPack) e importe em Meus Packs.</li>
+          <li data-i18n="guide.steps.2">Escolha as funções que você vai dublar. Os outros personagens ficam com a voz original.</li>
+          <li data-i18n="guide.steps.3">Ouça o clip, grave no microfone, volte na fala se precisar e avance para a próxima.</li>
+          <li data-i18n="guide.steps.4">Quando as falas da sua função estiverem gravadas, finalize e baixe o vídeo (WebM ou MP4, conforme o plano).</li>
+        </ol>
+        <h3 data-i18n="guide.faq.title">Perguntas frequentes</h3>
+        <p><strong data-i18n="guide.faq.1.q">Preciso de conta para dublar?</strong> <span data-i18n="guide.faq.1.a">Não. Conta é só para PRO, créditos de IA/nuvem e histórico. A tela de entrar não é obrigatória para usar o Studio.</span></p>
+        <p><strong data-i18n="guide.faq.2.q">Onde fica o conteúdo da cena?</strong> <span data-i18n="guide.faq.2.a">No pack: vídeo, áudio e legendas. Sem pack importado, o monitor fica vazio de propósito — não há cena para dublar ainda.</span></p>
+        <p><strong data-i18n="guide.faq.3.q">Vocês hospedam o filme original?</strong> <span data-i18n="guide.faq.3.a">O processamento é local no navegador. Direitos da mídia são de quem cria ou baixou o pack. Parcerias: contact@dubpackstudio.com.</span></p>
+      </article>
+
+      <div class="studio-ad studio-ad-mobile" aria-label="Advertisement">
+        <div class="studio-ad-unit studio-ad-unit-wide" data-ad-key="mobileBanner">
+          <div class="studio-ad-slot"></div>
+          <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+          <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+        </div>
+      </div>
+
+      <div id="studioFloor" class="cv-floor">
+        <div class="cv-desk">
+          <div class="cv-stage">
+            <section class="cv-monitor" aria-label="Dub monitor">
+              <div class="cv-bezel">
+                <span class="cv-screw cv-screw-tl" aria-hidden="true"></span>
+                <span class="cv-screw cv-screw-tr" aria-hidden="true"></span>
+                <p class="cv-monitor-name">DubPack Vision · DP-G4 · Dub Monitor</p>
+                <div class="video-shell" id="monitorScreen">
+                  <video id="sceneVideo" playsinline muted preload="auto"></video>
+                  <div id="sceneOgvHost" class="scene-ogv-host" hidden></div>
+                  <img id="sceneImage" alt="" />
+                  <div id="emptyFrame" class="empty-frame">
+                    <div id="emptyIdle" class="empty-idle">
+                      <small data-i18n="studio.nosignal">No signal</small>
+                      <strong data-i18n="studio.nopack">No pack loaded</strong>
+                      <button id="openImportBtn" class="cv-import primary" type="button" data-i18n="studio.import">Import a pack ZIP</button>
+                    </div>
+                    <div id="emptyScene" class="empty-scene" hidden></div>
+                  </div>
+                  <div class="cv-cue"><i></i> Cue <b id="cueLabel">00:00</b></div>
+                  <div id="countdownBadge" class="countdown-badge">3</div>
+                  <div id="recordingOverlay" class="recording-overlay inline">
+                    <strong id="overlayCharacter">Personagem</strong>
+                    <span id="overlayText">Leia a fala no tempo certo.</span>
+                  </div>
+                  <div class="cv-caption">
+                    <span id="frameCharacter" class="cv-char-chip">Personagem</span>
+                    <p id="frameSubtitle">A legenda aparece aqui.</p>
+                  </div>
+                </div>
+                <div class="cv-monitor-meta">
+                  <span>Frame hold <b id="elapsedLabel">00:00</b></span>
+                  <div class="cv-monitor-bay">
+                    <i class="cv-progress"><b id="videoProgress"></b></i>
+                    <div id="monitorDiscSlot" class="monitor-disc-slot" aria-hidden="true">
+                      <i class="monitor-disc-door"></i>
+                      <span id="cdTrayDisc" class="monitor-disc-edge" hidden></span>
+                    </div>
+                  </div>
+                  <span>Master <b id="durationLabel">00:00</b></span>
+                  <span id="tapeLamp" class="cv-lamp">No tape</span>
+                </div>
+                <span class="cv-screw cv-screw-bl" aria-hidden="true"></span>
+                <span class="cv-screw cv-screw-br" aria-hidden="true"></span>
+              </div>
+            </section>
+
+            <section class="cv-wave" aria-label="Audio waveform">
+              <header class="cv-wave-head">
+                <strong data-i18n="studio.wave.title">Overlap waveform</strong>
+                <div class="cv-wave-legend">
+                  <span class="is-ref" data-i18n="studio.wave.original">Original</span>
+                  <span class="is-take" data-i18n="studio.wave.take">Your take</span>
+                </div>
+              </header>
+              <div class="hero-waveform" id="waveStage">
+                <canvas id="waveCanvas" aria-hidden="true"></canvas>
+                <b id="wavePlayhead"></b>
+              </div>
+              <div class="cv-wave-foot">
+                <span id="waveStartLabel">0.0s</span>
+                <span id="stageState" class="stage-state">Pronto para gravar</span>
+                <span id="waveEndLabel">00:00</span>
+              </div>
+              <p id="timingHint" class="cv-timing-hint">Espere a barra branca chegar no pontilhado vermelho (3, 2, 1). Fale entre o início e o fim — acompanhe a onda roxa.</p>
+              <div class="timing-labels">
+                <span data-i18n="studio.early">Cedo</span>
+                <span data-i18n="studio.ontime">No tempo</span>
+                <span data-i18n="studio.late">Tarde</span>
+              </div>
+            </section>
+          </div>
+
+          <aside class="cv-board">
+            <div class="cv-clip">
+              <span data-i18n="studio.clip">On clip</span>
+              <p><strong id="clipPad">00</strong><em>/</em><b id="clipPadTotal">0</b></p>
+            </div>
+            <button id="referenceBtn" class="cv-key" type="button" data-i18n="studio.hear">Hear clip</button>
+            <button id="recordBtn" class="cv-key cv-key-rec mic stop-ready" type="button" data-i18n="studio.record">Start recording R</button>
+            <button id="listenTakeBtn" class="cv-key" type="button" data-i18n="studio.play">Play recording</button>
+            <div class="cv-nav-row">
+              <button id="prevSceneBtn" class="cv-key" type="button" data-i18n="studio.prev">Voltar</button>
+              <button id="nextBtn" class="cv-key" type="button" data-i18n="studio.next">Next clip</button>
+            </div>
+            <button id="previewBtn" class="cv-key preview-mini" type="button" data-i18n="studio.play">Play recording</button>
+            <label class="cv-pref-toggle" for="playOriginalAudioToggle">
+              <input id="playOriginalAudioToggle" type="checkbox" />
+              <span>
+                <strong data-i18n="studio.playOriginal">Ouvir áudio original</strong>
+                <small data-i18n="studio.playOriginal.hint">Fone evita vazamento no microfone</small>
+              </span>
+            </label>
+            <label class="cv-pref-toggle" for="micMonitorToggle">
+              <input id="micMonitorToggle" type="checkbox" />
+              <span>
+                <strong data-i18n="studio.micMonitor">Ouvir meu microfone</strong>
+                <small data-i18n="studio.micMonitor.hint">Use fone — grave, ajuste o volume</small>
+              </span>
+            </label>
+            <button id="micSettingsBtn" class="cv-key cv-key-mic-settings" type="button" data-i18n="studio.micSettings">⚙ Configurar voz</button>
+            <div id="micSettingsPanel" class="mic-settings-panel" hidden>
+              <p class="mic-settings-title" data-i18n="studio.micSettings.title">Efeito de voz no take</p>
+              <label class="mic-settings-label" data-i18n="studio.micSettings.preset">Preset</label>
+              <select id="micFilterPreset" class="mic-settings-select">
+                <option value="original" data-i18n="studio.micFilter.original">Original (sem efeito)</option>
+                <option value="broadcast" data-i18n="studio.micFilter.broadcast">Broadcast — compressor + presença</option>
+                <option value="clean" data-i18n="studio.micFilter.clean">Limpa — compressor + de-ess</option>
+                <option value="warm" data-i18n="studio.micFilter.warm">Quente — graves + suavização</option>
+              </select>
+              <label class="mic-settings-label" for="micVolumeSlider" data-i18n="studio.micSettings.volume">Volume do microfone</label>
+              <div class="mic-volume-row">
+                <input id="micVolumeSlider" class="mic-volume-slider" type="range" min="0" max="100" value="85" step="1" aria-valuemin="0" aria-valuemax="100" />
+                <strong id="micVolumeValue">85%</strong>
+              </div>
+              <p class="mic-settings-hint" data-i18n="studio.micSettings.volumeHint">Ajusta o volume ao ouvir o mic e na prévia do seu take.</p>
+              <p class="mic-settings-hint" data-i18n="studio.micSettings.hint">Aplicado ao preview do take. O export usa a voz original gravada.</p>
+            </div>
+            <button id="rolesBtn" class="cv-key" type="button" data-i18n="roles.btn">Escolher funções</button>
+            <button id="exportVideoBtn" class="cv-key cv-key-watch" type="button" disabled data-i18n="studio.watch">Watch dub</button>
+            <div class="cv-meter">
+              <small id="micHint" data-i18n="record.mic">Toque para começar</small>
+              <strong id="timerValue">0.0</strong>
+              <div id="voiceMeter" class="voice-meter" hidden>
+                <b><i id="voiceMeterFill"></i></b>
+                <small id="voiceMeterHint">Fale neste volume</small>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <section id="packsTab" class="tab-view active cv-packs">
+          <div class="section-head">
+            <h2 data-i18n="packs.title">Your packs</h2>
+            <label class="text-link">
+              <span data-i18n="packs.add">+ Adicionar Pack</span>
+              <input id="packInput" type="file" accept=".zip,application/zip" hidden />
+            </label>
+          </div>
+          <div id="packEmpty" class="pack-empty">
+            <h3 data-i18n="packs.empty.title">Comece em 3 passos</h3>
+            <ol class="start-steps">
+              <li data-i18n-html="packs.step.1"><strong>1.</strong> Baixe um pack no <a href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>.</li>
+              <li data-i18n-html="packs.step.2"><strong>2.</strong> Importe o ZIP aqui.</li>
+              <li data-i18n-html="packs.step.3"><strong>3.</strong> Ouça → grave → finalize.</li>
+            </ol>
+          </div>
+          <div class="pack-rail">
+            <div id="packGrid" class="pack-grid"></div>
+            <button id="packRailNext" class="pack-rail-next" type="button" aria-label="Ver mais packs">›</button>
+          </div>
+        </section>
+      </div>
+
+      <section id="recordTab" class="tab-view" hidden></section>
+
+      <section class="content cv-pages">
+        <section id="rehearsalTab" class="tab-view">
+          <header class="section-head">
+            <h2>Ensaio de atores</h2>
+            <label class="script-import">+ Importar roteiro PDF<input id="scriptInput" type="file" accept=".pdf,application/pdf" hidden /></label>
+          </header>
+          <p id="rehearsalStatus" role="status">Nenhum roteiro importado.</p>
+          <div id="rehearsalWorkspace" hidden>
+            <details id="rehearsalSetup" class="rehearsal-setup" open>
+              <summary>Configuração do ensaio</summary>
+              <div class="rehearsal-settings">
+                <label>Meu personagem<select id="actorRole"></select></label>
+                <label>Cena<select id="rehearsalScene"></select></label>
+                <label>Velocidade <input id="rehearsalRate" type="range" min="0.7" max="1.2" step="0.05" value="0.95" /></label>
+                <label class="rehearsal-check"><input id="followSpeech" type="checkbox" checked /> Acompanhar minha fala pelo microfone</label>
+                <label class="rehearsal-check"><input id="hideActorLine" type="checkbox" /> Ocultar minha fala</label>
+              </div>
+              <p id="speechPrivacy" class="rehearsal-note">O reconhecimento de voz pode enviar áudio ao serviço do seu navegador.</p>
+            </details>
+            <div class="rehearsal-layout">
+              <section class="rehearsal-stage" aria-label="Fala atual">
+                <div class="rehearsal-scene-heading"><span id="rehearsalSceneTitle"></span><span id="rehearsalCounter"></span></div>
+                <img class="rehearsal-mark" src="./assets/dubpack-logo-official.png" alt="" />
+                <span id="rehearsalSpeaker" class="rehearsal-speaker"></span>
+                <p id="rehearsalDirections" class="rehearsal-directions"></p>
+                <p id="rehearsalLine" class="rehearsal-line"></p>
+                <button id="revealActorLine" class="secondary" type="button" hidden>Mostrar fala</button>
+                <div class="rehearsal-follow"><progress id="speechProgress" max="100" value="0" aria-label="Progresso da fala"></progress><span id="speechProgressLabel"></span></div>
+                <p id="recognizedSpeech" class="rehearsal-transcript"></p>
+                <div class="rehearsal-controls">
+                  <button id="startRehearsal" class="primary" type="button">Começar ensaio</button>
+                  <button id="pauseRehearsal" class="secondary" type="button" disabled>Pausar</button>
+                  <button id="repeatRehearsal" class="secondary" type="button">Repetir deixa</button>
+                  <button id="continueRehearsal" class="secondary" type="button" disabled>Concluí minha fala</button>
+                </div>
+                <div id="rehearsalTranscriptStrip" class="rehearsal-transcript-strip" aria-label="Falas da cena"></div>
+              </section>
+              <aside class="rehearsal-cast">
+                <h3>Vozes dos parceiros</h3>
+                <div id="rehearsalVoices"></div>
+                <details class="rehearsal-review"><summary>Conferir roteiro</summary><div id="scriptReview"></div></details>
+              </aside>
+            </div>
+          </div>
+        </section>
+        <section id="createTab" class="tab-view create-pack-page">
+          <div id="createLanding" class="create-hero">
+            <div class="create-hero-copy">
+              <div class="create-brand-row">
+                <img class="create-brand-mark" src="./assets/dubpack-logo-official.png" alt="" width="48" height="48" />
+                <p class="create-eyebrow" data-i18n="create.eyebrow">Pack Maker · Input 01</p>
+              </div>
+              <h1>
+                <span data-i18n="create.hero.line1">Monte o seu</span>
+                <span class="create-hero-brand"><span class="create-hero-dub">Dub</span><span class="create-hero-pack">Pack</span>.</span>
+              </h1>
+              <p class="create-hero-lead" data-i18n="create.lead">Carregue um vídeo do zero ou abra um ZIP de pack existente e continue editando — tudo no navegador, sem enviar nada para o servidor.</p>
+              <div class="create-hero-actions">
+                <label class="create-cta create-cta-primary">
+                  <span aria-hidden="true">↑</span>
+                  <span data-i18n="create.video">Escolher vídeo MP4 ou WebM</span>
+                  <input id="createVideoInput" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.m4v,.ogv" hidden />
+                </label>
+                <label class="create-cta create-cta-secondary">
+                  <span aria-hidden="true">▣</span>
+                  <span data-i18n="create.openZip">Abrir pack ZIP</span>
+                  <input id="createZipInput" type="file" accept=".zip,application/zip" hidden />
+                </label>
+              </div>
+              <p class="create-limits" data-i18n="create.limits">Vídeo até 500 MB · ZIP até 1 GB · processado localmente</p>
+              <p class="create-legal" data-i18n="create.legal">Use só material que você tem direito de usar. O DubPack é só o estúdio; conteúdo e direitos são responsabilidade de quem cria o pack.</p>
+            </div>
+            <button id="createDrop" class="create-drop" type="button" aria-label="Soltar vídeo ou ZIP">
+              <span class="create-drop-glow" aria-hidden="true"></span>
+              <span class="create-drop-icon" aria-hidden="true">✦</span>
+              <strong data-i18n="create.drop">Solte MP4, WebM ou pack ZIP</strong>
+              <small data-i18n="create.drop.tag">Mídia / Arquivo</small>
+            </button>
+          </div>
+
+          <div id="createWorkspace" class="create-workspace is-hidden">
+            <div class="create-workspace-bar">
+              <div>
+                <p class="create-eyebrow" data-i18n="create.eyebrow.edit">Pack Maker · Timeline</p>
+                <strong id="createWorkspaceTitle">—</strong>
+              </div>
+              <div class="create-workspace-actions">
+                <button id="createNewProjectBtn" class="ghost" type="button" data-i18n="create.new">Novo projeto</button>
+                <button id="createResetBtn" class="ghost" type="button" data-i18n="create.reset">Limpar</button>
+              </div>
+            </div>
+
+            <label class="create-field">
+              <span data-i18n="create.name">Nome do pack</span>
+              <input id="createPackName" type="text" maxlength="80" placeholder="Minha cena" data-i18n-placeholder="create.name.placeholder" />
+            </label>
+
+            <div class="create-video-block">
+              <div class="create-scene-box">
+                <div class="create-scene-head">
+                  <strong data-i18n="create.scene.title">Cena do pack</strong>
+                  <span id="createSceneLength" class="create-scene-length">0:00 / 1:20</span>
+                </div>
+                <p class="hint-copy" data-i18n="create.scene.hint">Arraste a faixa no vídeo (máx. 1:20). Depois rode Detectar falas só nesse trecho.</p>
+                <div class="create-times">
+                  <label class="create-field">
+                    <span data-i18n="create.scene.start">Início da cena (s)</span>
+                    <input id="createSceneStart" type="number" min="0" step="0.01" value="0" />
+                  </label>
+                  <label class="create-field">
+                    <span data-i18n="create.scene.end">Fim da cena (s)</span>
+                    <input id="createSceneEnd" type="number" min="0" step="0.01" value="80" />
+                  </label>
+                </div>
+                <div class="create-video-actions">
+                  <button id="createSceneFromPlayheadBtn" class="secondary" type="button" data-i18n="create.scene.fromPlayhead" disabled>1:20 a partir daqui</button>
+                  <button id="createMarkSceneStartBtn" class="secondary" type="button" data-i18n="create.scene.markStart" disabled>Marcar início da cena</button>
+                  <button id="createMarkSceneEndBtn" class="secondary" type="button" data-i18n="create.scene.markEnd" disabled>Marcar fim da cena</button>
+                </div>
+              </div>
+
+              <div class="create-player-wrap">
+                <video id="createVideo" class="create-video" controls playsinline preload="metadata"></video>
+                <div id="createSceneScrub" class="create-scrub create-scrub-on-player" role="group" aria-label="Selecionar trecho da cena">
+                  <div class="create-scrub-track" id="createScrubTrack">
+                    <div id="createScrubSelection" class="create-scrub-selection"></div>
+                    <div id="createScrubPlayhead" class="create-scrub-playhead"></div>
+                    <button type="button" id="createScrubStart" class="create-scrub-handle is-start" aria-label="Início da cena"></button>
+                    <button type="button" id="createScrubEnd" class="create-scrub-handle is-end" aria-label="Fim da cena"></button>
+                  </div>
+                  <div class="create-scrub-labels">
+                    <span id="createScrubStartLabel">0:00</span>
+                    <span data-i18n="create.scene.dragHint">Arraste aqui pra escolher a cena</span>
+                    <span id="createScrubEndLabel">1:20</span>
+                  </div>
+                </div>
+              </div>
+              <p id="createVideoMeta" class="hint-copy" data-i18n="create.video.empty">Nenhum vídeo carregado.</p>
+
+              <div class="create-video-actions">
+                <button id="createDetectBtn" class="create-detect-btn" type="button" data-i18n="create.detect" disabled>Detectar falas</button>
+                <button id="createMarkStartBtn" class="secondary" type="button" data-i18n="create.markStart" disabled>Marcar início da fala</button>
+                <button id="createMarkEndBtn" class="secondary" type="button" data-i18n="create.markEnd" disabled>Marcar fim da fala</button>
+              </div>
+              <p class="hint-copy" data-i18n="create.detect.hint">Detectar falas junta o diálogo e parte trechos longos (~8s).</p>
+            </div>
+
+            <div id="createLineForm" class="create-line-form">
+              <label class="create-field">
+                <span data-i18n="create.character">Personagem</span>
+                <input id="createCharacter" type="text" maxlength="60" placeholder="Personagem" data-i18n-placeholder="create.character.placeholder" />
+              </label>
+              <label class="create-field create-field-wide">
+                <span data-i18n="create.text">Fala / legenda</span>
+                <textarea id="createText" rows="2" maxlength="500" placeholder="Texto da fala" data-i18n-placeholder="create.text.placeholder"></textarea>
+              </label>
+              <div class="create-times">
+                <label class="create-field">
+                  <span data-i18n="create.start">Início (s)</span>
+                  <input id="createStart" type="number" min="0" step="0.01" value="0" />
+                </label>
+                <label class="create-field">
+                  <span data-i18n="create.end">Fim (s)</span>
+                  <input id="createEnd" type="number" min="0" step="0.01" value="1" />
+                </label>
+              </div>
+              <button id="createAddLineBtn" class="secondary" type="button" data-i18n="create.add">Adicionar fala</button>
+            </div>
+
+            <div class="section-head">
+              <h3 data-i18n="create.lines">Falas do pack</h3>
+              <span id="createLineCount" class="hint-copy">0</span>
+            </div>
+            <ul id="createLineList" class="create-line-list"></ul>
+            <p id="createLinesEmpty" class="hint-copy" data-i18n="create.lines.empty">Ainda não há falas. Marque o tempo no vídeo e adicione.</p>
+
+            <div id="createConfirmBox" class="create-confirm-box is-hidden">
+              <p class="hint-copy" data-i18n="create.confirm.hint">Ouça cada fala. Quando a lista estiver boa, confirme pra escrever as legendas.</p>
+              <button id="createConfirmLinesBtn" class="create-confirm-btn" type="button" data-i18n="create.confirm">Confirmar falas</button>
+            </div>
+
+            <div id="createCaptionsBox" class="create-captions-box is-hidden">
+              <div class="create-scene-head">
+                <strong data-i18n="create.captions.title">Legendas do pack</strong>
+                <button id="createEditLinesBtn" class="ghost" type="button" data-i18n="create.confirm.edit">Voltar às falas</button>
+              </div>
+              <p class="hint-copy" data-i18n="create.captions.hint">Escolha o idioma, gere as legendas no seu PC e ajuste o texto. Depois preencha os personagens.</p>
+              <div id="createLangToggle" class="create-lang-toggle" role="group" aria-label="Idioma do pack">
+                <button type="button" data-create-lang="pt" class="is-active">Português</button>
+                <button type="button" data-create-lang="en">English</button>
+              </div>
+              <button id="createTranscribeBtn" class="create-transcribe-btn" type="button" data-i18n="create.whisper.generate" disabled>Gerar legendas</button>
+              <p class="hint-copy" data-i18n="create.whisper.note">Na primeira vez baixa o modelo (~75 MB) e roda local — nada vai pro servidor.</p>
+            </div>
+
+            <div class="create-actions">
+              <button id="createDownloadBtn" class="primary wide" type="button" data-i18n="create.download" disabled>Baixar ZIP do pack</button>
+              <button id="createOpenBtn" class="secondary wide" type="button" data-i18n="create.open" disabled>Abrir no Studio</button>
+            </div>
+            <p id="createStatus" class="hint-copy" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section id="dubTab" class="tab-view info-card final-video-page">
+          <h2 data-i18n="dub.title">Vídeo final</h2>
+          <p data-i18n="dub.body">Sua dublagem completa, com o filme original e as vozes que você gravou. Assista aqui e baixe para guardar ou compartilhar.</p>
+          <div id="readyActions" class="ready-actions is-hidden">
+            <h3 data-i18n="ready.title">Sua dublagem está pronta</h3>
+            <p class="ready-lead" data-i18n="ready.lead">Escolha o formato, baixe ou envie o link da cena para outra pessoa dublar no Studio.</p>
+            <div class="ready-formats" role="group" aria-label="Formatos">
+              <button id="exportOriginalBtn" class="ready-format is-active" type="button" data-export-layout="original" data-i18n="ready.format.original">Vídeo original · 16:9</button>
+              <button id="exportVerticalBtn" class="ready-format" type="button" data-export-layout="vertical" data-i18n="ready.format.vertical">TikTok / Reels / Shorts · 9:16</button>
+            </div>
+            <div id="verticalFramingBox" class="vertical-framing is-hidden">
+              <p class="hint-copy" data-i18n="ready.framing.hint">Ajuste o enquadramento horizontal do recorte 9:16. A prévia mostra o filme original; depois clique em atualizar para gerar o vídeo com a dublagem.</p>
+              <div class="vertical-framing-preview-wrap" aria-hidden="true">
+                <video id="exportFramingPreview" muted playsinline loop></video>
+              </div>
+              <label class="vertical-framing-control">
+                <span data-i18n="ready.framing.left">Esquerda</span>
+                <input id="exportVerticalPan" type="range" min="0" max="100" value="50" step="1" aria-label="Enquadramento horizontal" />
+                <span data-i18n="ready.framing.right">Direita</span>
+              </label>
+              <button id="exportVerticalApplyBtn" class="secondary" type="button" data-i18n="ready.framing.apply">Atualizar enquadramento</button>
+            </div>
+            <div class="ready-share">
+              <button id="copySceneLinkBtn" class="secondary" type="button" data-i18n="ready.copy">Copiar link da cena</button>
+              <button id="shareSceneBtn" class="secondary" type="button" data-i18n="ready.share">Compartilhar</button>
+              <button id="redubBtn" class="ghost" type="button" data-i18n="ready.redub">Dublar de novo</button>
+            </div>
+          </div>
+          <div id="finalVideoWrap" class="final-video-wrap">
+            <video id="finalVideo" controls playsinline></video>
+            <video id="exportFilm" muted playsinline></video>
+            <div id="finalVideoEmpty" class="empty-frame" data-i18n="dub.empty">Grave as falas e gere o vídeo para assistir sua dublagem completa.</div>
+          </div>
+          <p id="exportStatus" class="hint-copy" data-i18n="dub.status.none">Nenhum vídeo gerado ainda.</p>
+          <div id="exportProgressWrap" class="export-progress is-hidden">
+            <div class="export-progress-track"><b id="exportProgressBar"></b></div>
+            <strong id="exportProgressLabel">0%</strong>
+          </div>
+          <button id="generateMp4Btn" class="primary wide" type="button" data-i18n="record.finish">Finalizar dublagem</button>
+          <button id="downloadMp4Btn" class="primary wide is-hidden" type="button" data-i18n="dub.download.webm">Baixar WebM</button>
+        </section>
+
+        <section id="profileTab" class="tab-view info-card">
+          <h2 data-i18n="profile.title">Perfil</h2>
+          <div class="profile-hero">
+            <label class="profile-avatar-picker">
+              <input id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+              <span class="avatar-shell profile-avatar" id="profileAvatar">
+                <span class="avatar-fallback">👤</span>
+                <img alt="" hidden />
+              </span>
+              <small data-i18n="profile.avatar">Tocar para trocar a foto</small>
+            </label>
+            <div>
+              <h3 id="profileName">Conta</h3>
+              <p id="profileMeta">Faça login para dublar</p>
+            </div>
+          </div>
+          <p id="profileCreditsLine">Dublar e exportar o básico é grátis. Créditos ficam para IA e nuvem.</p>
+          <button id="profileLoginBtn" class="primary wide" type="button" data-i18n="auth.submit.login">Entrar</button>
+          <button class="primary wide" type="button" data-tab="credits" data-i18n="profile.plans">Comprar créditos</button>
+          <button id="logoutBtn" class="secondary wide is-hidden" type="button" data-i18n="profile.logout">Sair da conta</button>
+        </section>
+
+        <section id="creditsTab" class="tab-view info-card">
+          <h2 data-i18n="credits.title">Créditos</h2>
+          <p data-i18n="credits.intro">Grave e exporte o básico de graça. PRO sobe a qualidade. Créditos pagam IA e nuvem depois.</p>
+          <p><span data-i18n="credits.balance">Saldo atual:</span> <strong id="creditsBalance">1 crédito</strong></p>
+          <section class="pro-card">
+            <span data-i18n="pro.card.title">DubPack PRO</span>
+            <p data-i18n="pro.card.body">R$ 9,90/mês · exportação em qualidade mais alta e créditos para IA/nuvem.</p>
+            <button id="proBtn" class="primary" type="button" data-i18n="pro.btn">Ver plano PRO</button>
+          </section>
+          <section id="shopCart" class="shop-cart cart-panel" data-cart-panel>
+            <header class="side-cart-head">
+              <span data-i18n="cart.title">Carrinho</span>
+              <strong data-cart-count>0</strong>
+            </header>
+            <p data-cart-empty class="side-cart-empty" data-i18n="cart.empty">Nada no carrinho ainda.</p>
+            <ul data-cart-items class="side-cart-items"></ul>
+            <div data-cart-footer class="side-cart-footer is-hidden">
+              <div class="side-cart-total">
+                <span data-i18n="cart.total.brl">Total (BRL)</span>
+                <strong data-cart-total-brl>R$ 0,00</strong>
+              </div>
+              <div class="side-cart-total">
+                <span data-i18n="cart.total.usd">Total (USD)</span>
+                <strong data-cart-total-usd>$0.00</strong>
+              </div>
+              <div class="cart-currency" role="group" aria-label="Moeda">
+                <span class="cart-currency-label" data-i18n="cart.currency.label">Pagar em</span>
+                <button type="button" class="cart-currency-btn" data-cart-currency="brl" aria-pressed="true">BRL</button>
+                <button type="button" class="cart-currency-btn" data-cart-currency="usd" aria-pressed="false">USD</button>
+              </div>
+              <button type="button" class="stripe-checkout-btn wide" data-cart-checkout="stripe" data-i18n="cart.checkout.stripe">Finalizar pagamento</button>
+              <button type="button" class="side-cart-clear" data-cart-clear data-i18n="cart.clear">Limpar carrinho</button>
+            </div>
+          </section>
+          <div id="creditShop" class="credit-shop"></div>
+        </section>
+      </section>
+
+      <aside class="right-rail cv-extras">
+        <div class="studio-ad studio-ad-rail" aria-label="Advertisement">
+          <div class="studio-ad-unit studio-ad-unit-wide" data-ad-key="railTop">
+            <div class="studio-ad-slot"></div>
+            <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+            <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+          </div>
+        </div>
+        <section class="score-card">
+          <div>
+            <h2><span data-i18n="score.title">Seu desempenho</span> <small class="beta-pill" data-i18n="score.beta">beta</small></h2>
+          </div>
+          <div class="score-body">
+            <div class="score-ring">
+              <div class="score-ring-inner">
+                <strong id="scoreAverage">—</strong>
+                <span id="scoreCaption">SEM PACK</span>
+              </div>
+            </div>
+            <ul class="score-metrics">
+              <li><span data-i18n="score.recorded">Falas gravadas</span><b id="scoreCoverage">—</b></li>
+              <li><span data-i18n="score.duration">Duração vs referência</span><b id="scoreDuration">—</b></li>
+              <li><span data-i18n="score.ontime">Takes no tempo</span><b id="scoreOnTime">—</b></li>
+              <li><span data-i18n="score.pack">Pack atual</span><b id="scorePack">—</b></li>
+            </ul>
+          </div>
+        </section>
+        <section class="tips-card" aria-live="polite">
+          <h2><span aria-hidden="true">✦</span> <span data-i18n="tips.title">Dicas do Studio</span></h2>
+          <div class="tips-body">
+            <div>
+              <p id="tipTitle"><strong>Foque na emoção!</strong></p>
+              <p id="tipBody">Transmita sentimento na sua voz. Isso faz toda a diferença na dublagem.</p>
+            </div>
+            <img class="tips-mic" src="./assets/studio-mic-neon.png" alt="" />
+          </div>
+          <div id="tipDots" class="tip-dots" role="tablist" aria-label="Dicas do Studio"></div>
+        </section>
+        <div class="studio-ad studio-ad-rail" aria-label="Advertisement">
+          <div class="studio-ad-unit studio-ad-unit-wide" data-ad-key="railBottom">
+            <div class="studio-ad-slot"></div>
+            <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+            <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="cv-sr" hidden>
+        <button id="profileNavBtn" type="button" data-tab="profile">Perfil</button>
+        <button id="prevBtn" type="button">Voltar</button>
+        <button id="nextSceneBtn" type="button">Próxima</button>
+        <span id="previewHint"></span>
+        <span id="welcomeTitle"></span>
+        <span id="projectTitle"></span>
+        <span id="projectMeta"></span>
+        <span id="counter"></span>
+        <span id="topCounter"></span>
+        <span id="character"></span>
+        <span id="subtitle"></span>
+        <section id="sideCart" class="cart-panel" data-cart-panel>
+          <strong data-cart-count>0</strong>
+          <p data-cart-empty></p>
+          <ul data-cart-items></ul>
+          <div data-cart-footer class="is-hidden">
+            <strong data-cart-total-brl></strong>
+            <strong data-cart-total-usd></strong>
+            <button type="button" data-cart-currency="brl"></button>
+            <button type="button" data-cart-currency="usd"></button>
+            <button type="button" data-cart-checkout="stripe"></button>
+            <button type="button" data-cart-clear></button>
+          </div>
+        </section>
+      </div>
+    </main>
+      <div class="studio-ad studio-ad-bottom" aria-label="Advertisement">
+        <div class="studio-ad-unit studio-ad-unit-wide" data-ad-key="bottomLeader">
+          <div class="studio-ad-slot"></div>
+          <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+          <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+        </div>
+      </div>
+      <aside class="studio-ad studio-ad-right" aria-label="Advertisement">
+        <div class="studio-ad-unit" data-ad-key="rightTop">
+          <div class="studio-ad-slot"></div>
+          <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+          <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+        </div>
+        <div class="studio-ad-unit" data-ad-key="rightBottom">
+          <div class="studio-ad-slot"></div>
+          <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+          <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+        </div>
+      </aside>
+    </div>
+    <div class="studio-ad studio-ad-footer" aria-label="Advertisement">
+      <div class="studio-ad-unit studio-ad-unit-wide" data-ad-key="footer">
+        <div class="studio-ad-slot"></div>
+        <div class="studio-ad-fallback"><span data-i18n="ads.label">Anúncio</span></div>
+        <button type="button" class="studio-ad-pro" data-tab="credits" data-i18n="ads.remove">Remover com PRO</button>
+      </div>
+    </div>
+    <footer class="site-footer">
+      <p data-i18n="footer">DubPack Studio © 2026 · Feito para dubladores apaixonados</p>
+      <p data-i18n-html="footer.partnership">Parcerias: <a href="mailto:contact@dubpackstudio.com">contact@dubpackstudio.com</a></p>
+    </footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="./vendor/fflate.min.js?v=169"></script>
+    <script src="./payments.config.js?v=169"></script>
+    <script src="./ads.config.js?v=169"></script>
+    <script src="./i18n.js?v=208"></script>
+    <script src="./payments.js?v=169"></script>
+    <script src="./ads.js?v=206"></script>
+    <script src="./app.js?v=214"></script>
+    <script type="module" src="./rehearsal.js?v=216"></script>
+  </body>
+</html>
