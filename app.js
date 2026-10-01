@@ -389,7 +389,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '210';
+  const swVersion = '211';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -3031,7 +3031,8 @@ async function importRehearsalPdf(file) {
   if (status) status.textContent = `Abrindo PDF: ${file.name}...`;
   if (input) input.disabled = true;
   try {
-    const rehearsal = await import('./rehearsal.js?v=210');
+    const rehearsalUrl = new URL('./rehearsal.js?v=211', document.baseURI).href;
+    const rehearsal = await import(rehearsalUrl);
     await rehearsal.importScript(file);
   } catch (error) {
     if (status) status.textContent = `Não foi possível abrir o leitor de PDF: ${error.message}`;
