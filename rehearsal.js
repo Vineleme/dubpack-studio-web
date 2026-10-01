@@ -6,7 +6,7 @@ const ui = Object.fromEntries([
   'rehearsalCounter', 'rehearsalSpeaker', 'rehearsalDirections', 'rehearsalLine',
   'revealActorLine', 'speechProgress', 'speechProgressLabel', 'recognizedSpeech',
   'startRehearsal', 'pauseRehearsal', 'repeatRehearsal', 'continueRehearsal',
-  'rehearsalVoices', 'scriptReview'
+  'rehearsalVoices', 'scriptReview', 'rehearsalTranscriptStrip'
 ].map((id) => [id, document.getElementById(id)]));
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const synthesis = window.speechSynthesis;
@@ -83,10 +83,31 @@ function render() {
   ui.speechProgress.value = own ? Math.round(comparison.coverage * 100) : 0;
   ui.speechProgressLabel.textContent = own ? `${Math.round(comparison.coverage * 100)}% da fala reconhecida` : 'Parceiro de cena';
   ui.recognizedSpeech.textContent = own && rehearsal.transcript ? `Reconhecido: ${rehearsal.transcript}` : '';
+  renderTranscriptStrip(scene);
   ui.continueRehearsal.disabled = !rehearsal.running || !own;
   ui.startRehearsal.disabled = rehearsal.running;
   ui.pauseRehearsal.disabled = !rehearsal.running;
   document.querySelector('.rehearsal-stage').classList.toggle('actor-turn', Boolean(own));
+}
+
+function renderTranscriptStrip(scene) {
+  ui.rehearsalTranscriptStrip.replaceChildren();
+  scene.lines.forEach((item, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `rehearsal-transcript-item${index === rehearsal.line ? ' is-current' : ''}${actorTurn(item) ? ' is-actor' : ''}`;
+    button.title = 'Ir para esta fala';
+    const speaker = document.createElement('strong');
+    speaker.textContent = item.character;
+    const text = document.createElement('span');
+    text.textContent = item.text;
+    button.append(speaker, text);
+    button.onclick = () => {
+      resetPosition(rehearsal.scene, index);
+      status(index === rehearsal.line && actorTurn(item) ? 'Sua fala selecionada. Toque em “Começar ensaio” quando estiver pronto.' : 'Fala selecionada.');
+    };
+    ui.rehearsalTranscriptStrip.append(button);
+  });
 }
 
 function start() {

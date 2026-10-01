@@ -30,6 +30,12 @@ body.tab-rehearsal #studioIntro, body.tab-rehearsal #publisherGuide { display: n
 .rehearsal-controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; width: 100%; }
 .rehearsal-controls button { min-height: 44px; border-radius: 6px; }
 .rehearsal-controls button:disabled { opacity: .45; cursor: default; }
+.rehearsal-transcript-strip { width: 100%; display: flex; gap: 8px; overflow-x: auto; padding: 14px 2px 4px; scroll-snap-type: x proximity; }
+.rehearsal-transcript-item { flex: 0 0 min(240px, 72vw); display: grid; gap: 4px; text-align: left; scroll-snap-align: center; background: #100e1c; color: #c9c1d2; border: 1px solid #3a3046; border-radius: 6px; padding: 10px 12px; cursor: pointer; }
+.rehearsal-transcript-item strong { color: #ff91bf; font-size: 12px; }
+.rehearsal-transcript-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.rehearsal-transcript-item.is-actor strong { color: #63e7a6; }
+.rehearsal-transcript-item.is-current { border-color: #f52e83; box-shadow: 0 0 0 1px #f52e83; }
 .rehearsal-cast { border-left: 1px solid #302639; padding-left: 20px; min-width: 0; }
 .rehearsal-cast h3 { margin-top: 0; font-size: 16px; }
 #rehearsalVoices { display: grid; gap: 18px; }
