@@ -389,7 +389,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '208';
+  const swVersion = '209';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -455,7 +455,7 @@ function bindUi() {
     event.preventDefault();
     els.recordBtn?.click();
   });
-  document.querySelectorAll('label.text-link, .pack-empty label.primary').forEach((label) => {
+  document.querySelectorAll('#packsTab label.text-link, .pack-empty label.primary').forEach((label) => {
     label.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
