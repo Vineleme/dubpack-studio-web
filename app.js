@@ -429,6 +429,11 @@ function bindUi() {
   document.querySelector('#scriptInput')?.addEventListener('change', (event) => {
     void importRehearsalPdf(event.target.files?.[0]);
   });
+  document.querySelector('#pilotInterestBtn')?.addEventListener('click', () => {
+    state.authMode = 'signup';
+    showAuthGate(true);
+    setAuthMode('signup');
+  });
   document.querySelector('#openImportBtn')?.addEventListener('click', openImportModal);
   document.querySelector('#importCloseBtn')?.addEventListener('click', closeImportModal);
   document.querySelector('#importModal')?.addEventListener('click', (event) => {

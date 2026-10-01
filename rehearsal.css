@@ -13,6 +13,14 @@ body.tab-rehearsal #studioIntro, body.tab-rehearsal #publisherGuide { display: n
 .rehearsal-settings .rehearsal-check { display: flex; align-items: center; gap: 8px; }
 .rehearsal-check input { width: 18px; height: 18px; accent-color: #f52e83; flex-shrink: 0; }
 .rehearsal-note { color: #aca5ba; font-size: 12px; }
+.pilot-offer { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin: 18px 0 8px; padding: 18px 20px; border: 1px solid #6c2c63; border-radius: 8px; background: linear-gradient(100deg, #1a1025, #110e1c); }
+.pilot-offer h3 { margin: 4px 0 5px; font-size: 18px; }
+.pilot-offer p { margin: 0; color: #bdb4ca; font-size: 13px; }
+.pilot-kicker { color: #ff91bf; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+.pilot-meta { display: grid; justify-items: end; gap: 4px; white-space: nowrap; }
+.pilot-meta strong { color: #63e7a6; font-size: 16px; }
+.pilot-meta span { color: #aaa4b8; font-size: 12px; }
+.pilot-meta button { margin-top: 5px; min-height: 38px; }
 .rehearsal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 28px; margin-top: 24px; }
 .rehearsal-stage { min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 0; }
 .rehearsal-scene-heading { width: 100%; display: flex; justify-content: space-between; gap: 20px; color: #b9b2c8; font-size: 13px; text-align: left; }
@@ -58,6 +66,9 @@ body.tab-rehearsal #studioIntro, body.tab-rehearsal #publisherGuide { display: n
   #rehearsalVoices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
+  .pilot-offer { align-items: stretch; flex-direction: column; gap: 14px; }
+  .pilot-meta { justify-items: start; }
+  .pilot-meta button { width: 100%; }
   body.tab-rehearsal .content { padding: 12px 0; }
   body.tab-rehearsal .cv-now { display: none; }
   #rehearsalTab .section-head { flex-wrap: wrap; gap: 14px; }
