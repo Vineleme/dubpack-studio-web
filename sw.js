@@ -1,9 +1,14 @@
-const CACHE = 'dubpack-studio-web-v204';
+const CACHE = 'dubpack-studio-web-v207';
 const PRECACHE = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './rehearsal.css',
+  './rehearsal.js',
+  './rehearsal-core.mjs',
+  './vendor/pdf.mjs',
+  './vendor/pdf.worker.mjs',
   './create-separator.js',
   './i18n.js',
   './payments.js',

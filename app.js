@@ -389,7 +389,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '169';
+  const swVersion = '207';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -3217,6 +3217,8 @@ function setTab(tab) {
 }
 
 function applyTab(tab) {
+  document.body.classList.toggle('tab-rehearsal', tab === 'rehearsal');
+  document.dispatchEvent(new CustomEvent('dubpack:tab', { detail: tab }));
   if ((tab === 'record' || tab === 'dub') && !currentPack()) {
     toast('Importe um pack para gravar.');
     tab = 'packs';

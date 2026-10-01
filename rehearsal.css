@@ -1,0 +1,61 @@
+body.tab-rehearsal .right-rail { display: none; }
+body.tab-rehearsal .content { padding: 12px 0; }
+body.tab-rehearsal #studioIntro, body.tab-rehearsal #publisherGuide { display: none; }
+.rehearsal-setup > summary { cursor: pointer; color: #d3cedc; padding-block: 12px; }
+#rehearsalWorkspace[hidden], #revealActorLine[hidden] { display: none; }
+#rehearsalStatus { color: #c9c6d8; line-height: 1.5; min-height: 24px; }
+.rehearsal-settings { display: flex; flex-wrap: wrap; gap: 18px; padding-block: 20px; border-block: 1px solid #302639; }
+.rehearsal-settings label, .rehearsal-cast label { display: grid; gap: 8px; font-size: 14px; color: #d3cedc; min-width: 0; }
+.rehearsal-settings select { max-width: 350px; }
+.rehearsal-settings select, .rehearsal-cast select, .rehearsal-cast textarea { width: 100%; background: #100e1c; color: #fff; border: 1px solid #51445c; padding: 10px; border-radius: 6px; font: inherit; }
+.rehearsal-settings .rehearsal-check { display: flex; align-items: center; gap: 8px; }
+.rehearsal-check input { width: 18px; height: 18px; accent-color: #f52e83; flex-shrink: 0; }
+.rehearsal-note { color: #aca5ba; font-size: 12px; }
+.rehearsal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 28px; margin-top: 24px; }
+.rehearsal-stage { min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 0; }
+.rehearsal-scene-heading { width: 100%; display: flex; justify-content: space-between; gap: 20px; color: #b9b2c8; font-size: 13px; text-align: left; }
+.rehearsal-scene-heading span:first-child { overflow-wrap: anywhere; }
+.rehearsal-scene-heading span:last-child { white-space: nowrap; }
+.rehearsal-mark { width: 92px; height: 92px; object-fit: contain; margin: 28px 0 20px; }
+.rehearsal-speaker { font-size: 16px; font-weight: 700; color: #ff91bf; }
+.actor-turn .rehearsal-speaker { color: #63e7a6; }
+.rehearsal-directions { color: #aaa4b8; font-style: italic; font-size: 14px; line-height: 1.5; }
+.rehearsal-line { width: 100%; font-size: 26px; line-height: 1.65; font-weight: 600; min-height: 160px; overflow-wrap: anywhere; margin: 12px 0 24px; }
+.spoken-word { color: #63e7a6; }
+.rehearsal-follow { width: 100%; display: grid; gap: 10px; color: #aaa4b8; font-size: 13px; }
+.rehearsal-follow progress { width: 100%; height: 8px; accent-color: #63e7a6; }
+.rehearsal-transcript { width: 100%; min-height: 40px; color: #aaa4b8; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.rehearsal-controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; width: 100%; }
+.rehearsal-controls button { min-height: 44px; border-radius: 6px; }
+.rehearsal-controls button:disabled { opacity: .45; cursor: default; }
+.rehearsal-cast { border-left: 1px solid #302639; padding-left: 20px; min-width: 0; }
+.rehearsal-cast h3 { margin-top: 0; font-size: 16px; }
+#rehearsalVoices { display: grid; gap: 18px; }
+.rehearsal-review { margin-top: 28px; border-top: 1px solid #302639; padding-top: 18px; }
+.rehearsal-review summary { cursor: pointer; padding-block: 8px; }
+#scriptReview { max-height: 460px; overflow-y: auto; padding-right: 8px; }
+#scriptReview label { margin-block: 20px; }
+#scriptReview h4 { font-size: 13px; line-height: 1.5; color: #ff91bf; }
+#scriptReview textarea { resize: vertical; line-height: 1.5; }
+#scriptReview button { min-height: 40px; }
+@media (max-width: 1120px) {
+  .rehearsal-layout { grid-template-columns: minmax(0, 1fr); }
+  .rehearsal-cast { border-left: 0; padding-left: 0; border-top: 1px solid #302639; padding-top: 20px; }
+  #rehearsalVoices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  body.tab-rehearsal .content { padding: 12px 0; }
+  body.tab-rehearsal .cv-now { display: none; }
+  #rehearsalTab .section-head { flex-wrap: wrap; gap: 14px; }
+  .rehearsal-settings { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .rehearsal-settings select { max-width: none; }
+  .rehearsal-line { font-size: 22px; min-height: 110px; margin-bottom: 12px; }
+  .rehearsal-mark { display: none; }
+  .rehearsal-speaker { margin-top: 18px; }
+  .rehearsal-layout { margin-top: 12px; }
+  .rehearsal-transcript { min-height: 28px; }
+  .rehearsal-stage { padding-top: 10px; }
+  .rehearsal-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rehearsal-controls button { padding: 10px; }
+  #rehearsalVoices { grid-template-columns: minmax(0, 1fr); }
+}

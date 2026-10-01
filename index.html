@@ -24,6 +24,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css?v=206" />
+    <link rel="stylesheet" href="./rehearsal.css?v=207" />
     <meta name="google-adsense-account" content="ca-pub-1677516942518019" />
     <script type="application/ld+json">
       {
@@ -154,6 +155,7 @@
           <a class="cv-nav-link" href="https://gamebanana.com/games/20674" target="_blank" rel="noopener noreferrer">GameBanana</a>
           <button class="cv-nav-link active" type="button" data-tab="packs" data-i18n="studio.nav">Studio</button>
           <button class="cv-nav-link" type="button" data-tab="create" data-i18n="nav.create">Dub Maker</button>
+          <button class="cv-nav-link" type="button" data-tab="rehearsal">Ensaio de atores</button>
           <button id="howToPlayBtn" class="cv-nav-link" type="button" data-i18n="nav.howto">Como jogar</button>
           <div class="lang-switch" role="group" aria-label="Language">
             <button type="button" class="lang-btn active" data-lang="pt" aria-pressed="true">PT</button>
@@ -381,6 +383,49 @@
       <section id="recordTab" class="tab-view" hidden></section>
 
       <section class="content cv-pages">
+        <section id="rehearsalTab" class="tab-view">
+          <header class="section-head">
+            <h2>Ensaio de atores</h2>
+            <label class="text-link">+ Importar roteiro PDF<input id="scriptInput" type="file" accept=".pdf,application/pdf" hidden /></label>
+          </header>
+          <p id="rehearsalStatus" role="status">Nenhum roteiro importado.</p>
+          <div id="rehearsalWorkspace" hidden>
+            <details id="rehearsalSetup" class="rehearsal-setup" open>
+              <summary>Configuração do ensaio</summary>
+              <div class="rehearsal-settings">
+                <label>Meu personagem<select id="actorRole"></select></label>
+                <label>Cena<select id="rehearsalScene"></select></label>
+                <label>Velocidade <input id="rehearsalRate" type="range" min="0.7" max="1.2" step="0.05" value="0.95" /></label>
+                <label class="rehearsal-check"><input id="followSpeech" type="checkbox" checked /> Acompanhar minha fala pelo microfone</label>
+                <label class="rehearsal-check"><input id="hideActorLine" type="checkbox" /> Ocultar minha fala</label>
+              </div>
+              <p id="speechPrivacy" class="rehearsal-note">O reconhecimento de voz pode enviar áudio ao serviço do seu navegador.</p>
+            </details>
+            <div class="rehearsal-layout">
+              <section class="rehearsal-stage" aria-label="Fala atual">
+                <div class="rehearsal-scene-heading"><span id="rehearsalSceneTitle"></span><span id="rehearsalCounter"></span></div>
+                <img class="rehearsal-mark" src="./assets/dubpack-logo-official.png" alt="" />
+                <span id="rehearsalSpeaker" class="rehearsal-speaker"></span>
+                <p id="rehearsalDirections" class="rehearsal-directions"></p>
+                <p id="rehearsalLine" class="rehearsal-line"></p>
+                <button id="revealActorLine" class="secondary" type="button" hidden>Mostrar fala</button>
+                <div class="rehearsal-follow"><progress id="speechProgress" max="100" value="0" aria-label="Progresso da fala"></progress><span id="speechProgressLabel"></span></div>
+                <p id="recognizedSpeech" class="rehearsal-transcript"></p>
+                <div class="rehearsal-controls">
+                  <button id="startRehearsal" class="primary" type="button">Começar ensaio</button>
+                  <button id="pauseRehearsal" class="secondary" type="button" disabled>Pausar</button>
+                  <button id="repeatRehearsal" class="secondary" type="button">Repetir deixa</button>
+                  <button id="continueRehearsal" class="secondary" type="button" disabled>Concluí minha fala</button>
+                </div>
+              </section>
+              <aside class="rehearsal-cast">
+                <h3>Vozes dos parceiros</h3>
+                <div id="rehearsalVoices"></div>
+                <details class="rehearsal-review"><summary>Conferir roteiro</summary><div id="scriptReview"></div></details>
+              </aside>
+            </div>
+          </div>
+        </section>
         <section id="createTab" class="tab-view create-pack-page">
           <div id="createLanding" class="create-hero">
             <div class="create-hero-copy">
@@ -755,6 +800,7 @@
     <script src="./i18n.js?v=206"></script>
     <script src="./payments.js?v=169"></script>
     <script src="./ads.js?v=206"></script>
-    <script src="./app.js?v=206"></script>
+    <script src="./app.js?v=207"></script>
+    <script type="module" src="./rehearsal.js?v=207"></script>
   </body>
 </html>

@@ -30,6 +30,21 @@ Depois abra o endereço local mostrado no terminal.
 - Pacotes de crédito: 1/R$3, 2/R$5, 5/R$11, 10/R$20.
 - Pode ser publicado no GitHub Pages como site/PWA.
 
+## Ensaio de atores
+
+Importe um PDF com cenas numeradas e falas no formato `PERSONAGEM: texto`.
+Escolha seu papel, a cena e as vozes dos parceiros. O PDF e suas falas ficam
+na sessao local; nenhum roteiro e enviado ao servidor do DubPack.
+
+As vozes usam a sintese do aparelho. O acompanhamento usa reconhecimento de
+voz em portugues quando disponivel, que pode enviar audio ao servico do
+navegador. O proximo parceiro entra apenas com resultado final, cobertura
+ordenada da fala e suas palavras de encerramento. Silencio nao avanca o
+dialogo. Ha conclusao manual, pausa, repeticao da deixa, ocultacao da fala
+e revisao dos textos importados. PDFs escaneados nao sao suportados.
+
+Teste do parser e acompanhamento: `node --test tests/rehearsal-core.test.mjs`.
+
 ## O que fica para a proxima etapa
 
 - Pix/cartão reais no lugar da compra simulada.
