@@ -3,7 +3,7 @@ import { parseScript, compareSpeech, textLinesFromItems } from './rehearsal-core
 const ui = Object.fromEntries([
   'scriptInput', 'rehearsalStatus', 'rehearsalWorkspace', 'actorRole', 'rehearsalScene',
   'rehearsalRate', 'followSpeech', 'hideActorLine', 'speechPrivacy', 'rehearsalSceneTitle',
-  'rehearsalCounter', 'rehearsalSpeaker', 'rehearsalDirections', 'rehearsalLine',
+  'rehearsalCounter', 'rehearsalSpeaker', 'rehearsalDirections', 'rehearsalCue', 'rehearsalLine',
   'revealActorLine', 'speechProgress', 'speechProgressLabel', 'recognizedSpeech',
   'startRehearsal', 'pauseRehearsal', 'repeatRehearsal', 'continueRehearsal',
   'rehearsalVoices', 'scriptReview', 'rehearsalTranscriptStrip', 'rehearsalTranscriptFilter'
@@ -60,6 +60,16 @@ function render() {
   ui.rehearsalCounter.textContent = `${rehearsal.line + 1} / ${scene.lines.length}`;
   ui.rehearsalSpeaker.textContent = own ? `${line.character} · Sua vez` : line.character;
   ui.rehearsalDirections.textContent = line.directions;
+  const cue = scene.lines.slice(0, rehearsal.line).reverse().find((item) => !actorTurn(item));
+  ui.rehearsalCue.hidden = !own || !cue;
+  if (cue) {
+    ui.rehearsalCue.replaceChildren();
+    const label = document.createElement('small');
+    label.textContent = `Deixa de ${cue.character}`;
+    const text = document.createElement('span');
+    text.textContent = cue.text;
+    ui.rehearsalCue.append(label, text);
+  }
   ui.rehearsalLine.replaceChildren();
   const concealed = own && ui.hideActorLine.checked && !rehearsal.revealed;
   ui.revealActorLine.hidden = !concealed;

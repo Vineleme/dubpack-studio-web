@@ -22,6 +22,9 @@ body.tab-rehearsal #studioIntro, body.tab-rehearsal #publisherGuide { display: n
 .rehearsal-speaker { font-size: 16px; font-weight: 700; color: #ff91bf; }
 .actor-turn .rehearsal-speaker { color: #63e7a6; }
 .rehearsal-directions { color: #aaa4b8; font-style: italic; font-size: 14px; line-height: 1.5; }
+.rehearsal-cue { width: min(720px, 100%); display: grid; gap: 5px; margin: 8px 0 4px; padding: 10px 14px; text-align: left; background: #171327; border-left: 3px solid #ff9b35; border-radius: 6px; color: #d3cedc; }
+.rehearsal-cue small { color: #ffb45c; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.rehearsal-cue span { font-size: 16px; line-height: 1.45; }
 .rehearsal-line { width: 100%; font-size: 26px; line-height: 1.65; font-weight: 600; min-height: 160px; overflow-wrap: anywhere; margin: 12px 0 24px; }
 .spoken-word { color: #63e7a6; }
 .rehearsal-follow { width: 100%; display: grid; gap: 10px; color: #aaa4b8; font-size: 13px; }
