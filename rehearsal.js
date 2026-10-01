@@ -1,4 +1,4 @@
-import { parseScript, compareSpeech, textLinesFromItems } from './rehearsal-core.mjs?v=210';
+import { parseScript, compareSpeech, textLinesFromItems } from './rehearsal-core.mjs?v=214';
 
 const ui = Object.fromEntries([
   'scriptInput', 'rehearsalStatus', 'rehearsalWorkspace', 'actorRole', 'rehearsalScene',
@@ -270,8 +270,8 @@ export async function importScript(file) {
   let timeout;
   try {
     const read = async () => {
-      const pdfjs = await import('./vendor/pdf.mjs?v=210');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.mjs?v=210', import.meta.url).href;
+      const pdfjs = await import('./vendor/pdf.mjs?v=214');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.mjs?v=214', import.meta.url).href;
       loadingTask = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false });
       return loadingTask.promise;
     };

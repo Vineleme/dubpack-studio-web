@@ -389,7 +389,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '212';
+  const swVersion = '214';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -3044,6 +3044,7 @@ function waitForRehearsalModule(timeoutMs = 12000) {
   if (window.DubpackRehearsal?.importScript) return Promise.resolve(window.DubpackRehearsal);
   return new Promise((resolve, reject) => {
     const started = Date.now();
+    let fallbackStarted = false;
     const check = () => {
       if (window.DubpackRehearsal?.importScript) {
         cleanup();
@@ -3054,6 +3055,11 @@ function waitForRehearsalModule(timeoutMs = 12000) {
         cleanup();
         reject(new Error('O leitor de PDF não terminou de carregar. Verifique a conexão e tente novamente.'));
         return;
+      }
+      if (!fallbackStarted && Date.now() - started >= 1200) {
+        fallbackStarted = true;
+        const moduleUrl = new URL('/rehearsal.js?v=214', window.location.origin).href;
+        import(moduleUrl).catch(() => undefined);
       }
       timer = setTimeout(check, 100);
     };
