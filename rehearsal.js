@@ -312,6 +312,7 @@ export async function importScript(file) {
 }
 
 window.DubpackRehearsal = { importScript };
+window.dispatchEvent(new Event('dubpack:rehearsal-ready'));
 
 ui.startRehearsal.onclick = start;
 ui.pauseRehearsal.onclick = () => { halt(); render(); status('Ensaio pausado.'); };

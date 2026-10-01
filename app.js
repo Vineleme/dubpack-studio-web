@@ -3031,15 +3031,40 @@ async function importRehearsalPdf(file) {
   if (status) status.textContent = `Abrindo PDF: ${file.name}...`;
   if (input) input.disabled = true;
   try {
-    if (!window.DubpackRehearsal?.importScript) {
-      throw new Error('O módulo de ensaio ainda está carregando. Recarregue a página e tente novamente.');
-    }
-    await window.DubpackRehearsal.importScript(file);
+    const rehearsal = await waitForRehearsalModule();
+    await rehearsal.importScript(file);
   } catch (error) {
     if (status) status.textContent = `Não foi possível abrir o leitor de PDF: ${error.message}`;
   } finally {
     if (input) { input.disabled = false; input.value = ''; }
   }
+}
+
+function waitForRehearsalModule(timeoutMs = 12000) {
+  if (window.DubpackRehearsal?.importScript) return Promise.resolve(window.DubpackRehearsal);
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const check = () => {
+      if (window.DubpackRehearsal?.importScript) {
+        cleanup();
+        resolve(window.DubpackRehearsal);
+        return;
+      }
+      if (Date.now() - started >= timeoutMs) {
+        cleanup();
+        reject(new Error('O leitor de PDF não terminou de carregar. Verifique a conexão e tente novamente.'));
+        return;
+      }
+      timer = setTimeout(check, 100);
+    };
+    const ready = () => check();
+    let timer = setTimeout(check, 0);
+    const cleanup = () => {
+      clearTimeout(timer);
+      window.removeEventListener('dubpack:rehearsal-ready', ready);
+    };
+    window.addEventListener('dubpack:rehearsal-ready', ready, { once: true });
+  });
 }
 
 async function importPackFile(file) {
