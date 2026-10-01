@@ -311,6 +311,8 @@ export async function importScript(file) {
   }
 }
 
+window.DubpackRehearsal = { importScript };
+
 ui.startRehearsal.onclick = start;
 ui.pauseRehearsal.onclick = () => { halt(); render(); status('Ensaio pausado.'); };
 ui.continueRehearsal.onclick = () => { if (actorTurn()) advance(); };

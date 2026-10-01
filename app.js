@@ -389,7 +389,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '211';
+  const swVersion = '212';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
@@ -3031,9 +3031,10 @@ async function importRehearsalPdf(file) {
   if (status) status.textContent = `Abrindo PDF: ${file.name}...`;
   if (input) input.disabled = true;
   try {
-    const rehearsalUrl = new URL('./rehearsal.js?v=211', document.baseURI).href;
-    const rehearsal = await import(rehearsalUrl);
-    await rehearsal.importScript(file);
+    if (!window.DubpackRehearsal?.importScript) {
+      throw new Error('O módulo de ensaio ainda está carregando. Recarregue a página e tente novamente.');
+    }
+    await window.DubpackRehearsal.importScript(file);
   } catch (error) {
     if (status) status.textContent = `Não foi possível abrir o leitor de PDF: ${error.message}`;
   } finally {
