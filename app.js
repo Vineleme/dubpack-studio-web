@@ -389,7 +389,7 @@ try {
 bootApp();
 
 if ('serviceWorker' in navigator) {
-  const swVersion = '207';
+  const swVersion = '208';
   navigator.serviceWorker.getRegistrations()
     .then((regs) => Promise.all(regs.map((reg) => {
       const script = String(reg.active?.scriptURL || reg.waiting?.scriptURL || '');
