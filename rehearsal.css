@@ -31,6 +31,9 @@ body.tab-rehearsal #studioIntro, body.tab-rehearsal #publisherGuide { display: n
 .rehearsal-controls button { min-height: 44px; border-radius: 6px; }
 .rehearsal-controls button:disabled { opacity: .45; cursor: default; }
 .rehearsal-transcript-strip { width: 100%; max-height: 118px; display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 14px 2px 4px; scroll-snap-type: x proximity; }
+.rehearsal-transcript-head { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; color: #d3cedc; font-size: 13px; text-align: left; }
+.rehearsal-transcript-head label { display: flex; align-items: center; gap: 8px; color: #aaa4b8; }
+.rehearsal-transcript-head select { background: #100e1c; color: #fff; border: 1px solid #51445c; border-radius: 6px; padding: 7px 9px; font: inherit; }
 .rehearsal-transcript-item { flex: 0 0 min(240px, 72vw); display: grid; gap: 4px; text-align: left; scroll-snap-align: center; background: #100e1c; color: #c9c1d2; border: 1px solid #3a3046; border-radius: 6px; padding: 10px 12px; cursor: pointer; }
 .rehearsal-transcript-item strong { color: #ff91bf; font-size: 12px; }
 .rehearsal-transcript-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }

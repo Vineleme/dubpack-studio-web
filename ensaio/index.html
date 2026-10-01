@@ -25,7 +25,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css?v=206" />
-    <link rel="stylesheet" href="./rehearsal.css?v=217" />
+    <link rel="stylesheet" href="./rehearsal.css?v=218" />
     <meta name="google-adsense-account" content="ca-pub-1677516942518019" />
     <script type="application/ld+json">
       {
@@ -418,6 +418,10 @@
                   <button id="repeatRehearsal" class="secondary" type="button">Repetir deixa</button>
                   <button id="continueRehearsal" class="secondary" type="button" disabled>Concluí minha fala</button>
                 </div>
+                <div class="rehearsal-transcript-head">
+                  <strong>Falas da cena</strong>
+                  <label>Mostrar<select id="rehearsalTranscriptFilter" aria-label="Filtrar falas"><option value="all">Todas</option><option value="actor">Somente minhas falas</option></select></label>
+                </div>
                 <div id="rehearsalTranscriptStrip" class="rehearsal-transcript-strip" aria-label="Falas da cena"></div>
               </section>
               <aside class="rehearsal-cast">
@@ -803,6 +807,6 @@
     <script src="./payments.js?v=169"></script>
     <script src="./ads.js?v=206"></script>
     <script src="./app.js?v=214"></script>
-    <script type="module" src="./rehearsal.js?v=216"></script>
+    <script type="module" src="./rehearsal.js?v=218"></script>
   </body>
 </html>

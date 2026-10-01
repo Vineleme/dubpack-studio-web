@@ -6,7 +6,7 @@ const ui = Object.fromEntries([
   'rehearsalCounter', 'rehearsalSpeaker', 'rehearsalDirections', 'rehearsalLine',
   'revealActorLine', 'speechProgress', 'speechProgressLabel', 'recognizedSpeech',
   'startRehearsal', 'pauseRehearsal', 'repeatRehearsal', 'continueRehearsal',
-  'rehearsalVoices', 'scriptReview', 'rehearsalTranscriptStrip'
+  'rehearsalVoices', 'scriptReview', 'rehearsalTranscriptStrip', 'rehearsalTranscriptFilter'
 ].map((id) => [id, document.getElementById(id)]));
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const synthesis = window.speechSynthesis;
@@ -92,7 +92,9 @@ function render() {
 
 function renderTranscriptStrip(scene) {
   ui.rehearsalTranscriptStrip.replaceChildren();
+  const filter = ui.rehearsalTranscriptFilter.value;
   scene.lines.forEach((item, index) => {
+    if (filter === 'actor' && !actorTurn(item)) return;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `rehearsal-transcript-item${index === rehearsal.line ? ' is-current' : ''}${actorTurn(item) ? ' is-actor' : ''}`;
@@ -385,6 +387,8 @@ ui.rehearsalScene.onchange = () => {
   resetPosition(Number(ui.rehearsalScene.value));
   ui.startRehearsal.textContent = 'Começar ensaio'; ui.startRehearsal.onclick = start;
 };
+
+ui.rehearsalTranscriptFilter.onchange = () => render();
 ui.hideActorLine.onchange = render;
 ui.revealActorLine.onclick = () => { rehearsal.revealed = true; render(); };
 ui.followSpeech.onchange = () => { halt(); render(); status('Modo de acompanhamento alterado. Retome o ensaio.'); };
