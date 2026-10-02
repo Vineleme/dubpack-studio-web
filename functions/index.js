@@ -2,9 +2,11 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
+const textToSpeech = require('@google-cloud/text-to-speech');
 
 admin.initializeApp();
 const db = admin.firestore();
+const ttsClient = new textToSpeech.TextToSpeechClient();
 
 const stripeSecret = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
@@ -422,6 +424,42 @@ exports.pilotStatus = onRequest({ cors: false }, async (req, res) => {
     if (error.status === 401) return res.status(401).json({ error: 'unauthenticated' });
     console.error(error);
     return res.status(500).json({ error: 'pilot-status-failed' });
+  }
+});
+
+// Neural voice generation stays server-side so browser clients never receive credentials.
+exports.generateNeuralVoice = onRequest({ cors: false, timeoutSeconds: 60, memory: '256MiB' }, async (req, res) => {
+  withCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
+  try {
+    const header = String(req.get('authorization') || '');
+    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+    if (!token) return res.status(401).json({ error: 'unauthenticated' });
+    const decoded = await admin.auth().verifyIdToken(token);
+    const email = normalizeEmail(decoded.email);
+    const applicant = email ? (await db.collection('pilotApplicants').doc(email).get()).data() : null;
+    const pilotActive = applicant?.status === 'approved' && applicant.expiresAt?.toDate?.() > new Date();
+    if (!OWNER_EMAILS.has(email) && !decoded.pilotPro && !pilotActive) {
+      return res.status(403).json({ error: 'neural-voice-requires-pro' });
+    }
+
+    const text = String(req.body?.text || '').trim();
+    if (!text || text.length > 5000) return res.status(400).json({ error: 'text-must-be-1-to-5000-characters' });
+    const requestedVoice = String(req.body?.voice || '').trim();
+    const voice = /^pt-BR-(Neural2|Wavenet)-[A-D]$/.test(requestedVoice)
+      ? requestedVoice
+      : 'pt-BR-Neural2-A';
+    const [response] = await ttsClient.synthesizeSpeech({
+      input: { text },
+      voice: { languageCode: 'pt-BR', name: voice },
+      audioConfig: { audioEncoding: 'MP3', speakingRate: 0.96 }
+    });
+    return res.json({ ok: true, voice, audioContent: response.audioContent.toString('base64') });
+  } catch (error) {
+    if (error.code === 7 || error.code === 5) console.error('Text-to-Speech request failed', error);
+    else console.error(error);
+    return res.status(500).json({ error: 'neural-voice-failed' });
   }
 });
 

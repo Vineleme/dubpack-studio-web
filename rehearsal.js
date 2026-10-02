@@ -14,7 +14,7 @@ let importSequence = 0;
 const rehearsal = {
   scenes: [], scene: 0, line: 0, running: false, generation: 0,
   recognition: null, utterance: null, timer: null, restartTimer: null,
-  transcript: '', matched: [], voices: [], selectedVoices: new Map(), revealed: false, completed: false
+  audio: null, transcript: '', matched: [], voices: [], selectedVoices: new Map(), revealed: false, completed: false
 };
 
 function status(message) { ui.rehearsalStatus.textContent = message; }
@@ -31,6 +31,11 @@ function halt() {
   rehearsal.recognition = null;
   if (recognition) { recognition.onend = null; recognition.abort(); }
   synthesis?.cancel();
+  if (rehearsal.audio) {
+    rehearsal.audio.pause();
+    rehearsal.audio.src = '';
+    rehearsal.audio = null;
+  }
   rehearsal.utterance = null;
   ui.pauseRehearsal.disabled = true;
   ui.startRehearsal.disabled = !current();
@@ -150,6 +155,14 @@ function runLine() {
   }
   const line = current();
   const generation = rehearsal.generation;
+  if (window.firebase?.auth?.().currentUser) {
+    void playNeuralLine(line, generation);
+    return;
+  }
+  speakLocalLine(line, generation);
+}
+
+function speakLocalLine(line, generation) {
   const utterance = new SpeechSynthesisUtterance(line.text);
   utterance.lang = 'pt-BR';
   utterance.rate = Math.min(1.05, Number(ui.rehearsalRate.value) || 0.94);
@@ -167,6 +180,43 @@ function runLine() {
   };
   status(`${line.character} está falando.`);
   synthesis.speak(utterance);
+}
+
+async function playNeuralLine(line, generation) {
+  try {
+    const user = window.firebase.auth().currentUser;
+    const token = await user.getIdToken();
+    if (generation !== rehearsal.generation || !rehearsal.running) return;
+    const response = await fetch('https://generateneuralvoice-uyfnngj7sq-uc.a.run.app', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text: line.text, voice: neuralVoiceFor(line.character) })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.audioContent) throw new Error(result.error || 'neural-voice-failed');
+    const bytes = Uint8Array.from(atob(result.audioContent), (char) => char.charCodeAt(0));
+    const audio = new Audio(URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })));
+    rehearsal.audio = audio;
+    audio.volume = 1;
+    audio.onended = () => {
+      if (generation === rehearsal.generation && rehearsal.running) rehearsal.timer = setTimeout(advance, 350);
+    };
+    audio.onerror = () => {
+      if (generation !== rehearsal.generation) return;
+      speakLocalLine(line, generation);
+    };
+    status(`${line.character} está falando com voz neural.`);
+    await audio.play();
+  } catch (error) {
+    if (generation !== rehearsal.generation || !rehearsal.running) return;
+    console.warn('Voz neural indisponível; usando voz local.', error);
+    speakLocalLine(line, generation);
+  }
+}
+
+function neuralVoiceFor(character) {
+  const hash = Array.from(String(character || '')).reduce((total, char) => total + char.charCodeAt(0), 0);
+  return `pt-BR-Neural2-${['A', 'B', 'C', 'D'][hash % 4]}`;
 }
 
 function advance() {
