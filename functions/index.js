@@ -439,9 +439,10 @@ exports.generateNeuralVoice = onRequest({ cors: false, invoker: 'public', timeou
     if (!token) return res.status(401).json({ error: 'unauthenticated' });
     const decoded = await admin.auth().verifyIdToken(token);
     const email = normalizeEmail(decoded.email);
-    const applicant = email ? (await db.collection('pilotApplicants').doc(email).get()).data() : null;
+    const owner = OWNER_EMAILS.has(email);
+    const applicant = !owner && email ? (await db.collection('pilotApplicants').doc(email).get()).data() : null;
     const pilotActive = applicant?.status === 'approved' && applicant.expiresAt?.toDate?.() > new Date();
-    if (!OWNER_EMAILS.has(email) && !decoded.pilotPro && !pilotActive) {
+    if (!owner && !decoded.pilotPro && !pilotActive) {
       return res.status(403).json({ error: 'neural-voice-requires-pro' });
     }
 
