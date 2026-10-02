@@ -328,6 +328,7 @@ exports.stripeWebhook = onRequest({
 });
 
 const OWNER_EMAILS = new Set([
+  'vinnieleme@gmail.com',
   'viniciusleme@gmail.com',
   'vinicius.leme@gmail.com',
   'vineleme@gmail.com',
