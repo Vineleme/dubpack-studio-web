@@ -332,7 +332,6 @@ const OWNER_EMAILS = new Set([
   'viniciusleme@gmail.com',
   'vinicius.leme@gmail.com',
   'vineleme@gmail.com',
-  'vineleme@icloud.com',
   'viniciusleme@icloud.com'
 ]);
 
