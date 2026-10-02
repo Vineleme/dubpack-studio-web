@@ -429,7 +429,7 @@ exports.pilotStatus = onRequest({ cors: false }, async (req, res) => {
 });
 
 // Neural voice generation stays server-side so browser clients never receive credentials.
-exports.generateNeuralVoice = onRequest({ cors: false, timeoutSeconds: 60, memory: '256MiB' }, async (req, res) => {
+exports.generateNeuralVoice = onRequest({ cors: false, invoker: 'public', timeoutSeconds: 60, memory: '256MiB' }, async (req, res) => {
   withCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).send('');
   if (req.method !== 'POST') return res.status(405).json({ error: 'method-not-allowed' });
