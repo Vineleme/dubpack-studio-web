@@ -162,7 +162,7 @@ function runLine() {
   speakLocalLine(line, generation);
 }
 
-function speakLocalLine(line, generation) {
+function speakLocalLine(line, generation, message = '') {
   const utterance = new SpeechSynthesisUtterance(line.text);
   utterance.lang = 'pt-BR';
   utterance.rate = Math.min(1.05, Number(ui.rehearsalRate.value) || 0.94);
@@ -178,7 +178,7 @@ function speakLocalLine(line, generation) {
     halt(); render();
     status(`Não foi possível ler esta fala (${event.error}). Escolha outra voz e retome o ensaio.`);
   };
-  status(`${line.character} está falando.`);
+  status(message || `${line.character} está falando com voz local.`);
   synthesis.speak(utterance);
 }
 
@@ -203,14 +203,14 @@ async function playNeuralLine(line, generation) {
     };
     audio.onerror = () => {
       if (generation !== rehearsal.generation) return;
-      speakLocalLine(line, generation);
+      speakLocalLine(line, generation, 'Voz neural indisponível; usando voz local.');
     };
     status(`${line.character} está falando com voz neural.`);
     await audio.play();
   } catch (error) {
     if (generation !== rehearsal.generation || !rehearsal.running) return;
     console.warn('Voz neural indisponível; usando voz local.', error);
-    speakLocalLine(line, generation);
+    speakLocalLine(line, generation, 'Voz neural indisponível; usando voz local.');
   }
 }
 
