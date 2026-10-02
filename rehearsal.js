@@ -16,6 +16,37 @@ const NEURAL_VOICES = [
   ['pt-BR-Neural2-C', 'Google Cloud Neural2 C · feminina'],
 ];
 let importSequence = 0;
+
+// PDF.js uses these modern primitives, which are missing in some Safari/iOS versions.
+function preparePdfCompatibility() {
+  if (typeof Promise.withResolvers !== 'function') {
+    Promise.withResolvers = function withResolvers() {
+      let resolve;
+      let reject;
+      const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+      return { promise, resolve, reject };
+    };
+  }
+  if (typeof ReadableStream !== 'undefined' && typeof Symbol.asyncIterator === 'symbol'
+    && !ReadableStream.prototype[Symbol.asyncIterator]) {
+    Object.defineProperty(ReadableStream.prototype, Symbol.asyncIterator, {
+      configurable: true,
+      value: async function* streamAsyncIterator() {
+        const reader = this.getReader();
+        try {
+          while (true) {
+            const result = await reader.read();
+            if (result.done) return;
+            yield result.value;
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+    });
+  }
+}
+
 const rehearsal = {
   scenes: [], scene: 0, line: 0, running: false, generation: 0,
   recognition: null, utterance: null, timer: null, restartTimer: null,
@@ -423,8 +454,9 @@ export async function importScript(file) {
   let timeout;
   try {
     const read = async () => {
-      const pdfjs = await import('./vendor/pdf.mjs?v=214');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.mjs?v=214', import.meta.url).href;
+      preparePdfCompatibility();
+      const pdfjs = await import('./vendor/pdf.mjs?v=215');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.mjs?v=215', import.meta.url).href;
       loadingTask = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false });
       return loadingTask.promise;
     };
