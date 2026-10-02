@@ -80,7 +80,16 @@ body.tab-rehearsal #studioIntro, body.tab-rehearsal #publisherGuide { display: n
   .rehearsal-layout { margin-top: 12px; }
   .rehearsal-transcript { min-height: 28px; }
   .rehearsal-stage { padding-top: 10px; }
-  .rehearsal-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rehearsal-controls button { padding: 10px; }
+  #rehearsalTab { min-width: 0; overflow: hidden; }
+  .rehearsal-settings { gap: 12px; padding-block: 14px; }
+  .rehearsal-settings label, .rehearsal-cast label { font-size: 13px; }
+  .rehearsal-settings select, .rehearsal-cast select, .rehearsal-cast textarea { min-width: 0; max-width: 100%; }
+  .rehearsal-settings input[type="range"] { width: 100%; }
+  .rehearsal-controls { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .rehearsal-controls button { width: 100%; min-width: 0; padding: 10px; }
+  .rehearsal-transcript-head { align-items: stretch; flex-direction: column; }
+  .rehearsal-transcript-head select { width: 100%; }
+  .rehearsal-cue span { font-size: 15px; }
+  .rehearsal-line { font-size: clamp(20px, 5.8vw, 22px); }
   #rehearsalVoices { grid-template-columns: minmax(0, 1fr); }
 }

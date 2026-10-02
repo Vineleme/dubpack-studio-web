@@ -19,7 +19,7 @@ let importSequence = 0;
 const rehearsal = {
   scenes: [], scene: 0, line: 0, running: false, generation: 0,
   recognition: null, utterance: null, timer: null, restartTimer: null,
-  audio: null, audioContext: null, transcript: '', matched: [], voices: [], selectedVoices: new Map(), revealed: false, completed: false
+  audio: null, audioSource: null, audioContext: null, transcript: '', matched: [], voices: [], selectedVoices: new Map(), revealed: false, completed: false
 };
 
 function status(message) { ui.rehearsalStatus.textContent = message; }
@@ -40,6 +40,11 @@ function halt() {
     rehearsal.audio.pause();
     rehearsal.audio.src = '';
     rehearsal.audio = null;
+  }
+  if (rehearsal.audioSource) {
+    try { rehearsal.audioSource.stop(); } catch {}
+    rehearsal.audioSource.disconnect();
+    rehearsal.audioSource = null;
   }
   rehearsal.utterance = null;
   ui.pauseRehearsal.disabled = true;
@@ -212,19 +217,22 @@ async function playNeuralLine(line, generation) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.audioContent) throw new Error(result.error || 'neural-voice-failed');
     const bytes = Uint8Array.from(atob(result.audioContent), (char) => char.charCodeAt(0));
-    const audio = new Audio(URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })));
-    rehearsal.audio = audio;
-    audio.volume = 1;
-    audio.onended = () => {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) throw new Error('audio-context-unavailable');
+    rehearsal.audioContext ||= new AudioContext();
+    await rehearsal.audioContext.resume();
+    const buffer = await rehearsal.audioContext.decodeAudioData(bytes.buffer.slice(0));
+    if (generation !== rehearsal.generation || !rehearsal.running) return;
+    const source = rehearsal.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(rehearsal.audioContext.destination);
+    rehearsal.audioSource = source;
+    source.onended = () => {
+      if (rehearsal.audioSource === source) rehearsal.audioSource = null;
       if (generation === rehearsal.generation && rehearsal.running) rehearsal.timer = setTimeout(advance, 350);
     };
-    audio.onerror = () => {
-      if (generation !== rehearsal.generation) return;
-      halt(); render(); status('A voz neural não pôde ser reproduzida. Tente repetir esta fala.');
-    };
     status(`${line.character} está falando com voz neural.`);
-    if (rehearsal.audioContext?.state === 'suspended') await rehearsal.audioContext.resume();
-    await audio.play();
+    source.start(0);
   } catch (error) {
     if (generation !== rehearsal.generation || !rehearsal.running) return;
     console.warn('Voz neural indisponível; usando voz local.', error);
