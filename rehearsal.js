@@ -187,7 +187,7 @@ async function playNeuralLine(line, generation) {
     const user = window.firebase.auth().currentUser;
     const token = await user.getIdToken();
     if (generation !== rehearsal.generation || !rehearsal.running) return;
-    const response = await fetch('https://generateneuralvoice-uyfnngj7sq-uc.a.run.app', {
+    const response = await fetch('https://us-central1-dub-pack-studio.cloudfunctions.net/generateNeuralVoice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ text: line.text, voice: neuralVoiceFor(line.character) })
