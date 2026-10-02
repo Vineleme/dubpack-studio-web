@@ -10,6 +10,12 @@ const ui = Object.fromEntries([
 ].map((id) => [id, document.getElementById(id)]));
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const synthesis = window.speechSynthesis;
+const NEURAL_VOICES = [
+  ['pt-BR-Neural2-A', 'Google Cloud Neural2 A · masculina'],
+  ['pt-BR-Neural2-B', 'Google Cloud Neural2 B · masculina'],
+  ['pt-BR-Neural2-C', 'Google Cloud Neural2 C · feminina'],
+  ['pt-BR-Neural2-D', 'Google Cloud Neural2 D · feminina']
+];
 let importSequence = 0;
 const rehearsal = {
   scenes: [], scene: 0, line: 0, running: false, generation: 0,
@@ -215,6 +221,8 @@ async function playNeuralLine(line, generation) {
 }
 
 function neuralVoiceFor(character) {
+  const selected = rehearsal.selectedVoices.get(character);
+  if (selected?.startsWith('neural:')) return selected.slice(7);
   const hash = Array.from(String(character || '')).reduce((total, char) => total + char.charCodeAt(0), 0);
   return `pt-BR-Neural2-${['A', 'B', 'C', 'D'][hash % 4]}`;
 }
@@ -303,28 +311,34 @@ function refreshVoices() {
     profile.append(option('', 'Perfil automático'), option('female', 'Voz feminina'), option('male', 'Voz masculina'));
     const select = document.createElement('select');
     select.setAttribute('aria-label', `Voz de ${character}`);
-    select.append(option('', 'Voz padrão do aparelho'));
+    select.append(option('neural:pt-BR-Neural2-A', 'Google Cloud Neural2 A · masculina'));
+    select.append(option('neural:pt-BR-Neural2-B', 'Google Cloud Neural2 B · masculina'));
+    select.append(option('neural:pt-BR-Neural2-C', 'Google Cloud Neural2 C · feminina'));
+    select.append(option('neural:pt-BR-Neural2-D', 'Google Cloud Neural2 D · feminina'));
+    select.append(option('', 'Voz local do aparelho · fallback'));
     for (const voice of available) select.append(option(voice.voiceURI, `${voice.name} (${voice.lang})`));
-    if (!rehearsal.selectedVoices.has(character) && portuguese.length) {
-      rehearsal.selectedVoices.set(character, available[index % available.length].voiceURI);
+    if (!rehearsal.selectedVoices.has(character)) {
+      const neuralIndex = index % NEURAL_VOICES.length;
+      rehearsal.selectedVoices.set(character, `neural:${NEURAL_VOICES[neuralIndex][0]}`);
     }
     select.value = rehearsal.selectedVoices.get(character) || '';
     profile.value = inferVoiceProfile(select.value);
     profile.onchange = () => {
       const filtered = available.filter((voice) => profileMatches(voice, profile.value));
       const chosen = filtered[0] || available[0];
-      if (chosen) {
-        select.value = chosen.voiceURI;
-        rehearsal.selectedVoices.set(character, chosen.voiceURI);
-      }
+      const neuralPool = profile.value === 'female' ? ['pt-BR-Neural2-C', 'pt-BR-Neural2-D']
+        : profile.value === 'male' ? ['pt-BR-Neural2-A', 'pt-BR-Neural2-B'] : null;
+      const neural = neuralPool?.[index % neuralPool.length] || NEURAL_VOICES[index % NEURAL_VOICES.length][0];
+      select.value = `neural:${neural}`;
+      rehearsal.selectedVoices.set(character, `neural:${neural}`);
       halt(); render();
-      status('Perfil de voz alterado. Retome o ensaio.');
+      status('Perfil neural alterado. Retome o ensaio.');
     };
     select.onchange = () => {
       halt(); render();
       rehearsal.selectedVoices.set(character, select.value);
       profile.value = inferVoiceProfile(select.value);
-      status('Voz alterada. Retome o ensaio.');
+      status(select.value.startsWith('neural:') ? 'Voz Google Cloud Neural2 selecionada. Retome o ensaio.' : 'Voz local selecionada como fallback. Retome o ensaio.');
     };
     label.append(profile);
     label.append(select);
