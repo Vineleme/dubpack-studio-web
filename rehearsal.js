@@ -2,7 +2,7 @@ import { parseScript, compareSpeech, textLinesFromItems } from './rehearsal-core
 
 const ui = Object.fromEntries([
   'scriptInput', 'rehearsalStatus', 'rehearsalWorkspace', 'actorRole', 'rehearsalScene',
-  'rehearsalRate', 'followSpeech', 'hideActorLine', 'speechPrivacy', 'rehearsalSceneTitle',
+  'rehearsalRate', 'rehearsalEmotion', 'rehearsalIntensity', 'rehearsalDelivery', 'followSpeech', 'hideActorLine', 'speechPrivacy', 'rehearsalSceneTitle',
   'rehearsalCounter', 'rehearsalSpeaker', 'rehearsalDirections', 'rehearsalCue', 'rehearsalLine',
   'revealActorLine', 'speechProgress', 'speechProgressLabel', 'recognizedSpeech',
   'startRehearsal', 'pauseRehearsal', 'repeatRehearsal', 'continueRehearsal',
@@ -207,7 +207,7 @@ async function playNeuralLine(line, generation) {
     const response = await fetch('https://us-central1-dub-pack-studio.cloudfunctions.net/generateNeuralVoice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ text: line.text, voice: neuralVoiceFor(line.character) })
+      body: JSON.stringify({ text: line.text, voice: neuralVoiceFor(line.character), emotion: ui.rehearsalEmotion.value, intensity: ui.rehearsalIntensity.value, delivery: ui.rehearsalDelivery.value, speed: Number(ui.rehearsalRate.value) || 0.95 })
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.audioContent) throw new Error(result.error || 'neural-voice-failed');

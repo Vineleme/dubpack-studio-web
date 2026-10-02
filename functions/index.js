@@ -452,8 +452,21 @@ exports.generateNeuralVoice = onRequest({ cors: false, invoker: 'public', timeou
     const voice = /^pt-BR-(Neural2|Wavenet)-[A-C]$/.test(requestedVoice)
       ? requestedVoice
       : 'pt-BR-Neural2-A';
+    const emotion = String(req.body?.emotion || 'neutral');
+    const intensity = String(req.body?.intensity || 'medium');
+    const delivery = String(req.body?.delivery || 'normal');
+    const emotionMap = {
+      neutral: { pitch: 0, rate: 1 }, happy: { pitch: 2, rate: 1.04 }, sad: { pitch: -2, rate: 0.88 },
+      fear: { pitch: 3, rate: 1.08 }, angry: { pitch: -1, rate: 1.12 }, surprised: { pitch: 3, rate: 1.1 }
+    };
+    const deliveryMap = { normal: { volume: 'medium' }, whisper: { volume: 'x-soft', rate: 0.86 }, urgent: { volume: 'loud', rate: 1.14 }, shout: { volume: 'x-loud', rate: 1.08 } };
+    const level = intensity === 'high' ? 1.35 : intensity === 'low' ? 0.7 : 1;
+    const tone = emotionMap[emotion] || emotionMap.neutral;
+    const style = deliveryMap[delivery] || deliveryMap.normal;
+    const escapeXml = (value) => value.replace(/[<>&'\"]/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '\"': '&quot;' }[char]));
+    const ssml = `<speak><prosody rate="${Math.max(0.65, Math.min(1.35, tone.rate * (style.rate || 1) * (0.94 + (level - 1) * 0.08)))}" pitch="${tone.pitch * level >= 0 ? '+' : ''}${Math.round(tone.pitch * level)}st" volume="${style.volume}">${escapeXml(text)}</prosody></speak>`;
     const [response] = await ttsClient.synthesizeSpeech({
-      input: { text },
+      input: { ssml },
       voice: { languageCode: 'pt-BR', name: voice },
       audioConfig: { audioEncoding: 'MP3', speakingRate: 0.96 }
     });
