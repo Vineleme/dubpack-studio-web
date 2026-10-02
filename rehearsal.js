@@ -19,7 +19,7 @@ let importSequence = 0;
 const rehearsal = {
   scenes: [], scene: 0, line: 0, running: false, generation: 0,
   recognition: null, utterance: null, timer: null, restartTimer: null,
-  audio: null, transcript: '', matched: [], voices: [], selectedVoices: new Map(), revealed: false, completed: false
+  audio: null, audioContext: null, transcript: '', matched: [], voices: [], selectedVoices: new Map(), revealed: false, completed: false
 };
 
 function status(message) { ui.rehearsalStatus.textContent = message; }
@@ -136,9 +136,21 @@ function start() {
   if (!current()) return;
   if (rehearsal.completed) resetPosition(rehearsal.scene);
   if (window.matchMedia('(max-width: 760px)').matches) document.getElementById('rehearsalSetup').open = false;
+  unlockAudio();
   halt();
   rehearsal.running = true;
   runLine();
+}
+
+function unlockAudio() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    rehearsal.audioContext ||= new AudioContext();
+    if (rehearsal.audioContext.state === 'suspended') void rehearsal.audioContext.resume();
+  } catch (error) {
+    console.warn('Não foi possível preparar o áudio.', error);
+  }
 }
 
 function runLine() {
@@ -211,6 +223,7 @@ async function playNeuralLine(line, generation) {
       halt(); render(); status('A voz neural não pôde ser reproduzida. Tente repetir esta fala.');
     };
     status(`${line.character} está falando com voz neural.`);
+    if (rehearsal.audioContext?.state === 'suspended') await rehearsal.audioContext.resume();
     await audio.play();
   } catch (error) {
     if (generation !== rehearsal.generation || !rehearsal.running) return;
