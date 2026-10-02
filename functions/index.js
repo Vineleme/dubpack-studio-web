@@ -448,7 +448,7 @@ exports.generateNeuralVoice = onRequest({ cors: false, timeoutSeconds: 60, memor
     const text = String(req.body?.text || '').trim();
     if (!text || text.length > 5000) return res.status(400).json({ error: 'text-must-be-1-to-5000-characters' });
     const requestedVoice = String(req.body?.voice || '').trim();
-    const voice = /^pt-BR-(Neural2|Wavenet)-[A-D]$/.test(requestedVoice)
+    const voice = /^pt-BR-(Neural2|Wavenet)-[A-C]$/.test(requestedVoice)
       ? requestedVoice
       : 'pt-BR-Neural2-A';
     const [response] = await ttsClient.synthesizeSpeech({
